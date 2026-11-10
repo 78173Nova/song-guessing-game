@@ -25,6 +25,9 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] `db/schema.sql` creates a `songs` table: id, title, artist, year, genre, cached preview URL,
       cached artwork URL, cached store link, when the preview was cached
 - [ ] Seed script loads about 30 well-known songs (artist, title, original year, genre); running it twice does not create duplicates
+- [ ] The seed script also looks up each song's preview on iTunes **in advance** (through `lib/music/`), spaced out
+      to stay under ~20 requests per minute, and skips songs whose preview is already cached. If iTunes fails for a
+      song, the seed continues and that song stays without a preview
 - [ ] All SQL lives in `lib/db/`
 
 ### Music API
@@ -35,17 +38,23 @@ When a line below can be read two ways, choose the simpler option that keeps the
 
 ### Game (server)
 - [ ] Game logic in `lib/game/` as plain functions (no database, no network): build rounds, check an answer, score
-- [ ] `POST /api/games` starts a game: picks 10 distinct songs with a preview, builds 4 options per round
-      (1 correct + 3 wrong titles from other songs, shuffled), stores the game and its rounds, returns
-      game ID + rounds **without the correct answer**
+- [ ] `POST /api/games` starts a game: picks 10 distinct songs that already have a cached preview (normally no
+      iTunes call), builds 4 options per round (1 correct + 3 wrong titles from other songs, shuffled), stores the
+      game and its rounds, returns the game ID (a random UUID)
+- [ ] `POST /api/games/[id]/next` sends **one round at a time**: round number, preview URL and the 4 options,
+      **without the correct answer**. The server stores when it sent the round (`started_at`). It is rejected
+      while the current round is still unanswered, and after the last round
 - [ ] `POST /api/games/[id]/answer` takes round number + chosen option, validates it, stores it, returns
       correct/incorrect, the correct song (title, artist, artwork, store link) and points
-- [ ] Rejected with a clear error: unknown game, round number out of range, option not one of the four,
-      round already answered, malformed input
-- [ ] Scoring: 100 for correct, plus a speed bonus of up to 50 falling linearly over 15 seconds; 0 for wrong
-      or timed out; the server measures time from when the round was sent
+- [ ] The answer route also accepts "skip" instead of an option, for when the preview failed to load in the browser:
+      the round is marked `skipped`, gives 0 points and returns the correct song like a normal answer
+- [ ] Rejected with a clear error: unknown game, round number out of range, round not sent yet, option not one of
+      the four, round already answered or skipped, malformed input
+- [ ] Scoring: 100 for correct, plus a speed bonus of up to 50 falling linearly over 15 seconds, rounded to whole
+      points; 0 for wrong, timed out or skipped; the server measures time from that round's `started_at`
 - [ ] If fewer than 10 songs with a preview are available, the game does not start and the API returns a clear error
-- [ ] Tables for games and rounds/answers (schema reviewed by Niklas)
+- [ ] Tables for games and rounds/answers (schema reviewed by Niklas); a round stores when it was sent and
+      whether it is open, answered or skipped
 
 ### Game (UI)
 - [ ] Start screen with a "Start game" button and a one-line explanation
@@ -58,6 +67,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
 ### Tests and checks
 - [ ] Vitest tests for `lib/game/`: correct answer, wrong answer, timeout, double answer, invalid option, score bonus edges (0 s, 15 s, beyond)
 - [ ] Tests for `lib/music/` with fake responses: success, timeout, error code, no results, wrong artist, missing preview
+      (search in the US store, `country=US`)
+- [ ] Tests for `lib/db/` run against PGlite, a temporary Postgres inside the test process (decision 010)
 - [ ] No test calls the real iTunes API or the real Neon database
 - [ ] GitHub Action runs `npm ci`, lint, tests and build on every pull request
 - [ ] `README.md`: project description, deployed URL, team members (name + student number placeholders), run and test commands, required environment variables
@@ -89,3 +100,12 @@ When a line below can be read two ways, choose the simpler option that keeps the
 6. `chore/readme` – README
 
 Small branches are easier to review and give the team something to learn from step by step.
+For the base, teammates are not available for reviews yet: Niklas merges each pull request once the checks are
+green, and the team goes through them together at the next meeting (allowed by decision 009).
+
+## Decided on 10 Nov 2026
+- Rounds are sent one at a time, so the timer is fair and later preview URLs stay on the server (decision 004)
+- A round whose preview fails is stored as `skipped` (decision 006)
+- Previews are looked up in advance by `npm run db:seed`, not at game start (decision 006)
+- Database tests use PGlite (decision 010)
+- Game ID = random UUID; speed bonus rounded to whole points; iTunes searches the US store

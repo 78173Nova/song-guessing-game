@@ -31,3 +31,9 @@ this player, is the chosen option one of the four, was the round already answere
 ## How it could change
 For fairer timing, the clock could start when the music actually starts playing (the browser reports
 "playing") and network delays could be compensated.
+
+## Update 10 Nov 2026: one round at a time
+The server sends rounds **one at a time** (`POST /api/games/[id]/next`) instead of all 10 at game start.
+Why: the speed bonus needs the moment each round was sent, and the server stores it as `started_at`.
+Also, the preview URLs of later rounds stay on the server, so players cannot look ahead.
+Alternative: all rounds at the start – one request fewer, but the timer could not be measured fairly.
