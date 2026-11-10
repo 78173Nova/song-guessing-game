@@ -1,12 +1,28 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card: #f6f6f8;
+  --muted: #e2e2e8;
+  --accent: #5b3fd6;
+  --accent-text: #ffffff;
+  --good: #1f9d55;
+  --good-bg: #e3f6ea;
+  --bad: #d64545;
+  --bad-bg: #fbe5e5;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --card: #17171c;
+    --muted: #2c2c35;
+    --accent: #8b74ff;
+    --accent-text: #0a0a0a;
+    --good: #3ccf7a;
+    --good-bg: #12301f;
+    --bad: #ff6b6b;
+    --bad-bg: #3a1616;
   }
 }
 
@@ -26,7 +42,7 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

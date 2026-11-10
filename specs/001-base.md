@@ -40,7 +40,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] Game logic in `lib/game/` as plain functions (no database, no network): build rounds, check an answer, score
 - [ ] `POST /api/games` starts a game: picks 5 distinct songs that already have a cached preview (normally no
       iTunes call), builds 4 options per round (1 correct + 3 wrong titles from other songs, shuffled), stores the
-      game and its rounds, returns the game ID (a random UUID)
+      game and its rounds, returns the game ID (a random UUID) and the 5 preview URLs in round order
+      (no titles, no answers) so the browser can load the clips in advance
 - [ ] `POST /api/games/[id]/next` sends **one round at a time**: round number, preview URL and the 4 options,
       **without the correct answer**. The server stores when it sent the round (`started_at`). It is rejected
       while the current round is still unanswered, and after the last round
@@ -49,6 +50,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] The answer route also accepts "skip" instead of an option, for when the preview failed to load in the browser:
       the round is marked `skipped`, gives 0 points and returns the correct song like a normal answer
 - [ ] The answer route also accepts "timeout" when the 15 seconds ran out: 0 points, returns the correct song
+- [ ] `POST /api/games/[id]/replace` gives a round that has not started a different song (not in the game yet)
+      with 4 new options, for when its clip will not load in the browser
 - [ ] Rejected with a clear error: unknown game, round number out of range, round not sent yet, option not one of
       the four, round already answered or skipped, malformed input
 - [ ] Scoring: 100 for correct, plus a speed bonus of up to 50 falling linearly over 15 seconds, rounded to whole
@@ -59,7 +62,9 @@ When a line below can be read two ways, choose the simpler option that keeps the
 
 ### Game (UI)
 - [ ] Start screen with a "Start game" button and a one-line explanation
-- [ ] Round screen: clip plays, 15-second countdown, 4 big answer buttons, round number and score
+- [ ] Before round 1: "Loading first song…" until its clip is ready, then 3 – 2 – 1. Clips 2–5 load in the background
+- [ ] Round screen: clip plays, 15-second countdown, 4 big answer buttons, round number and score – clip, buttons and
+      countdown start in the same moment
 - [ ] After answering: right/wrong, the correct song with artwork, points earned, "Next" button
 - [ ] Results screen: total score, list of the 5 songs, "Play again"
 - [ ] Clear messages for: music source unreachable, preview failed to load (round skipped), network error
@@ -116,3 +121,6 @@ green, and the team goes through them together at the next meeting (allowed by d
   (`ROUNDS_PER_GAME` in `lib/game/rounds.ts`); the schema does not limit it
 - The answer route also accepts `"timeout"`, so the browser can close a round when time runs out and still show
   the correct song (decision 004)
+- Clips are loaded before their round starts: the start reply carries all 5 preview URLs, the game waits only for
+  the first clip (then 3-2-1), and a clip that will not load is retried and then swapped for another song
+  (decisions 004, 006, 011)

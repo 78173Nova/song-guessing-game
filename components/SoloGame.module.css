@@ -1,0 +1,184 @@
+/* Mobile first: one column, big touch targets. Wider screens get two answer columns. */
+.game {
+  width: 100%;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.intro {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  max-width: 28rem;
+}
+
+.primary,
+.secondary,
+.option {
+  font: inherit;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.primary {
+  min-height: 3.25rem;
+  padding: 0 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  color: var(--accent-text);
+  background: var(--accent);
+}
+
+.secondary {
+  display: block;
+  margin: 0 auto 1rem;
+  padding: 0.6rem 1.5rem;
+  border: 2px solid var(--accent);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.countdown {
+  position: relative;
+  height: 1.75rem;
+  margin-bottom: 1rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--muted);
+}
+
+.bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.countdown span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 600px) {
+  .options {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.option {
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
+  font-size: 1.05rem;
+  border: 2px solid var(--muted);
+  color: var(--foreground);
+  background: var(--card);
+}
+
+.option:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.option:disabled {
+  cursor: default;
+}
+
+.correct {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.wrong {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+.verdict {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.song {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+}
+
+.song img {
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.title {
+  font-weight: 700;
+}
+
+.song a {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.points {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.results {
+  width: 100%;
+  list-style: none;
+  text-align: left;
+}
+
+.results li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--muted);
+}
+
+.error {
+  color: var(--bad);
+  font-weight: 600;
+  max-width: 28rem;
+  line-height: 1.5;
+}
+
+.bigNumber {
+  font-size: 5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}

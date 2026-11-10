@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { answerRound, safely, sendNextRound, startGame } from "@/lib/api/games";
+import { answerRound, replaceRoundSong, safely, sendNextRound, startGame } from "@/lib/api/games";
 import type { Db } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
@@ -31,14 +31,22 @@ const answer = (gameId: string, body: unknown) =>
   answerRound(db, gameId, typeof body === "string" ? body : JSON.stringify(body), deps);
 
 describe("POST /api/games – start", () => {
-  it("returns 201 with only the game ID", async () => {
+  it("returns 201 with the game ID and the 5 clip addresses in round order – no titles or answers", async () => {
     await addTestSongs(db, 8);
     const result = await startGame(db);
 
     expect(result.status).toBe(201);
-    expect(Object.keys(result.body)).toEqual(["gameId"]);
-    const rounds = await getGameRounds(db, (result.body as { gameId: string }).gameId);
+    expect(Object.keys(result.body).sort()).toEqual(["gameId", "previewUrls"]);
+    const { gameId, previewUrls } = result.body as { gameId: string; previewUrls: string[] };
+    const rounds = await getGameRounds(db, gameId);
     expect(rounds).toHaveLength(5);
+    expect(previewUrls).toEqual(rounds!.map((r) => r.song.previewUrl));
+    // Nothing in the reply names a song or an option.
+    const text = JSON.stringify(result.body);
+    for (const round of rounds!) {
+      expect(text).not.toContain(round.song.title);
+      for (const option of round.options) expect(text).not.toContain(option);
+    }
   });
 
   it("returns 503 with the music message when fewer than 5 songs have a preview", async () => {
@@ -189,5 +197,65 @@ describe("safely", () => {
       throw new Error("DATABASE_URL is not set");
     });
     expect(result.status).toBe(500);
+  });
+});
+
+describe("POST /api/games/[id]/replace", () => {
+  const replace = (gameId: string, body: unknown) =>
+    replaceRoundSong(db, gameId, typeof body === "string" ? body : JSON.stringify(body));
+
+  it("gives a waiting round a song that is not in the game, with 4 new options, and returns its clip", async () => {
+    const gameId = await startedGame();
+    const before = (await getGameRounds(db, gameId))!;
+
+    const result = await replace(gameId, { round: 3 });
+
+    const after = (await getGameRounds(db, gameId))!;
+    const round = after[2];
+    expect(round.songId).not.toBe(before[2].songId);
+    expect(before.map((r) => r.songId)).not.toContain(round.songId);
+    expect(new Set(round.options).size).toBe(4);
+    expect(round.options[round.correctOption]).toBe(round.song.title);
+    expect(round.status).toBe("waiting");
+    expect(result).toEqual({ status: 200, body: { round: 3, previewUrl: round.song.previewUrl } });
+    // The other rounds are untouched.
+    expect(after.filter((_, i) => i !== 2)).toEqual(before.filter((_, i) => i !== 2));
+  });
+
+  it("refuses rounds that have started, and changes nothing", async () => {
+    const gameId = await startedGame();
+    await sendNextRound(db, gameId, deps); // round 1 open
+    const open = await replace(gameId, { round: 1 });
+    await answer(gameId, { round: 1, answer: 0 }); // round 1 answered
+    const answered = await replace(gameId, { round: 1 });
+    await sendNextRound(db, gameId, deps);
+    await answer(gameId, { round: 2, answer: "skip" }); // round 2 skipped
+    const skipped = await replace(gameId, { round: 2 });
+
+    for (const result of [open, answered, skipped]) {
+      expect(result).toMatchObject({ status: 409, body: { error: "round-already-started" } });
+    }
+  });
+
+  it("rejects malformed input, rounds out of range and unknown games", async () => {
+    const gameId = await startedGame();
+    expect(await replace(gameId, "not json")).toMatchObject({ status: 400, body: { error: "malformed" } });
+    expect(await replace(gameId, { round: "2" })).toMatchObject({ status: 400, body: { error: "malformed" } });
+    expect(await replace(gameId, { round: 0 })).toMatchObject({ status: 400, body: { error: "malformed" } });
+    expect(await replace(gameId, { round: 6 })).toMatchObject({ status: 400, body: { error: "round-out-of-range" } });
+    expect(await replace("00000000-0000-4000-8000-000000000000", { round: 1 })).toMatchObject({ status: 404 });
+    expect(await replace("not-a-uuid", { round: 1 })).toMatchObject({ status: 404 });
+  });
+
+  it("returns 503 when no unused song with a clip is left, and leaves the round as it was", async () => {
+    await addTestSongs(db, 5); // exactly the 5 songs of the game
+    const gameId = ((await startGame(db)).body as { gameId: string }).gameId;
+    const before = (await getGameRounds(db, gameId))!;
+
+    expect(await replace(gameId, { round: 2 })).toEqual({
+      status: 503,
+      body: { error: "not-enough-songs", message: MUSIC_UNAVAILABLE_MESSAGE },
+    });
+    expect(await getGameRounds(db, gameId)).toEqual(before);
   });
 });

@@ -49,3 +49,11 @@ Alternative: all rounds at the start – one request fewer, but the timer could 
   generic message only; details go to the server log.
 - A game has 5 rounds (spec 001, update). Limit: anyone who knows a game ID can play that game; without
   accounts (decision 007) the random UUID is the only protection – fine for solo.
+
+## Update 10 Nov 2026: clip addresses are sent at the start
+`POST /api/games` now also returns the 5 preview URLs in round order, so the browser can load every clip before
+its round. Why: the round should start exactly when the music starts – waiting 2–6 seconds for Apple's audio
+server while the timer runs felt unfair. Trade-off: someone using the developer tools could listen to later
+clips early. For a solo game that risk is small; the rule that matters most stays: **titles, options and the
+correct answer are still only sent with "next" and "answer"**. Alternative considered: keep the URLs on the server
+and let the browser report "music is playing" (more requests, still dependent on load times).

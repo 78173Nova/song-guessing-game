@@ -85,6 +85,15 @@ export async function savePreview(db: Db, songId: number, preview: PreviewData, 
   );
 }
 
+// Forgets a song's cached iTunes data (its clip address no longer works), so the seed looks it up again.
+export async function clearPreview(db: Db, songId: number): Promise<void> {
+  await db.query(
+    `UPDATE songs SET preview_url = NULL, artwork_url = NULL, store_url = NULL, preview_cached_at = NULL
+     WHERE id = $1`,
+    [songId],
+  );
+}
+
 function toSong(row: SongRow): Song {
   return {
     id: row.id,

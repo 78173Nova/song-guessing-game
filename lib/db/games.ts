@@ -106,6 +106,19 @@ export async function markRoundSent(db: Db, gameId: string, roundNumber: number,
   return rows.length === 1;
 }
 
+// Gives a round a different song and options (its clip would not load). Only a "waiting" round changes,
+// so a round that has started is never swapped. Returns false if nothing changed. The database refuses
+// a song that is already in the game (UNIQUE game_id + song_id).
+export async function replaceRound(db: Db, gameId: string, round: NewRound): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE rounds SET song_id = $3, options = $4, correct_option = $5
+     WHERE game_id = $1 AND round_number = $2 AND status = 'waiting'
+     RETURNING round_number`,
+    [gameId, round.roundNumber, round.songId, round.options, round.correctOption],
+  );
+  return rows.length === 1;
+}
+
 export type SavedAnswer = {
   status: "answered" | "skipped";
   chosenOption: number | null;

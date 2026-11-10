@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { listSongs, upsertSongs, type Song } from "@/lib/db/songs";
 import { MUSIC_UNAVAILABLE_MESSAGE, type PreviewLookup } from "@/lib/music/itunes";
-import { fillMissingPreviews, getPreview } from "@/lib/music/preview";
+import { fillMissingPreviews, getPreview, verifyCachedPreviews } from "@/lib/music/preview";
 import { createTestDb } from "../helpers/test-db";
 
 let db: Db;
@@ -121,5 +121,35 @@ describe("fillMissingPreviews", () => {
     });
     expect((await songByTitle("Works")).previewUrl).toBe("https://audio.example.com/works.m4a");
     expect((await songByTitle("Fails")).previewUrl).toBeNull();
+  });
+});
+
+describe("verifyCachedPreviews", () => {
+  it("clears broken addresses so they are looked up again, keeps ok and unknown, waits between checks", async () => {
+    await addCachedSong("Broken");
+    await addCachedSong("Fine");
+    await addCachedSong("Unsure");
+    await upsertSongs(db, [{ title: "Never Cached", artist: "X", year: 2000, genre: "pop" }]);
+    await db.query("UPDATE songs SET preview_url = 'https://audio.example.com/' || title || '.m4a' WHERE preview_url IS NOT NULL");
+
+    const results: Record<string, "ok" | "broken" | "unknown"> = { Broken: "broken", Fine: "ok", Unsure: "unknown" };
+    const check = vi.fn(async (url: string) => results[url.replace("https://audio.example.com/", "").replace(".m4a", "")]);
+    const wait = vi.fn(async () => {});
+
+    const summary = await verifyCachedPreviews(db, { check, wait });
+
+    expect(check).toHaveBeenCalledTimes(3); // the song without an address is skipped
+    expect(wait).toHaveBeenCalledTimes(2);
+    expect(wait).toHaveBeenCalledWith(500);
+    expect(summary).toEqual({ checked: 3, broken: [{ artist: "Cached Artist", title: "Broken" }] });
+    expect((await songByTitle("Broken")).previewUrl).toBeNull();
+    expect((await songByTitle("Fine")).previewUrl).not.toBeNull();
+    expect((await songByTitle("Unsure")).previewUrl).not.toBeNull();
+
+    // The next step of the seed looks the broken song up again.
+    const lookup = vi.fn(async (song: { title: string }) => found(song.title));
+    await fillMissingPreviews(db, { lookup, wait, now: () => NOW });
+    expect(lookup.mock.calls.map((c) => c[0].title)).toEqual(["Broken", "Never Cached"]);
+    expect((await songByTitle("Broken")).previewUrl).toBe("https://audio.example.com/Broken.m4a");
   });
 });
