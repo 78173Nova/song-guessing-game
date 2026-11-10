@@ -36,3 +36,14 @@ All database code lives in `lib/db/`; the connection comes from the `DATABASE_UR
 ## How it could change
 Because SQL only lives in `lib/db/`, the provider (e.g. Supabase, our own Postgres server) could be
 swapped by changing that folder and the connection string.
+
+## Update 10 Nov 2026: how `lib/db/` is built
+- **One small `Db` type:** every `lib/db/` function takes the database as a parameter (`query(sql, params)`).
+  The app passes Neon (`getDb()`), the tests pass PGlite (decision 010). Values always go in as parameters,
+  never pasted into the SQL text, so input cannot change a query.
+- **Seed can run again:** `db/schema.sql` uses `IF NOT EXISTS`; a song is unique by artist + title, ignoring
+  upper/lower case. Re-running the seed only updates year and genre and keeps cached previews.
+  Alternative: delete and reload all songs – simpler, but it would throw away every cached preview.
+- **Seed runs with plain Node:** Node 24 runs TypeScript files directly, so no extra tool (like `tsx`) is
+  needed. For that, `tsconfig.json` allows imports ending in `.ts`.
+- Limit: the games and rounds tables are added with `feature/game-core`.

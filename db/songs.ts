@@ -1,0 +1,36 @@
+import type { SongInput } from "../lib/db/songs";
+
+// Starter list of well-known songs for the base (spec 001). Year = original release year, not a remaster
+// (decision 005). Drafted with Claude – a human should check it. Person 2 replaces it with the full catalogue.
+export const songList: SongInput[] = [
+  { artist: "Elvis Presley", title: "Jailhouse Rock", year: 1957, genre: "rock" },
+  { artist: "Aretha Franklin", title: "Respect", year: 1967, genre: "soul" },
+  { artist: "The Beatles", title: "Hey Jude", year: 1968, genre: "rock" },
+  { artist: "Stevie Wonder", title: "Superstition", year: 1972, genre: "soul" },
+  { artist: "Queen", title: "Bohemian Rhapsody", year: 1975, genre: "rock" },
+  { artist: "ABBA", title: "Dancing Queen", year: 1976, genre: "pop" },
+  { artist: "Bee Gees", title: "Stayin' Alive", year: 1977, genre: "dance" },
+  { artist: "Gloria Gaynor", title: "I Will Survive", year: 1978, genre: "dance" },
+  { artist: "Queen", title: "Don't Stop Me Now", year: 1979, genre: "rock" },
+  { artist: "Toto", title: "Africa", year: 1982, genre: "rock" },
+  { artist: "Survivor", title: "Eye of the Tiger", year: 1982, genre: "rock" },
+  { artist: "Michael Jackson", title: "Billie Jean", year: 1983, genre: "pop" },
+  { artist: "Bon Jovi", title: "Livin' on a Prayer", year: 1986, genre: "rock" },
+  { artist: "Whitney Houston", title: "I Wanna Dance with Somebody (Who Loves Me)", year: 1987, genre: "pop" },
+  { artist: "Nirvana", title: "Smells Like Teen Spirit", year: 1991, genre: "rock" },
+  { artist: "Oasis", title: "Wonderwall", year: 1995, genre: "rock" },
+  { artist: "Britney Spears", title: "...Baby One More Time", year: 1998, genre: "pop" },
+  { artist: "Backstreet Boys", title: "I Want It That Way", year: 1999, genre: "pop" },
+  { artist: "Eminem", title: "Lose Yourself", year: 2002, genre: "hip-hop" },
+  { artist: "OutKast", title: "Hey Ya!", year: 2003, genre: "hip-hop" },
+  { artist: "Beyoncé", title: "Crazy in Love", year: 2003, genre: "r&b" },
+  { artist: "Rihanna", title: "Umbrella", year: 2007, genre: "pop" },
+  { artist: "Coldplay", title: "Viva la Vida", year: 2008, genre: "rock" },
+  { artist: "Adele", title: "Rolling in the Deep", year: 2010, genre: "pop" },
+  { artist: "Daft Punk", title: "Get Lucky", year: 2013, genre: "dance" },
+  { artist: "Pharrell Williams", title: "Happy", year: 2013, genre: "pop" },
+  { artist: "Mark Ronson", title: "Uptown Funk", year: 2014, genre: "pop" },
+  { artist: "Ed Sheeran", title: "Shape of You", year: 2017, genre: "pop" },
+  { artist: "The Weeknd", title: "Blinding Lights", year: 2019, genre: "pop" },
+  { artist: "Dua Lipa", title: "Levitating", year: 2020, genre: "pop" },
+];
