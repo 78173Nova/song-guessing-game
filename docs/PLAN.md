@@ -110,14 +110,16 @@ schema changes only through Niklas.
 ## 8. Workflow for everyone
 1. Update `main`, create a new branch (e.g. `feature/lobby-qr`)
 2. New Claude Code session per task, point it to the spec in `specs/`
-3. Tests first (Claude proposes, you read them), then build
+3. Tests first (Claude proposes, you read and OK them yourself), then build
 4. Claude shows the test output, not just "done"
 5. Click through it yourself: locally and on the pull request's Vercel preview URL
 6. Open a pull request and tag a teammate as reviewer
-7. When the automatic checks are green, merge it yourself. **Exception:** pull requests that change
-   tests, `db/schema.sql` or `CLAUDE.md` wait for a teammate's approval first (schema: Niklas)
-8. The tagged teammate reviews within 24 hours (also after the merge); problems are fixed in a new small pull request
-9. Stay small: merge daily rather than keeping branches open for days
+7. When the automatic checks are green, merge it yourself. If the pull request changes tests,
+   `db/schema.sql` or `CLAUDE.md`, say so in the group chat first (schema: wait for Niklas's OK)
+8. The tagged teammate reviews it before the next team meeting (also after the merge); problems are
+   fixed in a new small pull request
+9. Stay small: merge daily rather than keeping branches open for days. One feature per branch;
+   small doc fixes go along with the task they belong to, or several together in one `docs/...` branch
 
 Details and reasons: `docs/decisions/009-review-process.md`.
 Rotate reviewers so everyone knows every part. Whoever builds a feature writes its decision docs.
@@ -125,6 +127,7 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 ## 9. Folders
 - `specs/` – one spec per task (Why / What / Out of scope / Done when)
 - `docs/decisions/` – one file per decision: Decision, Why, Alternatives, Limits, How it could change
+  (one or two sentences each)
 - `docs/course/` – course requirements
 - `tests/` – tests
 
@@ -138,3 +141,6 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - 10 Nov 2026: first version
 - 10 Nov 2026: review process changed – author merges after green checks, review within 24 h
   (decision 009); GitHub Action moved into the `chore/setup` branch, because merging now depends on it
+- 10 Nov 2026: process simplified – no approval wait (group chat notice instead), review before the
+  next team meeting instead of within 24 h, small doc fixes need no own branch, the person working
+  with Claude OKs the tests, decision docs may be short (decision 009, update)

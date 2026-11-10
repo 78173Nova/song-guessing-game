@@ -51,3 +51,23 @@ GitHub settings for `main` (Settings → Branches → branch protection rule):
 ## How it could change
 - The exceptions could be enforced by GitHub with a `CODEOWNERS` file plus "Require review from Code Owners".
 - From the feature freeze (21 Nov) we could switch back to "1 approval required" to protect the demo version.
+
+## Update 10 Nov 2026: simpler process
+The rules above felt too heavy for a four-person course project with three weeks left. Changed:
+- **No approval wait.** Pull requests that change tests, `db/schema.sql` or `CLAUDE.md` no longer wait
+  for an approval on GitHub. The author says so in the group chat before merging; schema changes still
+  need Niklas's OK there. It was a team agreement before as well (not enforced by GitHub), so the
+  protection is about the same, and nobody has to wait for a click.
+- **Review before the next team meeting** instead of within 24 hours. The goal stays the same:
+  everyone knows every part for the walkthrough, without daily time pressure.
+- **Small doc fixes need no own branch.** They go into the branch of the task they belong to, or
+  several together into one `docs/...` branch. Features still get one branch each.
+- **Tests first stays, but the person working with Claude OKs the tests** – no teammate needed.
+  "Never change tests to make them pass" (rule 3 in `CLAUDE.md`) is unchanged.
+- **Decision docs keep their five sections, one or two sentences each.**
+
+Unchanged: pull request required for `main`, automatic checks must pass, nobody can bypass,
+no secrets in code, the server checks answers, tests stay offline.
+
+Limit: a test change by an agent is now only caught if the author really reads the diff and the
+chat notice is not skipped. Reviewers should look at test changes first.

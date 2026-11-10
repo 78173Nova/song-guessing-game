@@ -15,7 +15,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 ## Key documents
 - `docs/PLAN.md` – plan, releases, task split, workflow
 - `docs/course/requirements.md` – all course requirements and grading criteria
-- `docs/decisions/` – decisions made (Decision / Why / Alternatives / Limits / How it could change)
+- `docs/decisions/` – decisions made (Decision / Why / Alternatives / Limits / How it could change,
+  one or two sentences each)
 - `docs/reference/` – earlier prototype (README + notes on what we keep and change), ideas only
 - `specs/` – one spec per task (Why / What / Out of scope / Done when)
 
@@ -56,9 +57,10 @@ The team are **programming beginners**: explain proposals in plain language befo
 
 ## Rules
 1. **Branches:** every task on its own branch (`feature/...`, `fix/...`, `docs/...`).
-   Never commit or push to `main` directly. One task per branch.
-2. **Tests first:** for a new feature, propose the tests first and let a human review them,
-   then build. Test accepted **and** rejected actions as well as edge cases.
+   Never commit or push to `main` directly. One feature per branch. Small doc fixes go into the
+   branch of the task they belong to, or several of them together into one `docs/...` branch.
+2. **Tests first:** for a new feature, propose the tests first and let the person you are working
+   with review them (no teammate needed), then build. Test accepted **and** rejected actions as well as edge cases.
 3. **Never change tests to make them pass.** If a test looks wrong, say so and stop.
 4. **Proof, not claims:** at the end of a task run `npm test`, show the output and list every
    changed file. Also say how to check the change in the running app.
@@ -82,9 +84,10 @@ The team are **programming beginners**: explain proposals in plain language befo
 12. **Git:** commit messages say what changed ("Move answer checking to the server", not "update").
     Open pull requests with `gh pr create`; the description covers what, why, test output and how
     to check it. Merging (see `docs/decisions/009-review-process.md`): the author merges once the
-    automatic checks are green and tags a teammate, who reviews within 24 hours. Pull requests that
-    change tests, `db/schema.sql` or `CLAUDE.md` wait for a human approval before merging.
-    Claude never merges a pull request itself.
+    automatic checks are green and tags a teammate, who reviews it before the next team meeting.
+    Before merging a pull request that changes tests, `db/schema.sql` or `CLAUDE.md`, the author
+    tells the team in the group chat; schema changes need Niklas's OK there. Claude never merges
+    a pull request itself.
 13. **Language:** code, comments, commit messages, pull requests and all documentation in English.
 
 ## When something goes wrong
