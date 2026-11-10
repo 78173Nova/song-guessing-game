@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
-import { listSongs, upsertSongs, type SongInput } from "@/lib/db/songs";
+import { listSongs, listSongsWithoutPreview, upsertSongs, type SongInput } from "@/lib/db/songs";
 import { createTestDb } from "../helpers/test-db";
 
 let db: Db;
@@ -69,6 +69,14 @@ describe("upsertSongs / listSongs", () => {
   it("does nothing for an empty list", async () => {
     await expect(upsertSongs(db, [])).resolves.toBeUndefined();
     expect(await listSongs(db)).toEqual([]);
+  });
+
+  it("listSongsWithoutPreview returns only songs without a cached preview", async () => {
+    await upsertSongs(db, threeSongs);
+    await db.query("UPDATE songs SET preview_url = 'https://example.com/p.m4a', preview_cached_at = now() WHERE title = 'Billie Jean'");
+
+    const titles = (await listSongsWithoutPreview(db)).map((s) => s.title);
+    expect(titles).toEqual(["Bohemian Rhapsody", "Hey Ya!"]);
   });
 
   it("stores apostrophes and quotes exactly as written", async () => {
