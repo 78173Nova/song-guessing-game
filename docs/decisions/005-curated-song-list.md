@@ -33,3 +33,8 @@ Start: about 30 songs in the base, then 300+ songs (person 2).
 ## How it could change
 The list can grow at any time (extend the seed script). Later options: players suggest songs, or a
 "current charts" category from a feed.
+
+## Update 10 Nov 2026: no decade column
+The `songs` table stores artist, title, original year and genre – **no decade**. The decade is calculated from
+the year when a filter needs it (1987 → 1980s), so the two can never disagree. The base starts with 30 songs
+(`db/songs.ts`, drafted with Claude, to be checked by a person).

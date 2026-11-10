@@ -1,6 +1,6 @@
 # Project plan: music guessing game
 
-Last updated: 10 Nov 2026. Change it through a pull request and add a line under "Changelog".
+Last updated: 10 Nov 2026 (after the base). Change it through a pull request and add a line under "Changelog".
 
 ## 1. Context
 - Team: 4 people, everyone works with Claude Code and GitHub.
@@ -13,15 +13,25 @@ Last updated: 10 Nov 2026. Change it through a pull request and add a line under
 - **Stack approval:** the course default is Python/Streamlit. Using Next.js was approved by the
   professor on 10 Nov 2026 (decision 001).
 
-## 2. Product
-A music quiz with 30-second previews of well-known songs.
-- **Solo:** one player plays 5 rounds and picks the answer from 4 options.
-- **Presentation mode (Kahoot style):** a big screen shows a QR code, plays the music and shows the
-  leaderboard. The audience joins on their phones with a nickname and answers there.
-  Tuned for a 3-minute demo (e.g. 5 short rounds).
-- **Online duel:** players compete remotely, each phone plays the music itself, rounds start at
-  a time set by the server.
-- **Game modes:** guess the song, guess the artist; later the year and a mixed mode.
+## 2. Scope
+**Status (10 Nov 2026): the base is done** – the solo game runs at https://song-guessing-game-tawny.vercel.app
+(spec `specs/001-base.md`).
+
+**Must have**
+1. **Solo game** ✅ – 5 rounds, 4 options, speed points, results. Still to add: high scores, better error screens,
+   polished phone layout.
+2. **Song catalogue** – 300+ well-known songs, filters by genre and decade.
+3. **Game modes** – guess the song ✅, guess the artist, guess the year, mixed.
+4. **Room core** – create a room, join with a nickname, rounds run by the server (the foundation for 5).
+5. **Presentation mode (Kahoot style)** – the big screen shows a QR code, plays the music and shows the leaderboard;
+   the audience answers on their phones.
+
+**If time allows** (only once 1–5 work on the live URL)
+
+6. **Online duel** – players in different places, each phone plays the music, rounds start at the same moment.
+7. **Typed answers** – type the title instead of choosing from 4.
+
+**Not planned:** accounts or logins, other music sources.
 
 ## 3. Stack
 - **Next.js (TypeScript):** UI and server in one project. Streamlit is weak for games and multiplayer.
@@ -47,65 +57,46 @@ A music quiz with 30-second previews of well-known songs.
 7. **Secrets never in the repository:** `.gitignore` from the first commit, `.env.example` with
    placeholders, real values only locally and in the Vercel settings.
 
-## 5. Releases
-| Release | By | Content |
+## 5. Step by step
+No timeline – a step starts when what it needs is done. Steps in the same row can run at the same time.
+
+| Step | Person 1 (Niklas) | Person 2 | Persons 3 + 4 | Needs first |
+|---|---|---|---|---|
+| **0. Setup** | invite, share the `dev` string | install, run the app (README) | install, run the app (README) | – |
+| **1. Specs** | spec: solo extras | spec: catalogue + modes | spec: room core | step 0 |
+| **2. Basics** | high scores | 300+ songs into the seed, guess the artist | room core (together) | own spec OK'd |
+| **3. On top** | error screens, phone layout | genre/decade filters, year + mixed modes | P3: presentation mode · P4: helps P3 (or starts the duel if 5 is on track) | room core merged |
+| **4. Connect** | – | modes inside rooms | modes in presentation mode | steps 2 + 3 |
+| **5. Optional** | typed answers | | P4: online duel | must-haves 1–5 work |
+| **6. Finish** | everyone: bug fixes only, README names + student numbers, decision docs, demo rehearsal on the live URL | | | ~2 days before the deadline |
+
+**Fixed dates:** submission **23 Nov 2026, 23:59** · presentation 24 Nov or 4 Dec.
+
+**Rules for the steps**
+- **Schema changes** (high scores, rooms, players, modes) go through Niklas, one at a time – agree in the group chat
+  in which order they are merged.
+- Loading 300+ songs runs `npm run db:seed` for about 18 minutes (iTunes rate limit). Fine – but only once.
+
+## 6. Who is who
+| Person | Name | Feature |
 |---|---|---|
-| Base (0+1) | 12 Nov | Setup + solo game online (see section 6, spec `specs/001-base.md`) |
-| 2 | 16 Nov | Song catalogue (300+ songs), song/artist modes, solo polish, room core for multiplayer |
-| 3 | 20 Nov | Presentation mode (big screen + QR + leaderboard), online duel, more modes |
-| Feature freeze | 21 Nov, evening | Bug fixes only from here |
-| Wrap-up | 23 Nov | Tests green on `main`, README, decision docs, demo rehearsal on the real URL |
+| 1 | Niklas | Solo experience. **Owner of the database schema and `CLAUDE.md`.** |
+| 2 | *decided in the group chat* | Song catalogue & game modes |
+| 3 | *decided in the group chat* | Room core, then presentation mode |
+| 4 | *decided in the group chat* | Room core, then helps with presentation mode / online duel |
 
-## 6. Base: what must be done by 12 Nov (Niklas)
-Done when one player can play a full game at the **Vercel URL**:
-- [ ] Public repository, all team members invited
-- [ ] `main` protected: changes only through pull requests, automatic checks must pass, no bypassing
-      (see `docs/decisions/009-review-process.md`)
-- [ ] `.gitignore`, `.env.example`, `CLAUDE.md`, README skeleton
-- [ ] Next.js app runs locally and on Vercel
-- [ ] Neon connected (`main` + `dev`), songs table, seed script with about 30 songs
-- [ ] Server route "start game": 5 songs, previews via iTunes, 4 options per round
-- [ ] Server route "answer": checks the answer, returns the result and points
-- [ ] UI: start → clip plays → 4 buttons → right/wrong → final score
-- [ ] Clear message when iTunes is unreachable
-- [ ] Tests for answer checking and scoring (with fake iTunes)
-- [ ] GitHub Action: runs tests and build on every pull request
+Team: Niklas, Jasper, Steinar, Karin. Each feature goes from UI to database; whoever builds it writes its spec,
+tests and decision docs.
 
-### Order
-1. Install: Node.js (LTS), Git, GitHub CLI (`gh`, then `gh auth login`), Claude Code
-2. Create the repository on GitHub (public), invite team members, protect `main`
-3. With Claude Code: create the Next.js project, `.gitignore` first, then copy this package in
-4. Connect the repository to Vercel, deploy the empty app and check the URL works
-5. Neon: create the `dev` branch, put connection strings into `.env.local` and into Vercel
-6. Songs table + seed script
-7. Game routes + UI
-8. Tests (the GitHub Action already comes with step 3, see decision 009)
-9. README: URL, names, student numbers, run and test commands
-
-## 7. Task split after the base (by feature)
-| Person | Feature (UI to database) |
-|---|---|
-| 1 – Niklas | Solo experience: results screen, high scores, error states, mobile layout. **Owner of the database schema and `CLAUDE.md`.** |
-| 2 | Song catalogue & game modes: import the list, genre/decade filters, song/artist/year/mixed modes |
-| 3 | Presentation mode: big-screen view, QR code, join by nickname, live leaderboard |
-| 4 | Online duel: each phone plays the music, synchronised round start |
-
-- Persons 3 + 4 **first build the room core together** by 16 Nov (create room, join, poll game state,
-  server-controlled rounds). Then they split.
-- Until the base is ready: person 2 builds the curated song list (no code needed),
-  persons 3 + 4 write the room-core spec (`specs/002-room-core.md`).
-
-### Timeline
-| When | Person 1 | Person 2 | Persons 3 + 4 |
-|---|---|---|---|
-| 10–12 Nov | Base | Curate song list | Room-core spec |
-| 13–16 Nov | Solo experience | Import catalogue, song/artist modes | Room core together |
-| 17–20 Nov | High scores, mobile UI | Year and mixed modes, modes in multiplayer | P3 presentation mode · P4 online duel |
-| 21 Nov | Feature freeze | | |
-| 22–23 Nov | Everyone: bug fixes, README, docs, demo rehearsal | | |
-
-**Hard dependencies:** base before everything else · room core before presentation mode and duel ·
-schema changes only through Niklas.
+## 7. How to start a task
+Start Claude Code in the project folder and paste:
+```
+Read CLAUDE.md, docs/PLAN.md, docs/course/requirements.md and specs/001-base.md.
+I am Person <2/3/4>. Help me write the spec for my next step (specs/00X-<name>.md)
+in the same format as specs/001-base.md: Why / What / Out of scope / Done when.
+Ask me questions first. Do not write any code yet.
+```
+Once the spec is agreed: a new branch, then the workflow below.
 
 ## 8. Workflow for everyone
 1. Update `main`, create a new branch (e.g. `feature/lobby-qr`)
@@ -132,8 +123,7 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - `tests/` – tests
 
 ## 10. Open questions
-- Answer format: multiple choice to start, maybe free text later as a separate mode
-- Online duel: 1v1 only or more players?
+- Online duel: 1v1 only or more players? (only relevant if there is time for it)
 - Presentation date (24 Nov or 4 Dec)
 
 ## Changelog
@@ -146,3 +136,4 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - 10 Nov 2026: stack approved by the professor; base questions decided – rounds one at a time, skipped
   rounds stored, previews looked up during `db:seed`, PGlite for database tests (spec 001, decisions 001, 004, 006, 010)
 - 10 Nov 2026: a solo game has 5 rounds instead of 10; answer route also accepts "timeout" (spec 001, decision 004)
+- 10 Nov 2026: base done. Releases and timeline replaced by a scope (must have 1–5, optional: duel, typed answers) and a step-by-step plan; team names added, roles decided in the group chat
