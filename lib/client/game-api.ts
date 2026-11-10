@@ -37,7 +37,7 @@ async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<Ap
 
 // `fetchFn` is only passed in tests; the browser uses the real fetch.
 export function apiStartGame(fetchFn: FetchFn = fetch) {
-  return post<{ gameId: string }>("/api/games", undefined, fetchFn);
+  return post<{ gameId: string; previewUrls: string[] }>("/api/games", undefined, fetchFn);
 }
 
 export function apiNextRound(gameId: string, fetchFn: FetchFn = fetch) {
@@ -46,4 +46,8 @@ export function apiNextRound(gameId: string, fetchFn: FetchFn = fetch) {
 
 export function apiAnswer(gameId: string, round: number, answer: Answer, fetchFn: FetchFn = fetch) {
   return post<AnswerResult>(`/api/games/${encodeURIComponent(gameId)}/answer`, { round, answer }, fetchFn);
+}
+
+export function apiReplace(gameId: string, round: number, fetchFn: FetchFn = fetch) {
+  return post<{ round: number; previewUrl: string }>(`/api/games/${encodeURIComponent(gameId)}/replace`, { round }, fetchFn);
 }

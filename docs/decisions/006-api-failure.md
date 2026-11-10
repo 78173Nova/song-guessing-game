@@ -51,3 +51,11 @@ empty results, song without a preview.
   and other versions. Alternative: take the first result – simpler, but often the wrong recording.
 - **Seed spacing:** 3.5 seconds between lookups (about 17 per minute). If a song fails, the seed moves on.
 - Limit: expired preview URLs are not refreshed yet – a cached URL is used as it is.
+
+## Update 10 Nov 2026: clips that will not load in the browser
+- The browser tries a clip twice; if it still fails, it asks `POST /api/games/[id]/replace` for another song for
+  that round (only before the round starts, up to 3 times). Round 1 gives up after 30 seconds with a clear
+  message; for later rounds this happens unnoticed during the earlier rounds.
+- `npm run db:seed` checks every stored clip address with Apple's audio server (first 2 bytes only). Only a clear
+  "not found" (403/404/410) clears the address so it is looked up again; if our own connection fails, it is kept.
+  Why not clear it when a player's browser fails? One player on bad Wi-Fi would empty the song list for everyone.

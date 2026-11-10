@@ -37,23 +37,40 @@ export function buildRounds(songs: SongForGame[], random: () => number = Math.ra
   }
 
   const chosen = shuffle(songs, random).slice(0, ROUNDS_PER_GAME);
-  const rounds = chosen.map((song, index) => {
-    const usedTitles = new Set([titleKey(song.title)]);
-    const wrongTitles: string[] = [];
-    for (const other of shuffle(songs, random)) {
-      if (wrongTitles.length === OPTIONS_PER_ROUND - 1) break;
-      if (usedTitles.has(titleKey(other.title))) continue;
-      usedTitles.add(titleKey(other.title));
-      wrongTitles.push(other.title);
-    }
-
-    const options = shuffle([song.title, ...wrongTitles], random);
-    return {
-      roundNumber: index + 1,
-      songId: song.id,
-      options,
-      correctOption: options.indexOf(song.title),
-    };
-  });
+  const rounds = chosen.map((song, index) => roundFor(song, index + 1, songs, random));
   return { ok: true, rounds };
+}
+
+// One round for `song`: its title plus 3 different wrong titles from the other songs, shuffled.
+function roundFor(song: SongForGame, roundNumber: number, songs: SongForGame[], random: () => number): NewRound {
+  const usedTitles = new Set([titleKey(song.title)]);
+  const wrongTitles: string[] = [];
+  for (const other of shuffle(songs, random)) {
+    if (wrongTitles.length === OPTIONS_PER_ROUND - 1) break;
+    if (usedTitles.has(titleKey(other.title))) continue;
+    usedTitles.add(titleKey(other.title));
+    wrongTitles.push(other.title);
+  }
+
+  const options = shuffle([song.title, ...wrongTitles], random);
+  return { roundNumber, songId: song.id, options, correctOption: options.indexOf(song.title) };
+}
+
+export type ReplacementResult = { ok: true; round: NewRound } | { ok: false; reason: "not-enough-songs" };
+
+// A new song for a round whose clip would not load: a song that is not in the game yet,
+// with 4 new options. `songIdsInGame` are the songs the game already uses (including the one replaced).
+export function buildReplacementRound(
+  songs: SongForGame[],
+  songIdsInGame: number[],
+  roundNumber: number,
+  random: () => number = Math.random,
+): ReplacementResult {
+  const unused = songs.filter((s) => !songIdsInGame.includes(s.id));
+  const differentTitles = new Set(songs.map((s) => titleKey(s.title))).size;
+  if (unused.length === 0 || differentTitles < OPTIONS_PER_ROUND) {
+    return { ok: false, reason: "not-enough-songs" };
+  }
+  const song = shuffle(unused, random)[0];
+  return { ok: true, round: roundFor(song, roundNumber, songs, random) };
 }

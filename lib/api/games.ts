@@ -2,15 +2,25 @@
 // save, and build the reply. The route files in app/api/games/ only call these functions.
 // The database is passed in, so the tests can use PGlite instead of Neon.
 import type { Db } from "../db/client";
-import { createGame, getGameRounds, markRoundSent, saveAnswer } from "../db/games";
+import { createGame, getGameRounds, markRoundSent, replaceRound, saveAnswer } from "../db/games";
 import { listSongsWithPreview } from "../db/songs";
-import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput } from "../game/answers";
-import { buildRounds } from "../game/rounds";
+import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
+import { buildReplacementRound, buildRounds } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
 
 type Deps = { now?: () => Date };
+
+// Reads a small JSON body; null if it is too long or not JSON.
+function readJson(rawBody: string): { ok: true; body: unknown } | { ok: false } {
+  if (rawBody.length > MAX_BODY_LENGTH) return { ok: false };
+  try {
+    return { ok: true, body: JSON.parse(rawBody) };
+  } catch {
+    return { ok: false };
+  }
+}
 
 // Answer bodies are tiny ({"round":1,"answer":2}). Anything bigger is refused before parsing.
 const MAX_BODY_LENGTH = 1000;
@@ -25,6 +35,7 @@ const ERRORS = {
   "already-answered": { status: 409, message: "This round was already answered." },
   "round-still-open": { status: 409, message: "Please answer the current round first." },
   "game-finished": { status: 409, message: "The game is over – there are no more rounds." },
+  "round-already-started": { status: 409, message: "This round has already started." },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
 
@@ -45,14 +56,17 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
   }
 }
 
-// POST /api/games – picks the songs, builds the rounds, stores the game, returns only its ID.
+// POST /api/games – picks the songs, builds the rounds, stores the game. Returns its ID and the 5 clip
+// addresses in round order, so the browser can load the clips in advance (decision 004, update).
+// No titles and no answers: those only come with "next" and "answer".
 export async function startGame(db: Db, random: () => number = Math.random): Promise<ApiResult> {
   const songs = await listSongsWithPreview(db);
   const built = buildRounds(songs, random);
   if (!built.ok) return fail("not-enough-songs");
 
   const gameId = await createGame(db, built.rounds);
-  return { status: 201, body: { gameId } };
+  const previewUrls = built.rounds.map((round) => songs.find((s) => s.id === round.songId)!.previewUrl);
+  return { status: 201, body: { gameId, previewUrls } };
 }
 
 // POST /api/games/[id]/next – sends the next round without the correct answer and notes the time.
@@ -92,14 +106,9 @@ export async function answerRound(
   const now = deps.now ?? (() => new Date());
   if (!isValidGameId(gameId)) return fail("game-not-found");
 
-  if (rawBody.length > MAX_BODY_LENGTH) return fail("malformed");
-  let body: unknown;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
-    return fail("malformed");
-  }
-  const input = parseAnswerInput(body);
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const input = parseAnswerInput(json.body);
   if (!input.ok) return fail(input.error);
 
   const rounds = await getGameRounds(db, gameId);
@@ -139,4 +148,34 @@ export async function answerRound(
       },
     },
   };
+}
+
+// POST /api/games/[id]/replace – the browser could not load a round's clip: give that round another song
+// (not in the game yet) with 4 new options. Only for rounds that have not started (decision 006, update).
+export async function replaceRoundSong(
+  db: Db,
+  gameId: string,
+  rawBody: string,
+  random: () => number = Math.random,
+): Promise<ApiResult> {
+  if (!isValidGameId(gameId)) return fail("game-not-found");
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const input = parseRoundInput(json.body);
+  if (!input.ok) return fail(input.error);
+
+  const rounds = await getGameRounds(db, gameId);
+  if (rounds === null) return fail("game-not-found");
+  if (input.round > rounds.length) return fail("round-out-of-range");
+  if (rounds[input.round - 1].status !== "waiting") return fail("round-already-started");
+
+  const songs = await listSongsWithPreview(db);
+  const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, random);
+  if (!built.ok) return fail("not-enough-songs");
+
+  // Only succeeds if the round is still waiting.
+  if (!(await replaceRound(db, gameId, built.round))) return fail("round-already-started");
+
+  const previewUrl = songs.find((s) => s.id === built.round.songId)!.previewUrl;
+  return { status: 200, body: { round: input.round, previewUrl } };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRounds, OPTIONS_PER_ROUND, ROUNDS_PER_GAME } from "@/lib/game/rounds";
+import { buildReplacementRound, buildRounds, OPTIONS_PER_ROUND, ROUNDS_PER_GAME } from "@/lib/game/rounds";
 
 function songs(titles: string[]) {
   return titles.map((title, i) => ({ id: i + 1, title }));
@@ -61,5 +61,26 @@ describe("buildRounds", () => {
     expect(buildRounds(songs(["A", "B", "C", "D"]))).toEqual({ ok: false, reason: "not-enough-songs" });
     expect(buildRounds(songs(["A", "B", "C", "D", "E"])).ok).toBe(true);
     expect(buildRounds(songs(["A", "a", "B", "B", "C"]))).toEqual({ ok: false, reason: "not-enough-songs" });
+  });
+});
+
+describe("buildReplacementRound", () => {
+  it("picks a song that is not in the game, with 4 different titles and the correct one at correctOption", () => {
+    const inGame = [1, 2, 3, 4, 5];
+    for (let i = 0; i < 50; i++) {
+      const result = buildReplacementRound(eightSongs, inGame, 3);
+      if (!result.ok) throw new Error("expected a round");
+      const { round } = result;
+      expect(inGame).not.toContain(round.songId);
+      expect(round.roundNumber).toBe(3);
+      expect(new Set(round.options.map((o) => o.toLowerCase())).size).toBe(4);
+      expect(round.options[round.correctOption]).toBe(eightSongs.find((s) => s.id === round.songId)!.title);
+    }
+  });
+
+  it("refuses when every song is already in the game, or there are too few different titles", () => {
+    const five = songs(["A", "B", "C", "D", "E"]);
+    expect(buildReplacementRound(five, [1, 2, 3, 4, 5], 1)).toEqual({ ok: false, reason: "not-enough-songs" });
+    expect(buildReplacementRound(songs(["A", "a", "B", "C", "c", "B"]), [1], 1)).toEqual({ ok: false, reason: "not-enough-songs" });
   });
 });

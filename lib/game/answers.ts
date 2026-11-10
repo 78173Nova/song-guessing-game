@@ -34,6 +34,14 @@ export function parseAnswerInput(body: unknown): ParsedAnswer {
   return { ok: true, round, answer };
 }
 
+// Checks the body of a request that only names a round: { round: 1, 2, ... }.
+export function parseRoundInput(body: unknown): { ok: true; round: number } | { ok: false; error: "malformed" } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, error: "malformed" };
+  const { round } = body as Record<string, unknown>;
+  if (typeof round !== "number" || !Number.isInteger(round) || round < 1) return { ok: false, error: "malformed" };
+  return { ok: true, round };
+}
+
 export type RoundState = {
   status: RoundStatus;
   startedAt: Date | null;

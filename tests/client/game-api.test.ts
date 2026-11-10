@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   apiAnswer,
   apiNextRound,
+  apiReplace,
   apiStartGame,
   GENERIC_ERROR_MESSAGE,
   NETWORK_ERROR_MESSAGE,
@@ -17,8 +18,9 @@ function reply(status: number, body: unknown) {
 
 describe("game API calls from the browser", () => {
   it("starts a game and loads the next round", async () => {
-    const start = reply(201, { gameId: GAME });
-    expect(await apiStartGame(start)).toEqual({ ok: true, data: { gameId: GAME } });
+    const previewUrls = [1, 2, 3, 4, 5].map((n) => `https://audio.example.com/${n}.m4a`);
+    const start = reply(201, { gameId: GAME, previewUrls });
+    expect(await apiStartGame(start)).toEqual({ ok: true, data: { gameId: GAME, previewUrls } });
     expect(start).toHaveBeenCalledWith("/api/games", expect.objectContaining({ method: "POST" }));
 
     const roundData = { round: 1, totalRounds: 5, previewUrl: "https://audio.example.com/1.m4a", options: ["A", "B", "C", "D"] };
@@ -54,5 +56,17 @@ describe("game API calls from the browser", () => {
   it("returns a general message when the reply is not JSON", async () => {
     expect(await apiStartGame(reply(502, "<html>Bad gateway</html>"))).toEqual({ ok: false, message: GENERIC_ERROR_MESSAGE });
     expect(await apiNextRound(GAME, reply(200, "not json"))).toEqual({ ok: false, message: GENERIC_ERROR_MESSAGE });
+  });
+
+  it("asks the server to replace a round's song and passes on its error message", async () => {
+    const fetchFn = reply(200, { round: 2, previewUrl: "https://audio.example.com/new.m4a" });
+    expect(await apiReplace(GAME, 2, fetchFn)).toEqual({ ok: true, data: { round: 2, previewUrl: "https://audio.example.com/new.m4a" } });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe(`/api/games/${GAME}/replace`);
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ round: 2 });
+
+    const refused = reply(409, { error: "round-already-started", message: "This round has already started." });
+    expect(await apiReplace(GAME, 1, refused)).toEqual({ ok: false, message: "This round has already started." });
   });
 });

@@ -27,3 +27,15 @@ When it reaches 0, the browser sends `"timeout"`; when a clip fails to load, it 
 ## How it could change
 Browser tests (e.g. Playwright) could click through the screens automatically. The countdown could start when
 the clip actually starts playing instead of when the round arrives.
+
+## Update 10 Nov 2026: get ready, preloaded clips, one start moment
+- The start reply carries all clip addresses (decision 004, update). One audio player per round is created and
+  "unlocked" during the Start tap. The game waits only for clip 1 ("Loading first song…" – no fixed time), then
+  shows 3 – 2 – 1. Clips 2–5 load one after another in the background.
+- A round starts by asking the server for it first, then starting the already loaded clip and showing the
+  buttons together. Measured in Chrome: clip and buttons appear within ~0.1 s of each other.
+- Clips that will not load: retry → swap the song → give up (`lib/client/clip-loader.ts`, decision 006).
+  Browsers that cannot play AAC at all (e.g. the VS Code built-in browser) get a clear message before a game starts.
+- Limits: the server's 15 seconds start when the request arrives, so the reply's travel time (about 0.1–0.3 s)
+  counts against the player. If a phone still refuses to start round 1's sound, a "▶ Tap to start" button
+  appears; the server's clock is already running then.

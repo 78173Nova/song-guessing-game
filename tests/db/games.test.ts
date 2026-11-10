@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
-import { createGame, getGameRounds, markRoundSent, saveAnswer } from "@/lib/db/games";
-import { listSongsWithPreview, type Song } from "@/lib/db/songs";
+import { createGame, getGameRounds, markRoundSent, replaceRound, saveAnswer } from "@/lib/db/games";
+import { clearPreview, listSongs, listSongsWithPreview, type Song } from "@/lib/db/songs";
 import type { NewRound } from "@/lib/game/rounds";
 import { createTestDb } from "../helpers/test-db";
 import { addTestSongs } from "../helpers/songs";
@@ -147,5 +147,35 @@ describe("listSongsWithPreview", () => {
     await addTestSongs(fresh, 4, 2);
     const titles = (await listSongsWithPreview(fresh)).map((s) => s.title);
     expect(titles).toEqual(["Song 1", "Song 2"]);
+  });
+});
+
+describe("replaceRound", () => {
+  it("only changes a waiting round, and refuses a song that is already in the game", async () => {
+    const gameId = await createGame(db, newRounds());
+    const replacement = { roundNumber: 2, songId: songs[5].id, options: ["W", "X", "Y", songs[5].title], correctOption: 3 };
+
+    expect(await replaceRound(db, gameId, replacement)).toBe(true);
+    expect((await getGameRounds(db, gameId))![1]).toMatchObject({
+      songId: songs[5].id,
+      options: ["W", "X", "Y", songs[5].title],
+      correctOption: 3,
+      status: "waiting",
+    });
+
+    await markRoundSent(db, gameId, 1, NOW);
+    expect(await replaceRound(db, gameId, { ...replacement, roundNumber: 1, songId: songs[0].id })).toBe(false);
+
+    // Song of round 3 is already in the game → refused by the database.
+    await expect(replaceRound(db, gameId, { ...replacement, roundNumber: 4, songId: songs[2].id })).rejects.toThrow();
+  });
+});
+
+describe("clearPreview", () => {
+  it("empties the 4 cached fields of one song and touches no other song", async () => {
+    await clearPreview(db, songs[0].id);
+    const after = await listSongs(db);
+    expect(after[0]).toMatchObject({ previewUrl: null, artworkUrl: null, storeUrl: null, previewCachedAt: null });
+    expect(after.slice(1)).toEqual(songs.slice(1));
   });
 });
