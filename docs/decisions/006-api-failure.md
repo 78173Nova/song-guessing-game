@@ -41,3 +41,13 @@ empty results, song without a preview.
   Limit: a newly added song can only be played after the seed has run again.
 - **Skipped rounds:** when a preview fails to load in the browser, it tells the server ("skip"). The round is
   stored as `skipped` and gives 0 points. Alternative: count it as wrong – simpler, but unfair to the player.
+
+## Update 10 Nov 2026: how `lib/music/` is built
+- **Two results, never an exception:** `lookupPreview` returns either the preview or `unavailable`
+  (timeout, error code incl. 429, network error, broken reply) or `not-found` (no matching version).
+- **Picking the track:** the first result whose artist and title match after clean-up (case, accents,
+  punctuation, "(feat. …)", "- Remastered …") and that is not a karaoke, live or remix version.
+  Our artist followed by a partner ("Daft Punk & Pharrell Williams") counts. Why: iTunes also returns covers
+  and other versions. Alternative: take the first result – simpler, but often the wrong recording.
+- **Seed spacing:** 3.5 seconds between lookups (about 17 per minute). If a song fails, the seed moves on.
+- Limit: expired preview URLs are not refreshed yet – a cached URL is used as it is.

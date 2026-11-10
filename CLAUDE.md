@@ -42,7 +42,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 - Tests: `npm test` (runs once; tests live in `tests/` and end in `.test.ts`)
 - Lint: `npm run lint`
 - Check the build: `npm run build`
-- Create tables and load sample songs: `npm run db:seed` (uses `DATABASE_URL` from `.env.local`; safe to run again)
+- Create tables, load sample songs and look up their previews on iTunes: `npm run db:seed`
+  (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
 - CI: `.github/workflows/ci.yml` runs `npm ci`, lint, tests and build on every pull request
 
 ## Folder structure
