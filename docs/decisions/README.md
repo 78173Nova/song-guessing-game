@@ -2,6 +2,7 @@
 
 Each file describes one decision in five sections:
 **Decision · Why · Alternatives · Limits · How it could change.**
+One or two sentences per section are enough.
 
 That is exactly what the "repository walkthrough" criterion asks for at full marks
 (how it is built, why, its limits, and how it could change). It is also our study material for the presentation.
