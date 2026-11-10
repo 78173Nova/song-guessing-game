@@ -24,3 +24,4 @@ Rules:
 | 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core |
 | 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
+| 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |

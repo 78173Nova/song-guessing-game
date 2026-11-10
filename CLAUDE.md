@@ -48,10 +48,11 @@ The team are **programming beginners**: explain proposals in plain language befo
 
 ## Folder structure
 - `app/` – pages and server routes (`app/api/...`)
-- `components/` – reusable UI pieces
+- `components/` – reusable UI pieces (e.g. `SoloGame.tsx`, the solo game screens)
 - `lib/game/` – game logic with no database or network access (build rounds, check answers, score) – easy to test
 - `lib/music/` – everything about the iTunes API (call, cache, error handling) – the only place that calls iTunes
 - `lib/db/` – all database code – the only place with SQL
+- `lib/client/` – browser-side logic without UI: screen state (`gameReducer`), server calls, countdown – tested with Vitest
 - `lib/api/` – what each server route does step by step (validate, load, apply `lib/game/` rules, save, reply);
   the route files in `app/api/` only call it. Takes the database as a parameter, so it is tested with PGlite
 - `db/` – schema (`schema.sql`), seed script and song list
