@@ -14,7 +14,7 @@ Rules:
 
 | No. | Decision | Status |
 |---|---|---|
-| 001 | [Stack: Next.js instead of Streamlit](001-stack.md) | decided, staff approval pending |
+| 001 | [Stack: Next.js instead of Streamlit](001-stack.md) | decided, approved by the professor |
 | 002 | [Hosting on Vercel](002-hosting.md) | decided |
 | 003 | [Database: Neon Postgres](003-database.md) | decided |
 | 004 | [The server checks answers](004-server-checks-answers.md) | decided |
@@ -23,3 +23,4 @@ Rules:
 | 007 | [No accounts, nicknames only](007-no-accounts.md) | decided (for now) |
 | 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core |
 | 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
+| 010 | [Test database: PGlite](010-test-database.md) | decided |

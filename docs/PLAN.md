@@ -10,8 +10,8 @@ Last updated: 10 Nov 2026. Change it through a pull request and add a line under
   + about 3 min repository walkthrough. Any member can be asked about any part.
 - Grading (40 % of the course grade, same grade for everyone): It works 20 %, UI/UX 20 %,
   Scope 20 %, Verification 10 %, Security 10 %, Walkthrough 20 %. Details: `docs/course/requirements.md`.
-- **Stack approval:** the course default is Python/Streamlit. Using Next.js needs approval from
-  the teaching staff – send the email this week.
+- **Stack approval:** the course default is Python/Streamlit. Using Next.js was approved by the
+  professor on 10 Nov 2026 (decision 001).
 
 ## 2. Product
 A music quiz with 30-second previews of well-known songs.
@@ -135,7 +135,6 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - Answer format: multiple choice to start, maybe free text later as a separate mode
 - Online duel: 1v1 only or more players?
 - Presentation date (24 Nov or 4 Dec)
-- Stack approval from the teaching staff
 
 ## Changelog
 - 10 Nov 2026: first version
@@ -144,3 +143,5 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - 10 Nov 2026: process simplified – no approval wait (group chat notice instead), review before the
   next team meeting instead of within 24 h, small doc fixes need no own branch, the person working
   with Claude OKs the tests, decision docs may be short (decision 009, update)
+- 10 Nov 2026: stack approved by the professor; base questions decided – rounds one at a time, skipped
+  rounds stored, previews looked up during `db:seed`, PGlite for database tests (spec 001, decisions 001, 004, 006, 010)

@@ -1,6 +1,6 @@
 # 001 – Stack: Next.js (TypeScript) instead of Python/Streamlit
 
-Date: 10 Nov 2026 · Status: decided, **teaching staff approval pending**
+Date: 10 Nov 2026 · Status: decided, approved by the professor (10 Nov 2026)
 
 ## Decision
 We build the app with Next.js (App Router) and TypeScript. UI and server routes live in one project.
@@ -27,3 +27,7 @@ We build the app with Next.js (App Router) and TypeScript. UI and server routes 
 ## How it could change
 The game logic deliberately lives in `lib/game/` with no dependency on the UI or the database.
 It could be ported to another language without rethinking the rest.
+
+## Update 10 Nov 2026: approved
+Niklas talked to the professor on 10 Nov 2026; using Next.js instead of Streamlit is approved.
+The approval was given in person, so a short confirmation email is worth keeping as a record.

@@ -33,3 +33,11 @@ All iTunes calls go through `lib/music/`, on the server, with
 ## Tests
 Tests never call the real API. They use fake responses for: success, timeout, error code,
 empty results, song without a preview.
+
+## Update 10 Nov 2026: previews looked up in advance, skipped rounds recorded
+- **In advance:** `npm run db:seed` looks up every song's preview on iTunes, spaced out to stay under the
+  ~20 requests per minute, and stores it. Starting a game uses only songs with a cached preview, so it
+  normally makes no iTunes call. Why: a first game with 30 unknown songs would hit the limit.
+  Limit: a newly added song can only be played after the seed has run again.
+- **Skipped rounds:** when a preview fails to load in the browser, it tells the server ("skip"). The round is
+  stored as `skipped` and gives 0 points. Alternative: count it as wrong – simpler, but unfair to the player.
