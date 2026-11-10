@@ -15,7 +15,7 @@ Last updated: 10 Nov 2026. Change it through a pull request and add a line under
 
 ## 2. Product
 A music quiz with 30-second previews of well-known songs.
-- **Solo:** one player plays 10 rounds and picks the answer from 4 options.
+- **Solo:** one player plays 5 rounds and picks the answer from 4 options.
 - **Presentation mode (Kahoot style):** a big screen shows a QR code, plays the music and shows the
   leaderboard. The audience joins on their phones with a nickname and answers there.
   Tuned for a 3-minute demo (e.g. 5 short rounds).
@@ -64,7 +64,7 @@ Done when one player can play a full game at the **Vercel URL**:
 - [ ] `.gitignore`, `.env.example`, `CLAUDE.md`, README skeleton
 - [ ] Next.js app runs locally and on Vercel
 - [ ] Neon connected (`main` + `dev`), songs table, seed script with about 30 songs
-- [ ] Server route "start game": 10 songs, previews via iTunes, 4 options per round
+- [ ] Server route "start game": 5 songs, previews via iTunes, 4 options per round
 - [ ] Server route "answer": checks the answer, returns the result and points
 - [ ] UI: start → clip plays → 4 buttons → right/wrong → final score
 - [ ] Clear message when iTunes is unreachable
@@ -145,3 +145,4 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
   with Claude OKs the tests, decision docs may be short (decision 009, update)
 - 10 Nov 2026: stack approved by the professor; base questions decided – rounds one at a time, skipped
   rounds stored, previews looked up during `db:seed`, PGlite for database tests (spec 001, decisions 001, 004, 006, 010)
+- 10 Nov 2026: a solo game has 5 rounds instead of 10; answer route also accepts "timeout" (spec 001, decision 004)

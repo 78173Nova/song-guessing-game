@@ -37,3 +37,15 @@ The server sends rounds **one at a time** (`POST /api/games/[id]/next`) instead 
 Why: the speed bonus needs the moment each round was sent, and the server stores it as `started_at`.
 Also, the preview URLs of later rounds stay on the server, so players cannot look ahead.
 Alternative: all rounds at the start – one request fewer, but the timer could not be measured fairly.
+
+## Update 10 Nov 2026: answers, timeouts and errors
+- The browser answers with a number 0–3 (the button), `"skip"` (preview failed) or `"timeout"` (time ran out).
+  A number is the easiest input to validate; the server compares it with the stored correct position.
+  `"timeout"` closes the round with 0 points and reveals the song. It gives no advantage: a late click scores 0 anyway.
+- "Send round" and "save answer" only change a round that is in the expected state (`waiting` / `open`), so two
+  requests at the same moment cannot both count.
+- Errors come back as `{ error, message }`: 400 bad input, 404 unknown game, 409 wrong moment (not sent yet,
+  still open, already answered, game over), 503 too few songs with a preview, 500 anything unexpected – with a
+  generic message only; details go to the server log.
+- A game has 5 rounds (spec 001, update). Limit: anyone who knows a game ID can play that game; without
+  accounts (decision 007) the random UUID is the only protection – fine for solo.
