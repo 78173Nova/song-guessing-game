@@ -68,6 +68,14 @@ export async function listSongsWithoutPreview(db: Db): Promise<Song[]> {
   return rows.map(toSong);
 }
 
+// Songs that can be played: those with a cached preview (decision 006).
+export async function listSongsWithPreview(db: Db): Promise<Song[]> {
+  const rows = await db.query<SongRow>(
+    `SELECT ${SONG_COLUMNS} FROM songs WHERE preview_url IS NOT NULL ORDER BY id`,
+  );
+  return rows.map(toSong);
+}
+
 // Stores the iTunes data found for a song, and when it was found.
 export async function savePreview(db: Db, songId: number, preview: PreviewData, now: Date): Promise<void> {
   await db.query(

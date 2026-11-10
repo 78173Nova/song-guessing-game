@@ -21,7 +21,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
 
 ### Hosting and database
 - [ ] Repository connected to Vercel; every merge to `main` deploys; pull requests get a preview URL
-- [ ] Neon database with branches `main` (production) and `dev` (development); `DATABASE_URL` set locally and in Vercel
+- [ ] Neon database with branches `main` (production; called `production` in the Neon console) and `dev` (development); `DATABASE_URL` set locally and in Vercel
 - [ ] `db/schema.sql` creates a `songs` table: id, title, artist, year, genre, cached preview URL,
       cached artwork URL, cached store link, when the preview was cached
 - [ ] Seed script loads about 30 well-known songs (artist, title, original year, genre); running it twice does not create duplicates
@@ -38,7 +38,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
 
 ### Game (server)
 - [ ] Game logic in `lib/game/` as plain functions (no database, no network): build rounds, check an answer, score
-- [ ] `POST /api/games` starts a game: picks 10 distinct songs that already have a cached preview (normally no
+- [ ] `POST /api/games` starts a game: picks 5 distinct songs that already have a cached preview (normally no
       iTunes call), builds 4 options per round (1 correct + 3 wrong titles from other songs, shuffled), stores the
       game and its rounds, returns the game ID (a random UUID)
 - [ ] `POST /api/games/[id]/next` sends **one round at a time**: round number, preview URL and the 4 options,
@@ -48,11 +48,12 @@ When a line below can be read two ways, choose the simpler option that keeps the
       correct/incorrect, the correct song (title, artist, artwork, store link) and points
 - [ ] The answer route also accepts "skip" instead of an option, for when the preview failed to load in the browser:
       the round is marked `skipped`, gives 0 points and returns the correct song like a normal answer
+- [ ] The answer route also accepts "timeout" when the 15 seconds ran out: 0 points, returns the correct song
 - [ ] Rejected with a clear error: unknown game, round number out of range, round not sent yet, option not one of
       the four, round already answered or skipped, malformed input
 - [ ] Scoring: 100 for correct, plus a speed bonus of up to 50 falling linearly over 15 seconds, rounded to whole
       points; 0 for wrong, timed out or skipped; the server measures time from that round's `started_at`
-- [ ] If fewer than 10 songs with a preview are available, the game does not start and the API returns a clear error
+- [ ] If fewer than 5 songs with a preview are available, the game does not start and the API returns a clear error
 - [ ] Tables for games and rounds/answers (schema reviewed by Niklas); a round stores when it was sent and
       whether it is open, answered or skipped
 
@@ -60,7 +61,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] Start screen with a "Start game" button and a one-line explanation
 - [ ] Round screen: clip plays, 15-second countdown, 4 big answer buttons, round number and score
 - [ ] After answering: right/wrong, the correct song with artwork, points earned, "Next" button
-- [ ] Results screen: total score, list of the 10 songs, "Play again"
+- [ ] Results screen: total score, list of the 5 songs, "Play again"
 - [ ] Clear messages for: music source unreachable, preview failed to load (round skipped), network error
 - [ ] "Previews provided courtesy of iTunes" visible; usable on a phone-sized screen
 
@@ -82,7 +83,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - MusicBrainz or any other API
 
 ## Done when
-- On the **Vercel URL**, one player can start a game, hear 10 clips, answer, see right/wrong and the final score – on a laptop and on a phone.
+- On the **Vercel URL**, one player can start a game, hear 5 clips, answer, see right/wrong and the final score – on a laptop and on a phone.
 - With iTunes blocked (simulated in tests), the app shows a clear message instead of crashing.
 - The browser's network tab never shows the correct answer before answering.
 - `npm test` passes locally and in the GitHub Action on `main`.
@@ -109,3 +110,9 @@ green, and the team goes through them together at the next meeting (allowed by d
 - Previews are looked up in advance by `npm run db:seed`, not at game start (decision 006)
 - Database tests use PGlite (decision 010)
 - Game ID = random UUID; speed bonus rounded to whole points; iTunes searches the US store
+
+## Decided on 10 Nov 2026 (later)
+- A game has **5 rounds** instead of 10 – enough for the start and for a short demo. The number is one constant
+  (`ROUNDS_PER_GAME` in `lib/game/rounds.ts`); the schema does not limit it
+- The answer route also accepts `"timeout"`, so the browser can close a round when time runs out and still show
+  the correct song (decision 004)

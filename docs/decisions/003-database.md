@@ -5,7 +5,7 @@ Date: 10 Nov 2026 · Status: decided
 ## Decision
 All persistent data (song list, cached preview URLs, games, later rooms and players) lives in a Postgres
 database on Neon. There are two database branches:
-- `main` – only for the deployed app
+- `main` – only for the deployed app (the Neon console calls this branch `production`)
 - `dev` – for local development, shared by the team
 
 Tests do **not** use Neon; they use a temporary test database.
@@ -47,3 +47,10 @@ swapped by changing that folder and the connection string.
 - **Seed runs with plain Node:** Node 24 runs TypeScript files directly, so no extra tool (like `tsx`) is
   needed. For that, `tsconfig.json` allows imports ending in `.ts`.
 - Limit: the games and rounds tables are added with `feature/game-core`.
+
+## Update 10 Nov 2026: games and rounds tables
+`games` (random UUID, start time) and `rounds` (song, 4 shown titles, correct position, status, times,
+chosen option, points). The database itself refuses impossible rows: not exactly 4 options, an unknown status,
+the same song twice in a game, an answered round that was never sent.
+No total-score column: the total is the sum of the round points, so the two can never disagree.
+Note: the Neon console calls our `main` branch `production`; Vercel Preview and `.env.local` use `dev`.

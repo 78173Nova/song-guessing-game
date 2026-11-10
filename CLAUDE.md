@@ -52,6 +52,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 - `lib/game/` – game logic with no database or network access (build rounds, check answers, score) – easy to test
 - `lib/music/` – everything about the iTunes API (call, cache, error handling) – the only place that calls iTunes
 - `lib/db/` – all database code – the only place with SQL
+- `lib/api/` – what each server route does step by step (validate, load, apply `lib/game/` rules, save, reply);
+  the route files in `app/api/` only call it. Takes the database as a parameter, so it is tested with PGlite
 - `db/` – schema (`schema.sql`), seed script and song list
 - `tests/` – tests
 - `specs/`, `docs/` – specs and documentation
