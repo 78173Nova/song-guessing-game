@@ -81,7 +81,7 @@ No timeline – a step starts when what it needs is done. Steps in the same row 
 | Person | Name | Feature |
 |---|---|---|
 | 1 | Niklas | Solo experience. **Owner of the database schema and `CLAUDE.md`.** |
-| 2 | *decided in the group chat* | Song catalogue & game modes |
+| 2 | Karin | Song catalogue & game modes |
 | 3 | *decided in the group chat* | Room core, then presentation mode |
 | 4 | *decided in the group chat* | Room core, then helps with presentation mode / online duel |
 
