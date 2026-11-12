@@ -25,3 +25,4 @@ Rules:
 | 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
+| 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, database part built |
