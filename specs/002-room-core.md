@@ -1,7 +1,7 @@
 # Spec 002 – Room core: create a room, join with a nickname, play together
 
-Owners: Steinar (Person 3) and Jasper (Person 4) · Branches: several small ones (see "Suggested order") · Status: draft
-(schema agreed with Niklas on 11 Nov 2026; split still to agree with Jasper)
+Owners: Steinar (Person 3) and Jasper (Person 4) · Branches: several small ones (see "Suggested order") · Status: agreed
+(schema with Niklas on 11 Nov 2026; Jasper left the spec to Steinar on 12 Nov 2026)
 
 ## Why
 Presentation mode (must have 5) and the online duel (optional 6) both need the same foundation: several people in
@@ -134,8 +134,9 @@ When a line below can be read two ways, choose the simpler option that keeps the
 3. `feature/room-host` – host page, polling, clips
 4. `feature/room-player` – join page and phone screens
 
-Proposed split, to agree with Jasper: Steinar takes 1–2 (server), Jasper takes 3–4 (pages). Jasper can start the
-pages against the agreed route list while the server is being built. Both review each other's pull requests.
+Split: Steinar takes 1–2 (server), Jasper takes 3–4 (pages). Jasper can start the pages against the agreed route
+list while the server is being built. Both review each other's pull requests. Changes to the split are agreed in the
+group chat.
 
 ## Decided on 11 Nov 2026 (with Niklas, schema owner)
 - Tables and rules as in "Database" above; tokens stored as SHA-256 hashes; codes never reused; expiry from `created_at`
@@ -143,5 +144,5 @@ pages against the agreed route list while the server is being built. Both review
 - Solo routes reject room games with 404
 - Spec numbers: room core is 002, Karin's catalogue spec is 003
 
-## Open questions
-- Who builds which part – Steinar and Jasper
+## Decided on 12 Nov 2026
+- Jasper left the spec to Steinar; the split above (Steinar server, Jasper pages) stands
