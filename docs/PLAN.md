@@ -82,8 +82,8 @@ No timeline – a step starts when what it needs is done. Steps in the same row 
 |---|---|---|
 | 1 | Niklas | Solo experience. **Owner of the database schema and `CLAUDE.md`.** |
 | 2 | Karin | Song catalogue & game modes |
-| 3 | *decided in the group chat* | Room core, then presentation mode |
-| 4 | *decided in the group chat* | Room core, then helps with presentation mode / online duel |
+| 3 | Steinar | Room core, then presentation mode |
+| 4 | Jasper | Room core, then helps with presentation mode / online duel |
 
 Team: Niklas, Jasper, Steinar, Karin. Each feature goes from UI to database; whoever builds it writes its spec,
 tests and decision docs.
@@ -137,3 +137,4 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
   rounds stored, previews looked up during `db:seed`, PGlite for database tests (spec 001, decisions 001, 004, 006, 010)
 - 10 Nov 2026: a solo game has 5 rounds instead of 10; answer route also accepts "timeout" (spec 001, decision 004)
 - 10 Nov 2026: base done. Releases and timeline replaced by a scope (must have 1–5, optional: duel, typed answers) and a step-by-step plan; team names added, roles decided in the group chat
+- 11 Nov 2026: roles filled in – Karin Person 2, Steinar Person 3, Jasper Person 4; room core spec drafted (`specs/002-room-core.md`)
