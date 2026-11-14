@@ -73,14 +73,12 @@ No timeline – a step starts when what it needs is done. Steps in the same row 
 **Fixed dates:** submission **23 Nov 2026, 23:59** · presentation 24 Nov or 4 Dec.
 
 **Rules for the steps**
-- **Schema changes** (high scores, rooms, players, modes) go through Niklas, one at a time – agree in the group chat
-  in which order they are merged.
 - Loading 300+ songs runs `npm run db:seed` for about 18 minutes (iTunes rate limit). Fine – but only once.
 
 ## 6. Who is who
 | Person | Name | Feature |
 |---|---|---|
-| 1 | Niklas | Solo experience. **Owner of the database schema and `CLAUDE.md`.** |
+| 1 | Niklas | Solo experience. **Owner of `CLAUDE.md`.** |
 | 2 | Karin | Song catalogue & game modes |
 | 3 | Steinar | Room core, then presentation mode |
 | 4 | Jasper | Room core, then helps with presentation mode / online duel |
@@ -106,7 +104,7 @@ Once the spec is agreed: a new branch, then the workflow below.
 5. Click through it yourself: locally and on the pull request's Vercel preview URL
 6. Open a pull request and tag a teammate as reviewer
 7. When the automatic checks are green, merge it yourself. If the pull request changes tests,
-   `db/schema.sql` or `CLAUDE.md`, say so in the group chat first (schema: wait for Niklas's OK)
+   or `CLAUDE.md`, say so in the group chat first
 8. The tagged teammate reviews it before the next team meeting (also after the merge); problems are
    fixed in a new small pull request
 9. Stay small: merge daily rather than keeping branches open for days. One feature per branch;

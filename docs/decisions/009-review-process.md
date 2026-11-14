@@ -71,3 +71,10 @@ no secrets in code, the server checks answers, tests stay offline.
 
 Limit: a test change by an agent is now only caught if the author really reads the diff and the
 chat notice is not skipped. Reviewers should look at test changes first.
+
+## Update 14 Nov 2026: no schema approval
+Schema changes no longer need Niklas's OK, and a pull request that changes `db/schema.sql` needs no
+group-chat notice. Anyone may change the schema. The notice for test and `CLAUDE.md` changes stays.
+Why: waiting for one person slowed the team down, and everyone works with the same rules and tools.
+Limit: two branches changing the schema at the same time can conflict in the shared `dev` database
+without git noticing (see decision 003).

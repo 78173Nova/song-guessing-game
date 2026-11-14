@@ -54,3 +54,10 @@ chosen option, points). The database itself refuses impossible rows: not exactly
 the same song twice in a game, an answered round that was never sent.
 No total-score column: the total is the sum of the round points, so the two can never disagree.
 Note: the Neon console calls our `main` branch `production`; Vercel Preview and `.env.local` use `dev`.
+
+## Update 14 Nov 2026: no schema owner
+"Schema changes only through one person" (Limits) no longer applies: anyone may change `db/schema.sql`.
+Alternatives: keep one owner (what the course guide recommends), or no approval but an announcement in
+the group chat before starting. Limit: parallel schema changes can conflict in the shared `dev` database
+without git noticing; the seed only adds what is missing (`IF NOT EXISTS`), so it does not change existing tables.
+How it could change: if a conflict happens, go back to one schema change at a time.

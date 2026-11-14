@@ -79,8 +79,7 @@ The team are **programming beginners**: explain proposals in plain language befo
    message for the user. The app must never crash when the API fails.
 8. **Tests stay offline:** tests never call the real iTunes API or the real Neon database.
    Use fake responses and a temporary test database.
-9. **Database schema:** table changes only after agreement with Niklas (schema owner).
-   Point it out when a task needs a schema change.
+9. **Database schema:** anyone on the team may change `db/schema.sql` – no approval needed.
 10. **Keep the docs current:** when something is decided or changed, add or update the matching
     file in `docs/decisions/` on the same branch (do not delete the old reasoning; append
     "Update <date>: …"). When commands or structure change, update this file.
@@ -90,9 +89,8 @@ The team are **programming beginners**: explain proposals in plain language befo
     Open pull requests with `gh pr create`; the description covers what, why, test output and how
     to check it. Merging (see `docs/decisions/009-review-process.md`): the author merges once the
     automatic checks are green and tags a teammate, who reviews it before the next team meeting.
-    Before merging a pull request that changes tests, `db/schema.sql` or `CLAUDE.md`, the author
-    tells the team in the group chat; schema changes need Niklas's OK there. Claude never merges
-    a pull request itself.
+    Before merging a pull request that changes tests or `CLAUDE.md`, the author tells the team in
+    the group chat. Claude never merges a pull request itself.
 13. **Language:** code, comments, commit messages, pull requests and all documentation in English.
 
 ## When something goes wrong
