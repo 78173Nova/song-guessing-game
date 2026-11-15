@@ -14,6 +14,7 @@ import {
 } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
+import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
@@ -48,11 +49,15 @@ export default function SoloGame() {
   const [getReadyAt, setGetReadyAt] = useState(0);
   const [roundStartedAt, setRoundStartedAt] = useState(0);
   const [now, setNow] = useState(0);
-  // The mode chosen on the start screen. "Play again" and "Try again" keep it.
+  // The mode chosen on the start screen. "Play again", "Try again" and "Change settings" keep it.
   const [mode, setMode] = useState<Mode>("title");
-  // The filters chosen on the start screen (undefined = Any). "Play again" and "Try again" keep them.
+  // The filters chosen on the start screen (undefined = Any). "Play again", "Try again" and "Change settings"
+  // keep them.
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [decade, setDecade] = useState<Decade | undefined>(undefined);
+  // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
+  // a reload forgets them.
+  const recentGamesRef = useRef<string[]>([]);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -130,13 +135,14 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame(fetch, mode, { genre, decade });
+    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current);
     if (!game.ok) {
       // Too few songs match the filters: back to the start screen, which says so.
       dispatch(game.tooFewSongs ? { type: "start-refused", message: game.message } : { type: "failed", message: game.message });
       return;
     }
     const { gameId, previewUrls } = game.data;
+    recentGamesRef.current = rememberGame(recentGamesRef.current, gameId);
     dispatch({ type: "game-created", gameId, previewUrls });
 
     // Only the first clip is waited for. The 3-2-1 starts the moment it is ready.
@@ -394,6 +400,10 @@ export default function SoloGame() {
           </ol>
           <button className={styles.primary} onClick={handleStart}>
             Play again
+          </button>
+          {/* Back to the start screen: mode, genre and decade stay as chosen, so they are preselected. */}
+          <button className={styles.secondary} onClick={() => dispatch({ type: "reset" })}>
+            Change settings
           </button>
         </section>
       )}

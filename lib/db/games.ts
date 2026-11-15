@@ -98,6 +98,18 @@ export async function getGameFilters(db: Db, gameId: string): Promise<Filters | 
   return { ...(genre === null ? {} : { genre }), ...(decade === null ? {} : { decade }) };
 }
 
+// The song IDs of each of these games, in the order the IDs were given (an empty list for an unknown game).
+// Used to avoid the songs of a player's last games (decision 013). Nothing of this is sent to the browser.
+export async function getSongIdsOfGames(db: Db, gameIds: string[]): Promise<number[][]> {
+  if (gameIds.length === 0) return [];
+  const rows = await db.query<{ game_id: string; song_id: number }>(
+    "SELECT game_id, song_id FROM rounds WHERE game_id = ANY($1::uuid[])",
+    [gameIds],
+  );
+  // Postgres returns UUIDs in lower case, the browser may have sent upper case.
+  return gameIds.map((id) => rows.filter((row) => row.game_id === id.toLowerCase()).map((row) => row.song_id));
+}
+
 // All rounds of a game with their song, in order. null = there is no game with this ID.
 export async function getGameRounds(db: Db, gameId: string): Promise<StoredRound[] | null> {
   const games = await db.query("SELECT id FROM games WHERE id = $1", [gameId]);

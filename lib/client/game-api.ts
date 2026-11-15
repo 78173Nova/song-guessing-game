@@ -56,12 +56,19 @@ export type StartResponse =
   | { ok: false; message: string; tooFewSongs?: true };
 
 // `fetchFn` is only passed in tests; the browser uses the real fetch. Without a mode or filters, no body is
-// sent and the server plays title mode. A filter that is "Any" is left out.
-export async function apiStartGame(fetchFn: FetchFn = fetch, mode?: Mode, filters: Filters = {}): Promise<StartResponse> {
+// sent and the server plays title mode. A filter that is "Any" is left out. `recentGames`: the player's last
+// games, newest first, so the server can avoid their songs (left out when empty).
+export async function apiStartGame(
+  fetchFn: FetchFn = fetch,
+  mode?: Mode,
+  filters: Filters = {},
+  recentGames: string[] = [],
+): Promise<StartResponse> {
   const body = {
     ...(mode === undefined ? {} : { mode }),
     ...(filters.genre === undefined ? {} : { genre: filters.genre }),
     ...(filters.decade === undefined ? {} : { decade: filters.decade }),
+    ...(recentGames.length === 0 ? {} : { recentGames }),
   };
   const result = await postWithCode<{ gameId: string; previewUrls: string[] }>(
     "/api/games",

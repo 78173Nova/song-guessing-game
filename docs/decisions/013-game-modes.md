@@ -66,3 +66,25 @@ Update 15 Nov 2026: genre and decade filters (spec 003, step 5).
 - **Limits:** some combinations are always too small (no 1960s hip-hop). The dropdowns do not show in advance
   how many songs a combination has. When every matching song is already in the game, `/replace` refuses and that
   round is skipped instead of playing a song outside the filters.
+
+Update 15 Nov 2026: avoiding the songs of recent games, and "Change settings".
+- **Decision:** the browser keeps its last 3 game IDs in memory (newest first, `lib/client/recent-games.ts`) and sends
+  them as `recentGames` with the start request. The server looks up their songs (`getSongIdsOfGames`) and tries the
+  lists from `songPools` (`lib/game/recent-songs.ts`) in order: without the songs of all 3 games, then of the newest 2,
+  then of the newest one, then the full list. The first list that has at least 5 songs and can fill a game in the
+  chosen mode is used. Genre and decade filters apply before this. The results screen has a second button,
+  "Change settings", that goes back to the start screen with mode and filters preselected.
+- **Why:** with a genre + decade filter only 6–11 songs match, so the same songs came back every game. Step by step
+  instead of all-or-nothing: with 11 songs, avoiding two earlier games leaves 1 song, but avoiding the newest still
+  leaves 6, so the rule keeps helping after the second game. Memory only (no localStorage): nothing is stored in the
+  browser, and a reload simply starts fresh.
+- **Security:** the server checks the list (at most 3 IDs, UUID format, else `malformed`). Unknown IDs find no songs,
+  and the reply is always just `gameId` and `previewUrls`, so a player learns nothing about other games or the avoided
+  songs. Someone sending another player's game ID can only change which songs they themselves get.
+- **Alternatives:** localStorage (survives a reload, but stores data in the browser); a server-side history per player
+  (needs accounts, decision 007); all-or-nothing (stops working with small filters, see above).
+- **Limits:** a reload forgets the last games. With 6 matching songs, 5 of them play in every game no matter what.
+  `/replace` does not avoid recent songs. Wrong options may still be titles or artists of recently played songs.
+- **Random choice:** without filters, `buildRounds` shuffles all playable songs fairly (Fisher–Yates) and takes 5.
+  A test with a fixed random seed checks that every playable song gets played over 120 games and songs without a
+  clip never do.

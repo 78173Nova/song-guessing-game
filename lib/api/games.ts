@@ -7,6 +7,7 @@ import {
   getGameFilters,
   getGameRounds,
   getQuestionTypes,
+  getSongIdsOfGames,
   markRoundSent,
   replaceRound,
   saveAnswer,
@@ -15,7 +16,8 @@ import { listSongsWithPreview } from "../db/songs";
 import { filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
-import { buildReplacementRound, buildRounds } from "../game/rounds";
+import { songPools } from "../game/recent-songs";
+import { buildReplacementRound, buildRounds, type BuildResult } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -69,8 +71,8 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
   }
 }
 
-// POST /api/games – checks the chosen mode and filters, picks the matching songs, builds the rounds, stores
-// the game with its mode and filters.
+// POST /api/games – checks the chosen mode and filters, picks the matching songs (avoiding those of the
+// player's last games where possible), builds the rounds, stores the game with its mode and filters.
 // Returns its ID and the 5 clip addresses in round order, so the browser can load the clips in advance
 // (decision 004, update). No titles and no answers: those only come with "next" and "answer".
 // An empty body means title mode with no filters, so callers that send no body keep working.
@@ -94,7 +96,15 @@ export async function startGame(
   // The wrong options come from the same matching songs.
   const filters = { genre: input.genre, decade: input.decade };
   const songs = filterSongs(await listSongsWithPreview(db), filters);
-  const built = buildRounds(songs, random, { mode: input.mode, currentYear: now().getFullYear() });
+
+  // Avoid the songs of the player's last games where possible: first all of them, then fewer, then none
+  // (songPools). The first list that can fill a game in this mode is used.
+  const recentSongIds = await getSongIdsOfGames(db, input.recentGames ?? []);
+  let built: BuildResult = { ok: false, reason: "not-enough-songs" };
+  for (const pool of songPools(songs, recentSongIds)) {
+    built = buildRounds(pool, random, { mode: input.mode, currentYear: now().getFullYear() });
+    if (built.ok) break;
+  }
   if (!built.ok) {
     // With filters, the player can fix it by choosing other filters. Without, the music is unavailable.
     if (!hasFilters(filters)) return fail("not-enough-songs");

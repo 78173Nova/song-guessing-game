@@ -55,12 +55,19 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] The game stores its filters, so `/replace` only picks a replacement song that matches them
 - [ ] If fewer than 5 songs match (or fewer than 4 different titles or artists for the chosen mode), the game does
       not start and the screen says so clearly, e.g. "Only 3 songs match these filters – try 'Any' for genre or decade"
+- [ ] **Avoid recent songs** (added 15 Nov 2026): the browser keeps the IDs of the player's last 3 games in memory
+      (not in localStorage, a reload forgets them) and sends them with the start request as `recentGames`, newest first.
+      The server leaves out the songs of those games step by step: first of all 3 games, then of the newest 2, then of
+      the newest one, then none. It uses the first step that leaves at least 5 matching songs **and** can fill a game in
+      the chosen mode. Genre and decade filters apply first. Nothing about the avoided songs is sent back
 
 ### Server and validation
 - [ ] `POST /api/games` accepts optional `mode`, `genre` and `decade`. Missing values mean title / any / any,
       so the current start screen and room games keep working unchanged
 - [ ] Rejected with a clear error: unknown mode, unknown genre, decade not one of 1960, 1970 … 2020, wrong types
       (e.g. a decade sent as text or a list), extra-long strings, unknown extra fields
+- [ ] `recentGames` is optional: a list of at most 3 game IDs in UUID format, anything else is rejected. Unknown IDs
+      are ignored, and the reply is the same as without them
 - [ ] `/next` still never contains the correct answer: no correct position, no year, no artist in title mode, and so on
 - [ ] Schema change (anyone may change it, CLAUDE.md rule 9; tell the team in the group chat): added with
       `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, because `CREATE TABLE IF NOT EXISTS` would skip existing tables:
@@ -75,6 +82,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
       then "Start game". Usable on a phone
 - [ ] Round screen shows the question for that round's type ("Which song?" / "Who sings this?" / "Which year?")
 - [ ] Reveal screen shows the year; the "not enough songs" message appears on the start screen
+- [ ] Results screen: "Play again" (same mode and filters) and "Change settings" (back to the start screen with the
+      last mode, genre and decade preselected)
 - [ ] `components/SoloGame.tsx` is Niklas's area too (error screens, phone layout): agree in the group chat who
       changes which part first, to avoid merge conflicts
 
@@ -87,6 +96,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
       year options (all rules above, including near the current year and near 1950); mixed mode with a fixed
       random function (each type can appear, the type is stored per round); "not enough songs" for each mode
 - [ ] `lib/api/` tests with PGlite: a game starts in each mode; filters are respected, also by `/replace`;
+      recent games are avoided step by step, unknown IDs ignored, wrong lists rejected; without filters every
+      playable song gets played over many games (with a fixed random seed, so the test cannot fail by chance);
       a replaced round keeps its question type; too few matching songs gives a clear error; every rejected input
       above is rejected; `/next` never contains the answer; the reveal contains the year
 - [ ] No test calls the real iTunes API or the real Neon database
@@ -128,6 +139,13 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - All decades go on one branch (`feature/songs`) with one commit per decade, instead of one pull request per decade
 - Year rule (see "Song catalogue"): first release of the recording, album or single, whichever came first. Album and
   single years often differ, so one rule keeps the year mode fair and makes every year checkable
+
+## Decided on 15 Nov 2026 (after testing `feature/filters`)
+- "Play again" keeps mode and filters, so a second button "Change settings" goes back to the start screen
+- Small filters (6–11 songs) repeated the same songs, so the server avoids the songs of the player's last 3 games.
+  Step by step instead of all-or-nothing: with 11 songs, avoiding 2 earlier games leaves only 1 song, so all-or-nothing
+  would stop working from the third game, while avoiding just the newest game still leaves 6
+- `/replace` does not avoid recent songs (it only runs when a clip fails to load)
 
 ## Open questions
 - **Production database:** `npm run db:seed` uses the `dev` database from `.env.local`. Karin asks Niklas for access
