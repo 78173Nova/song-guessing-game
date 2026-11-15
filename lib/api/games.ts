@@ -2,8 +2,17 @@
 // save, and build the reply. The route files in app/api/games/ only call these functions.
 // The database is passed in, so the tests can use PGlite instead of Neon.
 import type { Db } from "../db/client";
-import { createGame, getGameRounds, getQuestionTypes, markRoundSent, replaceRound, saveAnswer } from "../db/games";
+import {
+  createGame,
+  getGameFilters,
+  getGameRounds,
+  getQuestionTypes,
+  markRoundSent,
+  replaceRound,
+  saveAnswer,
+} from "../db/games";
 import { listSongsWithPreview } from "../db/songs";
+import { filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
 import { buildReplacementRound, buildRounds } from "../game/rounds";
@@ -32,6 +41,8 @@ const ERRORS = {
   malformed: { status: 400, message: "The request is not valid." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
   "invalid-mode": { status: 400, message: "Please choose one of the game modes: title, artist, year or mixed." },
+  "invalid-genre": { status: 400, message: "Please choose a genre from the list." },
+  "invalid-decade": { status: 400, message: "Please choose a decade from the list (1960s to 2020s)." },
   "round-out-of-range": { status: 400, message: "This round does not exist in this game." },
   "round-not-sent": { status: 409, message: "This round has not started yet." },
   "already-answered": { status: 409, message: "This round was already answered." },
@@ -58,10 +69,11 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
   }
 }
 
-// POST /api/games – checks the chosen mode, picks the songs, builds the rounds, stores the game.
+// POST /api/games – checks the chosen mode and filters, picks the matching songs, builds the rounds, stores
+// the game with its mode and filters.
 // Returns its ID and the 5 clip addresses in round order, so the browser can load the clips in advance
 // (decision 004, update). No titles and no answers: those only come with "next" and "answer".
-// An empty body means title mode, so callers that send no body keep working.
+// An empty body means title mode with no filters, so callers that send no body keep working.
 export async function startGame(
   db: Db,
   random: () => number = Math.random,
@@ -78,11 +90,18 @@ export async function startGame(
   const input = parseStartInput(body);
   if (!input.ok) return fail(input.error);
 
-  const songs = await listSongsWithPreview(db);
+  // The playable songs (listSongsWithPreview decides which those are), then only the ones matching the filters.
+  // The wrong options come from the same matching songs.
+  const filters = { genre: input.genre, decade: input.decade };
+  const songs = filterSongs(await listSongsWithPreview(db), filters);
   const built = buildRounds(songs, random, { mode: input.mode, currentYear: now().getFullYear() });
-  if (!built.ok) return fail("not-enough-songs");
+  if (!built.ok) {
+    // With filters, the player can fix it by choosing other filters. Without, the music is unavailable.
+    if (!hasFilters(filters)) return fail("not-enough-songs");
+    return { status: 422, body: { error: "too-few-songs", message: tooFewSongsMessage(songs.length) } };
+  }
 
-  const gameId = await createGame(db, built.rounds, input.mode);
+  const gameId = await createGame(db, built.rounds, input.mode, filters);
   const previewUrls = built.rounds.map((round) => songs.find((s) => s.id === round.songId)!.previewUrl);
   return { status: 201, body: { gameId, previewUrls } };
 }
@@ -173,7 +192,8 @@ export async function answerRound(
 }
 
 // POST /api/games/[id]/replace – the browser could not load a round's clip: give that round another song
-// (not in the game yet) with 4 new options. Only for rounds that have not started (decision 006, update).
+// (not in the game yet, matching the game's filters) with 4 new options. Only for rounds that have not started
+// (decision 006, update).
 export async function replaceRoundSong(
   db: Db,
   gameId: string,
@@ -195,8 +215,9 @@ export async function replaceRoundSong(
 
   // The new song gets options of the same question type as before (a "Which year?" round stays one).
   const questionTypes = await getQuestionTypes(db, gameId);
-  if (questionTypes === null) return fail("game-not-found");
-  const songs = await listSongsWithPreview(db);
+  const filters = await getGameFilters(db, gameId);
+  if (questionTypes === null || filters === null) return fail("game-not-found");
+  const songs = filterSongs(await listSongsWithPreview(db), filters);
   const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, random, {
     questionType: questionTypes[input.round - 1],
     currentYear: now().getFullYear(),

@@ -51,6 +51,14 @@ ALTER TABLE games  ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'title'
 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS question_type text NOT NULL DEFAULT 'title'
   CHECK (question_type IN ('title', 'artist', 'year'));
 
+-- Filters (spec 003, decision 013): the genre and decade the player chose, so /replace only picks a song that
+-- matches them. Empty = Any. The genre list must match lib/game/genres.ts. The decade is the first year of
+-- the decade (1980 = the 1980s), the songs table has no decade column (decision 005).
+ALTER TABLE games ADD COLUMN IF NOT EXISTS genre text
+  CHECK (genre IN ('pop', 'rock', 'hip-hop', 'r&b', 'dance', 'country'));
+ALTER TABLE games ADD COLUMN IF NOT EXISTS decade integer
+  CHECK (decade BETWEEN 1960 AND 2020 AND decade % 10 = 0);
+
 -- ---------------------------------------------------------------------------------------------
 -- Rooms: several players in one shared game (spec 002, decision 012). Agreed with Niklas on 11 Nov 2026.
 -- ---------------------------------------------------------------------------------------------

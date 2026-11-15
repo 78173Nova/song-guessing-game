@@ -42,7 +42,7 @@ type Clips = { gameId: string; previewUrls: string[]; ready: boolean[] };
 type InGame = Clips & Progress;
 
 export type GameState =
-  | { screen: "start" }
+  | { screen: "start"; message?: string } // message: why the last start was refused (too few songs)
   | { screen: "creating" }
   | ({ screen: "first-clip" } & InGame)
   | ({ screen: "get-ready" } & InGame)
@@ -68,6 +68,7 @@ export type GameAction =
   | { type: "answer-result"; result: AnswerResult }
   | { type: "next" }
   | { type: "failed"; message: string }
+  | { type: "start-refused"; message: string }
   | { type: "reset" };
 
 export const initialState: GameState = { screen: "start" };
@@ -108,6 +109,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "start":
       return { screen: "creating" };
+
+    // Too few songs match the filters: back to the start screen, which shows why.
+    case "start-refused":
+      if (state.screen !== "creating") return state;
+      return { screen: "start", message: action.message };
 
     case "game-created":
       if (state.screen !== "creating") return state;

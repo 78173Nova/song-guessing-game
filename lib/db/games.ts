@@ -1,5 +1,7 @@
 // Saving and loading games and their rounds. All SQL for games lives here.
 import type { RoundStatus } from "../game/answers";
+import type { Decade, Filters } from "../game/filters";
+import type { Genre } from "../game/genres";
 import type { Mode, QuestionType } from "../game/modes";
 import type { NewRound } from "../game/rounds";
 import type { Db } from "./client";
@@ -44,10 +46,19 @@ type RoundRow = {
 
 const toDate = (value: Date | string | null) => (value === null ? null : new Date(value));
 
-// Creates a game in `mode` with all its rounds (status "waiting") and returns the new game's random UUID.
+// Creates a game in `mode` with its filters and all its rounds (status "waiting") and returns the new game's
+// random UUID. A missing filter is stored as empty (Any).
 // Two queries: if the second one fails, an empty game is left behind, but the browser never gets its ID.
-export async function createGame(db: Db, rounds: NewRound[], mode: Mode = "title"): Promise<string> {
-  const [game] = await db.query<{ id: string }>("INSERT INTO games (mode) VALUES ($1) RETURNING id", [mode]);
+export async function createGame(
+  db: Db,
+  rounds: NewRound[],
+  mode: Mode = "title",
+  filters: Filters = {},
+): Promise<string> {
+  const [game] = await db.query<{ id: string }>(
+    "INSERT INTO games (mode, genre, decade) VALUES ($1, $2, $3) RETURNING id",
+    [mode, filters.genre ?? null, filters.decade ?? null],
+  );
 
   // One INSERT with a row of placeholders per round: ($1, $2, ... $6), ($1, $7, ... $11), ...
   const params: unknown[] = [game.id];
@@ -73,6 +84,18 @@ export async function getQuestionTypes(db: Db, gameId: string): Promise<Question
     [gameId],
   );
   return rows.map((row) => row.question_type);
+}
+
+// The genre and decade a game was started with. Only the chosen ones are in the result (missing = Any).
+// null = there is no game with this ID.
+export async function getGameFilters(db: Db, gameId: string): Promise<Filters | null> {
+  const rows = await db.query<{ genre: Genre | null; decade: Decade | null }>(
+    "SELECT genre, decade FROM games WHERE id = $1",
+    [gameId],
+  );
+  if (rows.length === 0) return null;
+  const { genre, decade } = rows[0];
+  return { ...(genre === null ? {} : { genre }), ...(decade === null ? {} : { decade }) };
 }
 
 // All rounds of a game with their song, in order. null = there is no game with this ID.

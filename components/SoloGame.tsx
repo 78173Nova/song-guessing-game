@@ -15,6 +15,8 @@ import {
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
+import { DECADES, type Decade } from "@/lib/game/filters";
+import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
 import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
 import styles from "./SoloGame.module.css";
@@ -48,6 +50,9 @@ export default function SoloGame() {
   const [now, setNow] = useState(0);
   // The mode chosen on the start screen. "Play again" and "Try again" keep it.
   const [mode, setMode] = useState<Mode>("title");
+  // The filters chosen on the start screen (undefined = Any). "Play again" and "Try again" keep them.
+  const [genre, setGenre] = useState<Genre | undefined>(undefined);
+  const [decade, setDecade] = useState<Decade | undefined>(undefined);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -125,9 +130,10 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame(fetch, mode);
+    const game = await apiStartGame(fetch, mode, { genre, decade });
     if (!game.ok) {
-      dispatch({ type: "failed", message: game.message });
+      // Too few songs match the filters: back to the start screen, which says so.
+      dispatch(game.tooFewSongs ? { type: "start-refused", message: game.message } : { type: "failed", message: game.message });
       return;
     }
     const { gameId, previewUrls } = game.data;
@@ -264,6 +270,41 @@ export default function SoloGame() {
               </button>
             ))}
           </fieldset>
+          <div className={styles.filters}>
+            <label>
+              Genre
+              <select
+                value={genre ?? ""}
+                onChange={(e) => setGenre(GENRES.find((g) => g === e.target.value))}
+              >
+                <option value="">Any</option>
+                {GENRES.map((g) => (
+                  <option key={g} value={g}>
+                    {GENRE_LABELS[g]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Decade
+              <select
+                value={decade ?? ""}
+                onChange={(e) => setDecade(DECADES.find((d) => String(d) === e.target.value))}
+              >
+                <option value="">Any</option>
+                {DECADES.map((d) => (
+                  <option key={d} value={d}>
+                    {d}s
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {state.message && (
+            <p className={styles.error} role="alert">
+              {state.message}
+            </p>
+          )}
           <button className={styles.primary} onClick={handleStart}>
             Start game
           </button>

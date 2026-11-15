@@ -1,4 +1,6 @@
 // Game modes (spec 003, decision 013): what the player guesses. Plain functions: no database, no network.
+import { isDecade, type Filters } from "./filters";
+import { isGenre } from "./genres";
 
 // The modes a player can choose. "mixed" picks one of the question types at random for each round.
 export const MODES = ["title", "artist", "year", "mixed"] as const;
@@ -20,22 +22,36 @@ export function isMode(value: unknown): value is Mode {
   return typeof value === "string" && (MODES as readonly string[]).includes(value);
 }
 
-export type ParsedStart = { ok: true; mode: Mode } | { ok: false; error: "malformed" | "invalid-mode" };
+// A chosen genre or decade is only in the result when the player chose it: missing = "Any".
+export type ParsedStart =
+  | ({ ok: true; mode: Mode } & Filters)
+  | { ok: false; error: "malformed" | "invalid-mode" | "invalid-genre" | "invalid-decade" };
 
-// Checks the body of POST /api/games. No body or no mode = title mode, so older screens keep working.
-// Only "mode" is allowed: anything else (also genre and decade, until the filters are built) is refused.
+const START_FIELDS = ["mode", "genre", "decade"];
+
+// Checks the body of POST /api/games. No body, no mode, no genre, no decade = title mode with "Any" + "Any",
+// so older screens keep working. Only these three fields are allowed, anything else is refused.
 export function parseStartInput(body: unknown): ParsedStart {
   if (body === undefined) return { ok: true, mode: "title" };
   if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, error: "malformed" };
 
   const fields = Object.keys(body);
-  if (fields.some((field) => field !== "mode")) return { ok: false, error: "malformed" };
+  if (fields.some((field) => !START_FIELDS.includes(field))) return { ok: false, error: "malformed" };
 
-  const { mode } = body as Record<string, unknown>;
-  if (mode === undefined) return { ok: true, mode: "title" };
-  if (typeof mode !== "string") return { ok: false, error: "malformed" };
-  if (!isMode(mode)) return { ok: false, error: "invalid-mode" };
-  return { ok: true, mode };
+  const { mode, genre, decade } = body as Record<string, unknown>;
+  if (mode !== undefined && typeof mode !== "string") return { ok: false, error: "malformed" };
+  if (genre !== undefined && typeof genre !== "string") return { ok: false, error: "malformed" };
+  if (decade !== undefined && typeof decade !== "number") return { ok: false, error: "malformed" };
+  if (mode !== undefined && !isMode(mode)) return { ok: false, error: "invalid-mode" };
+  if (genre !== undefined && !isGenre(genre)) return { ok: false, error: "invalid-genre" };
+  if (decade !== undefined && !isDecade(decade)) return { ok: false, error: "invalid-decade" };
+
+  return {
+    ok: true,
+    mode: mode ?? "title",
+    ...(genre === undefined ? {} : { genre }),
+    ...(decade === undefined ? {} : { decade }),
+  };
 }
 
 // Rules for the wrong years in year mode (spec 003).

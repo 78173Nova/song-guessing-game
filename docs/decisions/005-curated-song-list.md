@@ -63,3 +63,8 @@ fill a game; the song list test rejects any other genre. The 2 `soul` songs beca
 - **Limits:** the seed never deletes songs, so songs removed from the list stay in the database. Renamed songs
   leave an old row without a preview (never played), but replaced songs that already had a preview are still
   played until they are deleted from the database.
+
+## Update 15 Nov 2026: decade filter built (spec 003, step 5)
+As planned above, the decade is calculated from the year: `decadeOf` in `lib/game/filters.ts` (1987 → 1980).
+The filter runs after `listSongsWithPreview`, so a song is only played if it has a preview **and** matches genre
+and decade. The player can choose 1960s … 2020s, so *Jailhouse Rock* (1957, decade 1950) only plays under "Any".

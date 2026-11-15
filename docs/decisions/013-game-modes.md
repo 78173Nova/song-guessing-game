@@ -1,4 +1,4 @@
-# 013 – Game modes: title, artist, year, mixed
+# 013 – Game modes (title, artist, year, mixed) and filters (genre, decade)
 
 Date: 15 Nov 2026 · Status: decided, built (see the update at the end)
 
@@ -45,3 +45,24 @@ not which option is right), and the reveal's `song` includes `year`. `getGameRou
 so three tests changed: the exact field list and reply of `/next` and the reveal in `tests/api/games.test.ts`, and
 the stored round in `tests/db/games.test.ts`. The round screen shows the question in every mode, including mixed,
 and the reveal shows the year under the artist.
+
+Update 15 Nov 2026: genre and decade filters (spec 003, step 5).
+- **Decision:** before a game the player can choose one genre (from `lib/game/genres.ts`) and one decade
+  (1960s … 2020s), each "Any" by default. The server keeps only playable songs that match both
+  (`filterSongs` in `lib/game/filters.ts`, run on the result of `listSongsWithPreview`). The wrong title and
+  artist options come from the same matching songs. The game stores its filters in `games.genre` and
+  `games.decade` (empty = Any), and `/replace` reads them back, so a replaced song matches too.
+- **Why the filters are stored on the game:** the browser only sends them once, at the start. If `/replace`
+  took them from the browser, a player could change them mid-game. Storing them keeps the server in control.
+- **Why filter in code, not in SQL:** the decade is calculated from the year (decision 005), and filtering
+  after `listSongsWithPreview` means every rule about which songs are playable (preview, catalogue) applies
+  automatically. With about 330 songs, filtering in memory costs nothing.
+- **Too few songs:** if the matching songs cannot fill a game (fewer than 5, or fewer than 4 different titles
+  or artists for the mode), the server answers `422 too-few-songs` with a message such as "Only 3 songs match
+  these filters – try 'Any' for genre or decade", stores no game, and the start screen shows the message.
+  Without filters the old "music unavailable" error stays. A filter set to "Any" is not sent at all.
+- **Alternatives:** several genres or decades at once (out of scope); a `decade` column (could disagree with the
+  year); sending the filters again with `/replace` (the browser would decide).
+- **Limits:** some combinations are always too small (no 1960s hip-hop). The dropdowns do not show in advance
+  how many songs a combination has. When every matching song is already in the game, `/replace` refuses and that
+  round is skipped instead of playing a song outside the filters.
