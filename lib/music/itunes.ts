@@ -96,12 +96,21 @@ function cleanTitle(title: string): string {
 }
 
 // Same artist, or our artist followed by a partner ("Daft Punk & Pharrell Williams", "Eminem feat. ...").
+// Our own "feat." partner is ignored too ("Shakira feat. Wyclef Jean" = "Shakira"), but only "feat.", "ft."
+// and "featuring": "&" in our list is part of the name ("Simon & Garfunkel" is not "Simon").
 // "Daft Punk Tribute Band" does not count.
 function artistMatches(ours: string, theirs: string): boolean {
-  const wanted = cleanText(ours);
-  if (cleanText(theirs) === wanted) return true;
-  const mainArtist = theirs.split(/\s*(?:&|,|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i)[0];
-  return cleanText(mainArtist) === wanted;
+  const wanted = artistKey(ours);
+  const wantedMain = artistKey(ours.split(/\s+(?:feat\.?|ft\.?|featuring)\s+/i)[0]);
+  const theirMain = theirs.split(/\s*(?:&|,|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b)\s*/i)[0];
+  const candidates = [artistKey(theirs), artistKey(theirMain)];
+  return candidates.includes(wanted) || candidates.includes(wantedMain);
+}
+
+// Artist names written differently on iTunes: "&" = "and", and a leading "The" is ignored
+// ("The Black Eyed Peas" = "Black Eyed Peas").
+function artistKey(artist: string): string {
+  return cleanText(artist.replace(/&/g, " and ")).replace(/^the /, "");
 }
 
 const UNWANTED_WORDS = [/\bkaraoke\b/i, /\blive\b/i, /\bremix(?:es|ed)?\b/i];
