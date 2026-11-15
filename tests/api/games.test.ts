@@ -67,13 +67,14 @@ describe("POST /api/games/[id]/next", () => {
     const result = await sendNextRound(db, gameId, deps);
 
     expect(result.status).toBe(200);
-    expect(Object.keys(result.body).sort()).toEqual(["options", "previewUrl", "round", "totalRounds"]);
+    expect(Object.keys(result.body).sort()).toEqual(["options", "previewUrl", "questionType", "round", "totalRounds"]);
     const round = (await getGameRounds(db, gameId))![0];
     expect(result.body).toEqual({
       round: 1,
       totalRounds: 5,
       previewUrl: round.song.previewUrl,
       options: round.options,
+      questionType: "title",
     });
     expect(round.status).toBe("open");
     expect(round.startedAt).toEqual(clock);
@@ -109,7 +110,7 @@ describe("POST /api/games/[id]/answer", () => {
         points: 140,
         totalScore: 140,
         correctOption: right,
-        song: { title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, storeUrl: song.storeUrl },
+        song: { title: song.title, artist: song.artist, year: song.year, artworkUrl: song.artworkUrl, storeUrl: song.storeUrl },
       },
     });
   });

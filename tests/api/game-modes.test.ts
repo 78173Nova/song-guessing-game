@@ -116,6 +116,26 @@ describe("POST /api/games/[id]/next – other modes", () => {
     expect(text).not.toContain(round.song.artist);
     expect(Object.keys(result.body)).not.toContain("correctOption");
   });
+
+  it("sends the question type of each round – 'artist' in an artist game", async () => {
+    const gameId = await startedGame("artist");
+    const result = await sendNextRound(db, gameId, deps);
+    expect(result).toMatchObject({ status: 200, body: { questionType: "artist" } });
+  });
+
+  it("in a mixed game, /next sends the type that was stored for that round", async () => {
+    const gameId = await startedGame("mixed");
+    const stored = (await getQuestionTypes(db, gameId))!;
+
+    const sent: unknown[] = [];
+    for (let round = 1; round <= 5; round++) {
+      const result = await sendNextRound(db, gameId, deps);
+      expect(result.status).toBe(200);
+      sent.push((result.body as { questionType: unknown }).questionType);
+      await answerRound(db, gameId, JSON.stringify({ round, answer: 0 }), deps);
+    }
+    expect(sent).toEqual(stored);
+  });
 });
 
 describe("POST /api/games/[id]/answer – other modes", () => {
