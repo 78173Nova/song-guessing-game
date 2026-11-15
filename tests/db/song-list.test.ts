@@ -7,10 +7,15 @@ const JAILHOUSE_ROCK = { artist: "Elvis Presley", title: "Jailhouse Rock", year:
 const FIRST_YEAR = 1960;
 const LAST_YEAR = 2026;
 
+const MIN_SONGS = 300;
+const MIN_PER_GENRE = 30;
+const MIN_PER_DECADE = 35;
+const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020];
+
 const describeSong = (song: unknown) => JSON.stringify(song);
 
-// Checks the song data itself (no database). The size rules (300+ songs, 30 per genre, 35 per decade)
-// are added with the last decade on feature/songs (spec 003, step 3).
+// Checks the song data itself (no database), including the size rules from spec 003:
+// 300+ songs, at least 30 per genre and at least 35 per decade (1960s–2020s).
 describe("db/songs.ts – the seed song list", () => {
   it("gives every song a non-empty title and artist", () => {
     for (const song of songList) {
@@ -46,5 +51,19 @@ describe("db/songs.ts – the seed song list", () => {
   it("has no song twice (same artist + title, ignoring upper/lower case)", () => {
     const keys = songList.map((s) => `${s.artist.toLowerCase()}|${s.title.toLowerCase()}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("has at least 300 songs", () => {
+    expect(songList.length).toBeGreaterThanOrEqual(MIN_SONGS);
+  });
+
+  it.each(GENRES)("has at least 30 songs in genre %s", (genre) => {
+    const count = songList.filter((song) => song.genre === genre).length;
+    expect(count).toBeGreaterThanOrEqual(MIN_PER_GENRE);
+  });
+
+  it.each(DECADES)("has at least 35 songs in the %ss", (decade) => {
+    const count = songList.filter((song) => song.year >= decade && song.year <= decade + 9).length;
+    expect(count).toBeGreaterThanOrEqual(MIN_PER_DECADE);
   });
 });

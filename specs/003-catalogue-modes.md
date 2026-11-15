@@ -18,6 +18,10 @@ When a line below can be read two ways, choose the simpler option that keeps the
       **1960–2026**, roughly even across the 7 decades 1960s–2020s (about 40–50 songs each).
       One exception: *Jailhouse Rock* (Elvis Presley, 1957) stays from the base list and only appears when the
       decade is "Any" (there is no 1950s filter)
+- [ ] **Year rule:** the year is when that recording was first released, as album or single, whichever came first
+      (e.g. "Hello" by Lionel Richie: album *Can't Slow Down* 1983, single 1984 → 1983). Not the year it became a hit,
+      not a remaster, live version or compilation. For a cover, the year of the cover recording, not of the original song.
+      For a re-recording (e.g. "Take On Me", 1985), the year of the version that is played
 - [ ] Genres come from one fixed list of 6, defined in one place in code:
       `pop`, `rock`, `hip-hop`, `r&b` (includes soul), `dance` (includes disco and electronic), `country` (includes folk).
       The 2 current `soul` songs become `r&b`
@@ -122,6 +126,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - *Jailhouse Rock* (1957) stays as the one song outside 1960–2026: the seed never deletes songs, so removing it from
   the list would leave it in the database anyway. It only appears under decade "Any", and the song list test allows it
 - All decades go on one branch (`feature/songs`) with one commit per decade, instead of one pull request per decade
+- Year rule (see "Song catalogue"): first release of the recording, album or single, whichever came first. Album and
+  single years often differ, so one rule keeps the year mode fair and makes every year checkable
 
 ## Open questions
 - **Production database:** `npm run db:seed` uses the `dev` database from `.env.local`. Karin asks Niklas for access
