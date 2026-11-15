@@ -1,5 +1,6 @@
 // Saving and loading games and their rounds. All SQL for games lives here.
 import type { RoundStatus } from "../game/answers";
+import type { Mode, QuestionType } from "../game/modes";
 import type { NewRound } from "../game/rounds";
 import type { Db } from "./client";
 
@@ -41,23 +42,35 @@ type RoundRow = {
 
 const toDate = (value: Date | string | null) => (value === null ? null : new Date(value));
 
-// Creates a game with all its rounds (status "waiting") and returns the new game's random UUID.
+// Creates a game in `mode` with all its rounds (status "waiting") and returns the new game's random UUID.
 // Two queries: if the second one fails, an empty game is left behind, but the browser never gets its ID.
-export async function createGame(db: Db, rounds: NewRound[]): Promise<string> {
-  const [game] = await db.query<{ id: string }>("INSERT INTO games DEFAULT VALUES RETURNING id");
+export async function createGame(db: Db, rounds: NewRound[], mode: Mode = "title"): Promise<string> {
+  const [game] = await db.query<{ id: string }>("INSERT INTO games (mode) VALUES ($1) RETURNING id", [mode]);
 
-  // One INSERT with a row of placeholders per round: ($1, $2, $3, $4, $5), ($1, $6, $7, $8, $9), ...
+  // One INSERT with a row of placeholders per round: ($1, $2, ... $6), ($1, $7, ... $11), ...
   const params: unknown[] = [game.id];
   const rows = rounds.map((round) => {
-    params.push(round.roundNumber, round.songId, round.options, round.correctOption);
+    params.push(round.roundNumber, round.songId, round.options, round.correctOption, round.questionType ?? "title");
     const n = params.length;
-    return `($1, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
+    return `($1, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
   });
   await db.query(
-    `INSERT INTO rounds (game_id, round_number, song_id, options, correct_option) VALUES ${rows.join(", ")}`,
+    `INSERT INTO rounds (game_id, round_number, song_id, options, correct_option, question_type)
+     VALUES ${rows.join(", ")}`,
     params,
   );
   return game.id;
+}
+
+// The question type of each round of a game, in round order. null = there is no game with this ID.
+export async function getQuestionTypes(db: Db, gameId: string): Promise<QuestionType[] | null> {
+  const games = await db.query("SELECT id FROM games WHERE id = $1", [gameId]);
+  if (games.length === 0) return null;
+  const rows = await db.query<{ question_type: QuestionType }>(
+    "SELECT question_type FROM rounds WHERE game_id = $1 ORDER BY round_number",
+    [gameId],
+  );
+  return rows.map((row) => row.question_type);
 }
 
 // All rounds of a game with their song, in order. null = there is no game with this ID.
@@ -106,7 +119,8 @@ export async function markRoundSent(db: Db, gameId: string, roundNumber: number,
   return rows.length === 1;
 }
 
-// Gives a round a different song and options (its clip would not load). Only a "waiting" round changes,
+// Gives a round a different song and options (its clip would not load). The question type stays: the new
+// options are of the same type (buildReplacementRound). Only a "waiting" round changes,
 // so a round that has started is never swapped. Returns false if nothing changed. The database refuses
 // a song that is already in the game (UNIQUE game_id + song_id).
 export async function replaceRound(db: Db, gameId: string, round: NewRound): Promise<boolean> {

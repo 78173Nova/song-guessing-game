@@ -182,3 +182,33 @@
   line-height: 1;
   color: var(--accent);
 }
+
+/* Mode choice on the start screen: 2 × 2 buttons, the chosen one outlined. */
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 28rem;
+  border: none;
+}
+
+.modes legend {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.modes .option {
+  min-height: 3.25rem;
+}
+
+.chosen {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.question {
+  margin-bottom: 0.75rem;
+  font-size: 1.2rem;
+  text-align: center;
+}

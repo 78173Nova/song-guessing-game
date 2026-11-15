@@ -15,6 +15,7 @@ import {
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
+import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
 import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
 import styles from "./SoloGame.module.css";
 
@@ -45,6 +46,8 @@ export default function SoloGame() {
   const [getReadyAt, setGetReadyAt] = useState(0);
   const [roundStartedAt, setRoundStartedAt] = useState(0);
   const [now, setNow] = useState(0);
+  // The mode chosen on the start screen. "Play again" and "Try again" keep it.
+  const [mode, setMode] = useState<Mode>("title");
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -122,7 +125,7 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame();
+    const game = await apiStartGame(fetch, mode);
     if (!game.ok) {
       dispatch({ type: "failed", message: game.message });
       return;
@@ -238,8 +241,22 @@ export default function SoloGame() {
       {state.screen === "start" && (
         <section className={styles.center}>
           <p className={styles.intro}>
-            Hear a 30-second clip and pick the right song title. {ROUNDS_PER_GAME} rounds – faster answers score more.
+            Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
+          <fieldset className={styles.modes}>
+            <legend>What do you want to guess?</legend>
+            {MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={m === mode ? `${styles.option} ${styles.chosen}` : styles.option}
+                aria-pressed={m === mode}
+                onClick={() => setMode(m)}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
+          </fieldset>
           <button className={styles.primary} onClick={handleStart}>
             Start game
           </button>
@@ -294,6 +311,9 @@ export default function SoloGame() {
             <Countdown left={state.pending === null ? secondsLeft(now - roundStartedAt) : null} />
           )}
 
+          {/* Mixed games show no question yet: /next does not say the round's type (see PR description). */}
+          {mode !== "mixed" && <h2 className={styles.question}>{QUESTION_LABELS[mode]}</h2>}
+
           <div className={styles.options}>
             {state.round.options.map((title, index) => (
               <button
@@ -343,6 +363,8 @@ export default function SoloGame() {
 }
 
 const OUTCOME_ICON = { correct: "✅", wrong: "❌", skipped: "⏭", timeout: "⏱" } as const;
+
+const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
 function optionClass(state: GameState, index: number): string {
   if (state.screen !== "reveal") return styles.option;

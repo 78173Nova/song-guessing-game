@@ -1,5 +1,6 @@
 // The browser's calls to our game server routes. Each call returns the data or a readable message –
 // it never throws, so the screen can always show something sensible.
+import type { Mode } from "../game/modes";
 import type { Answer, AnswerResult, RoundInfo } from "./game-state";
 
 export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your internet connection and try again.";
@@ -35,9 +36,10 @@ async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<Ap
   return { ok: true, data: data as T };
 }
 
-// `fetchFn` is only passed in tests; the browser uses the real fetch.
-export function apiStartGame(fetchFn: FetchFn = fetch) {
-  return post<{ gameId: string; previewUrls: string[] }>("/api/games", undefined, fetchFn);
+// `fetchFn` is only passed in tests; the browser uses the real fetch. Without a mode, no body is sent
+// and the server plays title mode.
+export function apiStartGame(fetchFn: FetchFn = fetch, mode?: Mode) {
+  return post<{ gameId: string; previewUrls: string[] }>("/api/games", mode === undefined ? undefined : { mode }, fetchFn);
 }
 
 export function apiNextRound(gameId: string, fetchFn: FetchFn = fetch) {
