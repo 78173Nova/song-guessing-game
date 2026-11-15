@@ -20,7 +20,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
       decade is "Any" (there is no 1950s filter)
 - [ ] Genres come from one fixed list of 6, defined in one place in code:
       `pop`, `rock`, `hip-hop`, `r&b` (includes soul), `dance` (includes disco and electronic), `country` (includes folk).
-      The 3 current `soul` songs become `r&b`
+      The 2 current `soul` songs become `r&b`
 - [ ] The screen shows readable names: Pop, Rock, Hip-hop, R&B / Soul, Dance / Electronic, Country / Folk
 - [ ] Each genre has at least 30 songs and each decade at least 35. Not every genre exists in every decade
       (no 1960s hip-hop), so some genre + decade combinations are allowed to be too small

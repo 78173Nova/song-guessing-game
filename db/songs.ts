@@ -4,9 +4,9 @@ import type { SongInput } from "../lib/db/songs";
 // (decision 005). Drafted with Claude – a human should check it. Person 2 replaces it with the full catalogue.
 export const songList: SongInput[] = [
   { artist: "Elvis Presley", title: "Jailhouse Rock", year: 1957, genre: "rock" },
-  { artist: "Aretha Franklin", title: "Respect", year: 1967, genre: "soul" },
+  { artist: "Aretha Franklin", title: "Respect", year: 1967, genre: "r&b" },
   { artist: "The Beatles", title: "Hey Jude", year: 1968, genre: "rock" },
-  { artist: "Stevie Wonder", title: "Superstition", year: 1972, genre: "soul" },
+  { artist: "Stevie Wonder", title: "Superstition", year: 1972, genre: "r&b" },
   { artist: "Queen", title: "Bohemian Rhapsody", year: 1975, genre: "rock" },
   { artist: "ABBA", title: "Dancing Queen", year: 1976, genre: "pop" },
   { artist: "Bee Gees", title: "Stayin' Alive", year: 1977, genre: "dance" },

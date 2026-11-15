@@ -38,3 +38,8 @@ The list can grow at any time (extend the seed script). Later options: players s
 The `songs` table stores artist, title, original year and genre – **no decade**. The decade is calculated from
 the year when a filter needs it (1987 → 1980s), so the two can never disagree. The base starts with 30 songs
 (`db/songs.ts`, drafted with Claude, to be checked by a person).
+
+## Update 15 Nov 2026: fixed genre list
+Genres come from one fixed list of 6 in `lib/game/genres.ts`: `pop`, `rock`, `hip-hop`, `r&b` (includes soul),
+`dance` (includes disco and electronic), `country` (includes folk). Few, broad genres keep each one big enough to
+fill a game; the song list test rejects any other genre. The 2 `soul` songs became `r&b` (spec 003).
