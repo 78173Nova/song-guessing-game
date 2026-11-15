@@ -45,7 +45,7 @@ Genres come from one fixed list of 6 in `lib/game/genres.ts`: `pop`, `rock`, `hi
 fill a game; the song list test rejects any other genre. The 2 `soul` songs became `r&b` (spec 003).
 
 ## Update 15 Nov 2026: the full catalogue (spec 003)
-- **Size and range:** 332 songs from 1960–2026 (40–51 per decade) plus *Jailhouse Rock* (1957), which only plays
+- **Size and range:** 331 songs from 1960–2026 (40–51 per decade) plus *Jailhouse Rock* (1957), which only plays
   under decade "Any". Each of the 6 genres has at least 34 songs. Some genre + decade combinations stay small
   (no 1960s hip-hop, only 2 hip-hop songs in the 2020s).
 - **Year rule:** the year the recording was first released, as album or single, whichever came first. Not the year
