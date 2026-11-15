@@ -43,3 +43,23 @@ the year when a filter needs it (1987 → 1980s), so the two can never disagree.
 Genres come from one fixed list of 6 in `lib/game/genres.ts`: `pop`, `rock`, `hip-hop`, `r&b` (includes soul),
 `dance` (includes disco and electronic), `country` (includes folk). Few, broad genres keep each one big enough to
 fill a game; the song list test rejects any other genre. The 2 `soul` songs became `r&b` (spec 003).
+
+## Update 15 Nov 2026: the full catalogue (spec 003)
+- **Size and range:** 331 songs from 1960–2026 (40–51 per decade) plus *Jailhouse Rock* (1957), which only plays
+  under decade "Any". Each of the 6 genres has at least 34 songs. Some genre + decade combinations stay small
+  (no 1960s hip-hop, only 2 hip-hop songs in the 2020s).
+- **Year rule:** the year the recording was first released, as album or single, whichever came first. Not the year
+  it became a hit, not a remaster or compilation. For a cover, the year of the cover.
+- **How the list was checked:** Claude drafted each decade, Karin checked every line (well known, year, genre).
+  Then `npm run db:seed` looked up every preview; songs without one were renamed (if iTunes has the same
+  recording under another name, e.g. "Lady A", "Martha Reeves & The Vandellas") or replaced by a song of the same
+  decade and genre. Every song in the list has a preview.
+- **No explicit lyrics:** the game may be played in class and on a big screen. Songs whose original recording
+  is explicit were replaced. iTunes search only returns the clean edit of such songs, marked
+  `trackExplicitness: "cleaned"`, so "cleaned" on the artist's own album = explicit original. Where no clean
+  2020s hip-hop hit was found, a clean 2020s song of another genre was used instead.
+- **Artist matching:** see decision 006 (update 15 Nov 2026): "feat." partners, "&" = "and" and a leading "The"
+  are handled by the matching; real name changes are fixed in `db/songs.ts`.
+- **Limits:** the seed never deletes songs, so songs removed from the list stay in the database. Renamed songs
+  leave an old row without a preview (never played), but replaced songs that already had a preview are still
+  played until they are deleted from the database.
