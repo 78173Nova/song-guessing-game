@@ -59,3 +59,13 @@ empty results, song without a preview.
 - `npm run db:seed` checks every stored clip address with Apple's audio server (first 2 bytes only). Only a clear
   "not found" (403/404/410) clears the address so it is looked up again; if our own connection fails, it is kept.
   Why not clear it when a player's browser fails? One player on bad Wi-Fi would empty the song list for everyone.
+
+## Update 15 Nov 2026: artist names written differently
+- The seed found no preview for 37 songs, and most of them exist on iTunes: we write "Shakira feat. Wyclef Jean",
+  iTunes writes "Shakira" (the partner is in the track name). Now our own "feat." / "ft." / "featuring" partner is
+  ignored, "&" counts as "and", and a leading "The" is ignored on both sides ("The Black Eyed Peas" = "Black Eyed Peas").
+  Why: the alternative was to replace those songs with others, which would have dropped well-known hits.
+- "&" in our list stays part of the name ("Simon & Garfunkel" never matches "Simon"), and a longer name still
+  does not match ("Black Eyed Peas Tribute Band").
+- Limit: real name changes are not covered ("Lady Antebellum" is now "Lady A", "Martha and the Vandellas" is
+  "Martha Reeves & The Vandellas" on iTunes). Those are fixed in `db/songs.ts`.

@@ -100,6 +100,59 @@ describe("lookupPreview – picking the right track", () => {
     expect(tributeBand).toMatchObject({ ok: false, reason: "not-found" });
   });
 
+  it("accepts our artist with a featured partner when iTunes lists only the main artist", async () => {
+    for (const ourArtist of ["Shakira feat. Wyclef Jean", "Shakira ft. Wyclef Jean", "Shakira featuring Wyclef Jean"]) {
+      const result = await lookupPreview(
+        { artist: ourArtist, title: "Hips Don't Lie" },
+        { fetchFn: fakeItunes([track("Shakira", "Hips Don't Lie (feat. Wyclef Jean)")]) },
+      );
+      expect(result, ourArtist).toMatchObject({ ok: true });
+    }
+  });
+
+  it("treats 'and' and '&' in an artist name as the same", async () => {
+    const result = await lookupPreview(
+      { artist: "Grandmaster Flash and the Furious Five", title: "The Message" },
+      { fetchFn: fakeItunes([track("Grandmaster Flash & The Furious Five", "The Message")]) },
+    );
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("ignores a leading 'The' in the artist name, on either side", async () => {
+    const withoutThe = await lookupPreview(
+      { artist: "The Black Eyed Peas", title: "I Gotta Feeling" },
+      { fetchFn: fakeItunes([track("Black Eyed Peas", "I Gotta Feeling")]) },
+    );
+    expect(withoutThe).toMatchObject({ ok: true });
+
+    const withThe = await lookupPreview(
+      { artist: "Black Eyed Peas", title: "I Gotta Feeling" },
+      { fetchFn: fakeItunes([track("The Black Eyed Peas", "I Gotta Feeling")]) },
+    );
+    expect(withThe).toMatchObject({ ok: true });
+  });
+
+  it("still rejects a different artist after the new clean-up", async () => {
+    const cases = [
+      // Only our main artist counts, not the featured partner.
+      { ours: { artist: "Shakira feat. Wyclef Jean", title: "Hips Don't Lie" }, theirs: track("Wyclef Jean", "Hips Don't Lie") },
+      // A duo is not the same as one of its members ("&" in our name is part of the name).
+      { ours: { artist: "Simon & Garfunkel", title: "Mrs. Robinson" }, theirs: track("Simon", "Mrs. Robinson") },
+      // Dropping "The" must not let a tribute band through.
+      { ours: { artist: "The Black Eyed Peas", title: "I Gotta Feeling" }, theirs: track("Black Eyed Peas Tribute Band", "I Gotta Feeling") },
+      // A completely different artist with the same title.
+      { ours: { artist: "Grandmaster Flash and the Furious Five", title: "The Message" }, theirs: track("Dr. Dre", "The Message") },
+    ];
+    for (const { ours, theirs } of cases) {
+      const result = await lookupPreview(ours, { fetchFn: fakeItunes([theirs]) });
+      expect(result, `${ours.artist} vs ${theirs.artistName}`).toEqual({
+        ok: false,
+        reason: "not-found",
+        message: PREVIEW_NOT_FOUND_MESSAGE,
+      });
+    }
+  });
+
   it("skips karaoke, live and remix versions (track or album name) and takes the studio version", async () => {
     const studio = track("Oasis", "Wonderwall", { collectionName: "(What's the Story) Morning Glory?" });
     const fetchFn = fakeItunes([
