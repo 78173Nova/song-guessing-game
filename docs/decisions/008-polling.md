@@ -33,3 +33,9 @@ For the online duel, the server sets a **start time** for each round; every phon
 
 ## How it could change
 The polling code would be replaced by a real-time service in one place; the game rules on the server stay the same.
+
+## Update 15 Nov 2026: built with the room API
+The state every page polls is `GET /api/rooms/[code]` (`getRoomState` in `lib/api/rooms.ts`). The same request
+also moves the game forward: it closes a round that is due and finishes the room after the last round, so no
+timer is needed. The three rules for simultaneous actions above are tested in `tests/api/rooms.test.ts` and
+`tests/game/rooms.test.ts`. Details and limits: decision 012, update 15 Nov 2026.
