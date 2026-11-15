@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS songs (
   preview_cached_at timestamptz  -- when the three URLs above were looked up, empty = not looked up yet
 );
 
+-- Is the song still in db/songs.ts? The seed sets this (true = listed, false = removed from the list).
+-- Removed songs are never deleted, because old rounds point to them, but the game only plays songs with true.
+-- Added with ALTER TABLE so it also reaches songs tables created before this column existed.
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS in_catalogue boolean NOT NULL DEFAULT true;
+
 -- The same song may only exist once, ignoring upper/lower case ("Queen" = "queen").
 CREATE UNIQUE INDEX IF NOT EXISTS songs_artist_title_unique ON songs (lower(artist), lower(title));
 
