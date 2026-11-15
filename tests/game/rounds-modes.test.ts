@@ -44,7 +44,7 @@ describe("buildRounds – artist mode", () => {
         // The wrong ones are artists of other songs.
         for (const option of round.options.filter((_, j) => j !== round.correctOption)) {
           expect(eightSongs.some((s) => s.artist === option)).toBe(true);
-          expect(key(option)).not.toBe(key(songOf(round).artist));
+          expect(key(option)).not.toBe(key(songOf(round).artist!));
         }
       }
     }
