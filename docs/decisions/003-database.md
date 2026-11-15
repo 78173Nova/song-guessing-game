@@ -61,3 +61,9 @@ Alternatives: keep one owner (what the course guide recommends), or no approval 
 the group chat before starting. Limit: parallel schema changes can conflict in the shared `dev` database
 without git noticing; the seed only adds what is missing (`IF NOT EXISTS`), so it does not change existing tables.
 How it could change: if a conflict happens, go back to one schema change at a time.
+
+## Update 15 Nov 2026: `dev` branch recreated
+The Neon `dev` branch disappeared (probably an automatic expiry date). The seed then failed with the
+misleading message "password authentication failed". We created a new `dev` branch from `production`
+with **no expiry date** and shared the new connection string with the team (one-time link) and in Vercel Preview.
+If the seed suddenly fails with that message: first check in the Neon console that the `dev` branch still exists.

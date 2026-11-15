@@ -61,4 +61,4 @@ room games) are added here as updates when `feature/room-api` builds them.
 ## How it could change
 - If players should be able to leave or be removed, the limit keeps working, because it counts the rows.
 - If old rooms should be cleaned up, codes would need a separate "used codes" list to stay unique forever.
-- If the lock turns out to be a bottleneck, the player counter above is the next step (needs Niklas's OK).
+- If the lock turns out to be a bottleneck, the player counter above is the next step.
