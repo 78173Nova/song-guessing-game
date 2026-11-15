@@ -102,7 +102,9 @@ export async function sendNextRound(db: Db, gameId: string, deps: Deps = {}): Pr
   if (!(await markRoundSent(db, gameId, next.roundNumber, now()))) return fail("round-still-open");
 
   const round = rounds[next.roundNumber - 1];
-  // Only these four fields – nothing that reveals the answer (decision 004).
+  const questionTypes = await getQuestionTypes(db, gameId);
+  // Only these five fields – nothing that reveals the answer (decision 004). The question type only says
+  // what is asked ("Which year?"), not which option is right.
   return {
     status: 200,
     body: {
@@ -110,6 +112,7 @@ export async function sendNextRound(db: Db, gameId: string, deps: Deps = {}): Pr
       totalRounds: rounds.length,
       previewUrl: round.song.previewUrl,
       options: round.options,
+      questionType: questionTypes![next.roundNumber - 1],
     },
   };
 }
@@ -161,6 +164,7 @@ export async function answerRound(
       song: {
         title: round.song.title,
         artist: round.song.artist,
+        year: round.song.year,
         artworkUrl: round.song.artworkUrl,
         storeUrl: round.song.storeUrl,
       },

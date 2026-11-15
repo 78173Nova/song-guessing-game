@@ -236,6 +236,13 @@ export default function SoloGame() {
   }, [state.screen]);
   useEffect(() => () => pauseAll(), []);
 
+  // What the current round asks. The server sends it with each round; without it (older data),
+  // title/artist/year games fall back to the chosen mode and mixed games show no question.
+  const questionType =
+    state.screen === "round" || state.screen === "reveal"
+      ? (state.round.questionType ?? (mode === "mixed" ? undefined : mode))
+      : undefined;
+
   return (
     <div className={styles.game}>
       {state.screen === "start" && (
@@ -311,8 +318,8 @@ export default function SoloGame() {
             <Countdown left={state.pending === null ? secondsLeft(now - roundStartedAt) : null} />
           )}
 
-          {/* Mixed games show no question yet: /next does not say the round's type (see PR description). */}
-          {mode !== "mixed" && <h2 className={styles.question}>{QUESTION_LABELS[mode]}</h2>}
+          {/* The server says what each round asks – in mixed games it changes from round to round. */}
+          {questionType && <h2 className={styles.question}>{QUESTION_LABELS[questionType]}</h2>}
 
           <div className={styles.options}>
             {state.round.options.map((title, index) => (
@@ -402,6 +409,7 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
         <div>
           <p className={styles.title}>{result.song.title}</p>
           <p>{result.song.artist}</p>
+          {result.song.year !== undefined && <p>{result.song.year}</p>}
           {result.song.storeUrl && (
             <a href={result.song.storeUrl} target="_blank" rel="noopener noreferrer">
               Open in Apple Music

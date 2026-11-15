@@ -4,6 +4,7 @@
 //
 // Flow: start → creating → first-clip (loading the first song) → get-ready (3-2-1) → starting →
 // round → reveal → starting the next round (or clip-loading if its clip is not ready yet) → ... → results.
+import type { QuestionType } from "../game/modes";
 import { MUSIC_LOAD_MESSAGE } from "./clip-loader";
 
 export type RoundInfo = {
@@ -11,6 +12,8 @@ export type RoundInfo = {
   totalRounds: number;
   previewUrl: string;
   options: string[];
+  // What the round asks. Always sent by the server; optional so older round data still fits.
+  questionType?: QuestionType;
 };
 
 export type AnswerResult = {
@@ -18,7 +21,7 @@ export type AnswerResult = {
   points: number;
   totalScore: number;
   correctOption: number;
-  song: { title: string; artist: string; artworkUrl: string | null; storeUrl: string | null };
+  song: { title: string; artist: string; year?: number; artworkUrl: string | null; storeUrl: string | null };
 };
 
 export type Answer = number | "skip" | "timeout";

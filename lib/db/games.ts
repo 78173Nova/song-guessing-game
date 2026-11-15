@@ -17,6 +17,7 @@ export type StoredRound = {
   song: {
     title: string;
     artist: string;
+    year: number;
     previewUrl: string | null;
     artworkUrl: string | null;
     storeUrl: string | null;
@@ -35,6 +36,7 @@ type RoundRow = {
   points: number | null;
   title: string;
   artist: string;
+  year: number;
   preview_url: string | null;
   artwork_url: string | null;
   store_url: string | null;
@@ -81,7 +83,7 @@ export async function getGameRounds(db: Db, gameId: string): Promise<StoredRound
   const rows = await db.query<RoundRow>(
     `SELECT r.round_number, r.song_id, r.options, r.correct_option, r.status, r.started_at,
             r.answered_at, r.chosen_option, r.points,
-            s.title, s.artist, s.preview_url, s.artwork_url, s.store_url
+            s.title, s.artist, s.year, s.preview_url, s.artwork_url, s.store_url
      FROM rounds r JOIN songs s ON s.id = r.song_id
      WHERE r.game_id = $1
      ORDER BY r.round_number`,
@@ -100,6 +102,7 @@ export async function getGameRounds(db: Db, gameId: string): Promise<StoredRound
     song: {
       title: row.title,
       artist: row.artist,
+      year: row.year,
       previewUrl: row.preview_url,
       artworkUrl: row.artwork_url,
       storeUrl: row.store_url,

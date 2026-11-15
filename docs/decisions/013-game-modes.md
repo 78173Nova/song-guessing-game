@@ -1,6 +1,6 @@
 # 013 – Game modes: title, artist, year, mixed
 
-Date: 15 Nov 2026 · Status: decided, partly built (see "Not built yet")
+Date: 15 Nov 2026 · Status: decided, built (see the update at the end)
 
 ## Decision
 A solo game has one of 4 modes: `title` (default), `artist`, `year` or `mixed`. Each round stores its own
@@ -39,3 +39,9 @@ Rooms get the same modes in a follow-up spec. A "close year" scoring rule could 
 two existing tests in `tests/api/games.test.ts`, which check the exact fields of those replies, so they wait for
 the team's OK (see the pull request). Until then, the round screen shows the question for title, artist and year
 games and no question in mixed games.
+
+Update 15 Nov 2026: built after the team's OK. `/next` now also sends `questionType` (it says what is asked,
+not which option is right), and the reveal's `song` includes `year`. `getGameRounds` returns the song's year,
+so three tests changed: the exact field list and reply of `/next` and the reveal in `tests/api/games.test.ts`, and
+the stored round in `tests/db/games.test.ts`. The round screen shows the question in every mode, including mixed,
+and the reveal shows the year under the artist.
