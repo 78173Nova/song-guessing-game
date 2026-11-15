@@ -60,11 +60,24 @@ fill a game; the song list test rejects any other genre. The 2 `soul` songs beca
   2020s hip-hop hit was found, a clean 2020s song of another genre was used instead.
 - **Artist matching:** see decision 006 (update 15 Nov 2026): "feat." partners, "&" = "and" and a leading "The"
   are handled by the matching; real name changes are fixed in `db/songs.ts`.
-- **Limits:** the seed never deletes songs, so songs removed from the list stay in the database. Renamed songs
-  leave an old row without a preview (never played), but replaced songs that already had a preview are still
-  played until they are deleted from the database.
+- **Limits:** the seed never deletes songs, so songs removed from the list stay in the database. They are
+  marked as retired and never played (see the update below).
+
+## Update 15 Nov 2026: retired songs (fix/retire-dropped-songs)
+- **Decision:** `songs.in_catalogue` (yes/no, default yes) says whether a song is still in `db/songs.ts`. On every
+  run the seed sets it to yes for every listed song and no for every other song. The game only plays catalogue
+  songs with a preview; the seed only looks up and checks previews of catalogue songs.
+- **Why:** removed songs (the 32 explicit ones, *Suga Suga*, *End of Beginning*) still had a preview and were
+  still played. Rows are not deleted: old rounds point to them, and the team does not delete data.
+- **Alternatives:** delete removed songs (breaks old rounds); clear their preview (the seed would look them up
+  again); a separate table of removed songs (two places to keep in sync).
+- **Limits:** a song only counts as the same if artist and title match (ignoring case), so a renamed song is a
+  new row and the old row is retired. An empty song list is refused, so a mistake cannot retire every song.
+- **How it could change:** if songs are later edited in the database instead of `db/songs.ts`, the seed must stop
+  overwriting `in_catalogue`.
 
 ## Update 15 Nov 2026: decade filter built (spec 003, step 5)
 As planned above, the decade is calculated from the year: `decadeOf` in `lib/game/filters.ts` (1987 → 1980).
-The filter runs after `listSongsWithPreview`, so a song is only played if it has a preview **and** matches genre
-and decade. The player can choose 1960s … 2020s, so *Jailhouse Rock* (1957, decade 1950) only plays under "Any".
+The filter runs after `listSongsWithPreview`, so a song is only played if it is in the catalogue, has a preview
+**and** matches genre and decade (the catalogue and preview rules live in `listSongsWithPreview`). The player can
+choose 1960s … 2020s, so *Jailhouse Rock* (1957, decade 1950) only plays under "Any".
