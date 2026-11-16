@@ -143,3 +143,10 @@ Update 16 Nov 2026 (code review of #24–#29): the one-email-per-minute limit mo
 (per account; the column is dropped) to the table `email_throttle` (per address, hashed), so the 429 no longer
 reveals whether an address has an account. Signing up again within the minute no longer replaces the pending
 account. Used and expired links answer 400 instead of 410. Routes cap the request body while reading it.
+
+Update 16 Nov 2026 (team accounts): `npm run db:team-accounts` creates the accounts listed in `TEAM_ACCOUNTS`
+(`email|username|password;…`) already verified, so the team can test multiplayer and demo without the email step
+(the course asks for prepared demo accounts). They are ordinary accounts with no extra rights. Their emails,
+usernames and passwords exist only in `.env.local` and the host's settings, never in the repository. Running it
+again gives an existing account its configured password back, keeps its username and sessions, and marks it
+verified; a username taken by another email is reported and left alone.

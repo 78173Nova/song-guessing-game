@@ -44,6 +44,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 - Check the build: `npm run build`
 - Create tables, load sample songs, check stored previews and look up missing ones on iTunes: `npm run db:seed`
   (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
+- Create the team accounts (already verified) from `TEAM_ACCOUNTS`: `npm run db:team-accounts`
+  (uses `DATABASE_URL` and `TEAM_ACCOUNTS` from `.env.local`; safe to run again)
 - CI: `.github/workflows/ci.yml` runs `npm ci`, lint, tests and build on every pull request
 
 ## Folder structure

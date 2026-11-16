@@ -2,8 +2,9 @@
 // Tokens come in as the raw value and are hashed here (SHA-256, like room tokens in decision 012), so a raw
 // token can never reach the database. Password hashes are made in lib/accounts before they get here.
 import type { TransactionDb } from "./client";
-import { EMAIL_THROTTLE_MS } from "../accounts/rules";
-import { hashToken } from "./rooms";
+// Value imports end in .ts so that `npm run db:team-accounts` can load this file with plain Node.
+import { EMAIL_THROTTLE_MS } from "../accounts/rules.ts";
+import { hashToken } from "./rooms.ts";
 
 export type CreatePendingAccountResult =
   | { ok: true; userId: string }
@@ -234,4 +235,37 @@ export async function redeemEmailToken(
   if (changed.length === 1) return { ok: true };
   if (found.length === 0) return { ok: false, reason: "unknown" };
   return { ok: false, reason: found[0].used_at === null ? "expired" : "used" };
+}
+
+export type UpsertVerifiedAccountResult =
+  | { ok: true; outcome: "created" | "updated" }
+  | { ok: false; reason: "username_taken" };
+
+// Team accounts (decision 014), for `npm run db:team-accounts`. In one query:
+//   - an account with this email exists → it gets this password and is verified; its username stays the same.
+//     Its sessions stay too, so running the script again does not log the team out.
+//   - otherwise → a new account, verified from the start. A username taken by another email (any case) inserts
+//     nothing (ON CONFLICT DO NOTHING) and is reported as "username_taken".
+export async function upsertVerifiedAccount(
+  db: TransactionDb,
+  account: { email: string; username: string; passwordHash: string; now: Date },
+): Promise<UpsertVerifiedAccountResult> {
+  const [row] = await db.query<{ updated: number; inserted: number }>(
+    `WITH updated AS (
+       UPDATE users SET password_hash = $3, email_verified_at = coalesce(email_verified_at, $4)
+       WHERE email = $1
+       RETURNING id
+     ),
+     inserted AS (
+       INSERT INTO users (email, username, password_hash, email_verified_at, created_at)
+       SELECT $1, $2, $3, $4, $4 WHERE NOT EXISTS (SELECT 1 FROM updated)
+       ON CONFLICT DO NOTHING
+       RETURNING id
+     )
+     SELECT (SELECT count(*) FROM updated)::int AS updated, (SELECT count(*) FROM inserted)::int AS inserted`,
+    [account.email, account.username, account.passwordHash, account.now.toISOString()],
+  );
+  if (row.updated === 1) return { ok: true, outcome: "updated" };
+  if (row.inserted === 1) return { ok: true, outcome: "created" };
+  return { ok: false, reason: "username_taken" };
 }

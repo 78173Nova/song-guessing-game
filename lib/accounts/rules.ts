@@ -138,3 +138,40 @@ export function parseResetPasswordInput(
   if (!isValidPassword(password)) return { ok: false, error: "invalid-password" };
   return { ok: true, token, password };
 }
+
+export type TeamAccount = { email: string; username: string; password: string };
+
+// Reads TEAM_ACCOUNTS: accounts the team creates ahead of time, already verified (decision 014), as
+// "email|username|password;email|username|password;…". The values live only in environment variables, never in
+// the repository. Spaces around each part and empty entries are ignored; the email comes back lowercase.
+export function parseTeamAccounts(value: string | undefined): { ok: true; accounts: TeamAccount[] } | { ok: false; error: string } {
+  const entries = (value ?? "")
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+  if (entries.length === 0) return { ok: false, error: "TEAM_ACCOUNTS is empty" };
+
+  const accounts: TeamAccount[] = [];
+  for (const [index, entry] of entries.entries()) {
+    // Errors name the entry by its number and never repeat its content, so a password never reaches the terminal.
+    const where = `Entry ${index + 1} of TEAM_ACCOUNTS`;
+    const parts = entry.split("|").map((part) => part.trim());
+    if (parts.length !== 3) return { ok: false, error: `${where} needs email|username|password` };
+    const [email, username, password] = parts;
+    const checked = parseSignupInput({ email, username, password });
+    if (!checked.ok) return { ok: false, error: `${where} ${TEAM_ACCOUNT_ERRORS[checked.error]}` };
+    if (accounts.some((a) => a.email === checked.input.email)) return { ok: false, error: `${where} repeats an email` };
+    if (accounts.some((a) => a.username.toLowerCase() === username.toLowerCase())) {
+      return { ok: false, error: `${where} repeats a username` };
+    }
+    accounts.push(checked.input);
+  }
+  return { ok: true, accounts };
+}
+
+const TEAM_ACCOUNT_ERRORS = {
+  malformed: "needs email|username|password",
+  "invalid-email": "has an invalid email",
+  "invalid-username": "has a username that is not 3–20 letters, digits or _",
+  "invalid-password": "has a password that is not 8–128 characters",
+} as const;
