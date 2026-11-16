@@ -7,9 +7,10 @@ export const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 export type ApiResponse<T> = { ok: true; data: T } | { ok: false; message: string };
 
-type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
-async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
+// Also used by account-api.ts.
+export async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
   let response: Response;
   try {
     response = await fetchFn(url, {
