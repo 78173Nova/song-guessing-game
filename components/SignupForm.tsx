@@ -81,7 +81,7 @@ export default function SignupForm() {
         required
       />
       <p id="signup-password-rule" className={styles.hint}>
-        8–128 characters
+        8–128 characters, no spaces
       </p>
 
       <p className={styles.error} role="alert">

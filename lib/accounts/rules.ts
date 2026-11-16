@@ -49,13 +49,14 @@ export function isValidEmail(email: string): boolean {
   return email.length <= MAX_EMAIL_LENGTH && EMAIL_PATTERN.test(email);
 }
 
-// Password: 8–128 characters, no other rules. Counted in Unicode characters, so a simple emoji counts as one.
+// Password: 8–128 characters and no spaces (no whitespace at all: a space typed by mistake at the start or end
+// would otherwise lock people out). Counted in Unicode characters, so a simple emoji counts as one.
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
 
 function isValidPassword(password: string): boolean {
   const length = [...password].length;
-  return length >= MIN_PASSWORD_LENGTH && length <= MAX_PASSWORD_LENGTH;
+  return length >= MIN_PASSWORD_LENGTH && length <= MAX_PASSWORD_LENGTH && !/\s/.test(password);
 }
 
 // A long random token for links in emails (32 random bytes = 43 characters). Only its hash is stored.
@@ -128,7 +129,7 @@ export function parseTokenInput(body: unknown): { ok: true; token: string } | { 
   return looksLikeToken(token) ? { ok: true, token } : { ok: false };
 }
 
-// Checks the reset page: { token, password }. The new password follows the same 8–128 character rule as at
+// Checks the reset page: { token, password }. The new password follows the same rule (8–128 characters, no spaces) as at
 // sign-up.
 export function parseResetPasswordInput(
   body: unknown,
@@ -173,5 +174,5 @@ const TEAM_ACCOUNT_ERRORS = {
   malformed: "needs email|username|password",
   "invalid-email": "has an invalid email",
   "invalid-username": "has a username that is not 3–20 letters, digits or _",
-  "invalid-password": "has a password that is not 8–128 characters",
+  "invalid-password": "has a password that is not 8–128 characters without spaces",
 } as const;

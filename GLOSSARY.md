@@ -9,7 +9,7 @@ A person's registered identity, made of an email address, a password and a usern
 _Avoid_: Profile, user, login
 
 **Username**:
-The unique name that identifies an account. No two accounts can have the same username, even with different upper/lower case.
+The unique name that identifies an account. No two accounts can have the same username, even with different upper/lower case. Signing up reserves the username; if the email address is never verified and the link expires, the username becomes free again.
 _Avoid_: Handle, account name, nickname
 
 **Guest**:

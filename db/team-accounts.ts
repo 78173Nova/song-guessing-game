@@ -25,7 +25,10 @@ async function main() {
       passwordHash: await hashPassword(account.password),
       now: new Date(),
     });
-    if (result.ok) {
+    if (result.ok && result.username !== account.username) {
+      // The email already had an account with another username: that one stays and is the one to log in with.
+      console.log(`${account.email}: ${result.outcome}, keeps its username ${result.username}`);
+    } else if (result.ok) {
       console.log(`${account.username}: ${result.outcome}`);
     } else {
       failed++;

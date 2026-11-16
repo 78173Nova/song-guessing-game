@@ -48,7 +48,7 @@ const CHECK_INBOX = { status: 200, body: { message: "Check your inbox to finish 
 
 const signup = (body: unknown) => signUp(db, typeof body === "string" ? body : JSON.stringify(body), deps);
 
-const valid = { email: "Anna@Example.com", username: "Anna_99", password: "correct horse" };
+const valid = { email: "Anna@Example.com", username: "Anna_99", password: "correct-horse" };
 
 describe("POST /api/accounts/signup", () => {
   it("creates an unverified account and sends a verification link", async () => {
@@ -112,6 +112,18 @@ describe("POST /api/accounts/signup – input rules", () => {
     expect(await withField("password", "a".repeat(129))).toEqual(rejected("invalid-password"));
   });
 
+  it.each([
+    ["a space in the middle", "correct horse"],
+    ["a space at the start", " correct-horse"],
+    ["a space at the end", "correct-horse "],
+    ["a tab", "correct\thorse"],
+  ])("rejects a password with %s", async (_, password) => {
+    expect(await withField("password", password)).toEqual({
+      status: 400,
+      body: { error: "invalid-password", message: "Passwords are 8–128 characters long, without spaces." },
+    });
+  });
+
   it("rejects missing fields, wrong types, bad JSON and a body that is too big", async () => {
     expect(await signup({ email: valid.email, username: valid.username })).toEqual(rejected("malformed"));
     expect(await withField("username", 42)).toEqual(rejected("malformed"));
@@ -139,7 +151,7 @@ describe("POST /api/accounts/signup – taken and replaced accounts", () => {
     const [before] = await db.query<{ password_hash: string }>("SELECT password_hash FROM users");
     later(MINUTE);
 
-    const result = await signup({ email: "ANNA@example.com", username: "Anna_New", password: "another secret" });
+    const result = await signup({ email: "ANNA@example.com", username: "Anna_New", password: "another-secret" });
 
     expect(result).toEqual(CHECK_INBOX);
     const users = await db.query<{ username: string; password_hash: string }>("SELECT username, password_hash FROM users");
@@ -157,6 +169,40 @@ describe("POST /api/accounts/signup – taken and replaced accounts", () => {
     await signup({ ...valid, username: "Anna_New" });
 
     expect(await signup({ ...valid, email: "other@example.com", username: "anna_99" })).toEqual(CHECK_INBOX);
+  });
+
+  it("keeps the username of a pending account while its verification link still works", async () => {
+    await signup(valid);
+    later(24 * 60 * MINUTE - 1);
+
+    expect((await signup({ ...valid, email: "other@example.com", username: "anna_99" })).status).toBe(409);
+  });
+
+  it("frees the username of a pending account whose link expired unused, and removes that account", async () => {
+    await signup(valid);
+    later(24 * 60 * MINUTE + 1);
+
+    expect(await signup({ ...valid, email: "other@example.com", username: "anna_99" })).toEqual(CHECK_INBOX);
+    expect(await db.query("SELECT email, username FROM users")).toEqual([
+      { email: "other@example.com", username: "anna_99" },
+    ]);
+  });
+
+  it("keeps the username blocked while a new link from 'Send the email again' still works", async () => {
+    await signup(valid);
+    later(23 * 60 * MINUTE);
+    await resendVerification(db, JSON.stringify({ email: valid.email }), deps);
+    later(2 * 60 * MINUTE);
+
+    expect((await signup({ ...valid, email: "other@example.com", username: "anna_99" })).status).toBe(409);
+  });
+
+  it("never frees the username of a verified account", async () => {
+    await signup(valid);
+    await verifyEmail(db, JSON.stringify({ token: `token-1-${"a".repeat(40)}` }), deps);
+    later(48 * 60 * MINUTE);
+
+    expect((await signup({ ...valid, email: "other@example.com", username: "anna_99" })).status).toBe(409);
   });
 
   it("lets exactly one of two sign-ups at the same moment with the same username (any case) win", async () => {
@@ -340,7 +386,7 @@ describe("POST /api/accounts/signup – email of a verified account", () => {
     later(MINUTE);
     sent = [];
 
-    const result = await signup({ email: "ANNA@example.com", username: "Someone_Else", password: "another secret" });
+    const result = await signup({ email: "ANNA@example.com", username: "Someone_Else", password: "another-secret" });
 
     expect(result).toEqual(CHECK_INBOX);
     expect(await db.query("SELECT username, email FROM users")).toEqual([
@@ -411,7 +457,7 @@ describe("POST /api/accounts/login – other ways in and refusals", () => {
 
     const replies = [
       await login({ login: "Anna_99", password: "wrong password" }),
-      await login({ login: "anna@example.com", password: "Correct Horse" }),
+      await login({ login: "anna@example.com", password: "Correct-Horse" }),
       await login({ login: "Nobody", password: valid.password }),
       await login({ login: "nobody@example.com", password: valid.password }),
     ];
@@ -662,7 +708,7 @@ describe("At most one email per address per minute", () => {
     sent = [];
 
     later(59 * SECOND);
-    expect(await signup({ ...valid, username: "Anna_New", password: "another secret" })).toEqual(CHECK_INBOX);
+    expect(await signup({ ...valid, username: "Anna_New", password: "another-secret" })).toEqual(CHECK_INBOX);
     expect(sent).toEqual([]);
     expect(await db.query("SELECT username FROM users")).toEqual([{ username: "Anna_99" }]);
     expect(await db.query("SELECT purpose FROM email_tokens")).toEqual([{ purpose: "verify" }]);
@@ -799,7 +845,7 @@ describe("POST /api/accounts/forgot-password – one email per minute and input 
 
 const reset = (body: unknown) => resetPassword(db, typeof body === "string" ? body : JSON.stringify(body), deps);
 const PASSWORD_CHANGED = { status: 200, body: { message: "Your password is changed – you can log in now" } };
-const NEW_PASSWORD = "brand new secret";
+const NEW_PASSWORD = "brand-new-secret";
 
 // A verified account, logged in on two browsers (sessions token-2 and token-3), that asks for a reset a minute
 // later: the reset link is token-4.
@@ -878,7 +924,7 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
     await loggedInTwiceAndAskedForReset();
     await reset({ token: resetToken, password: NEW_PASSWORD });
 
-    expect(await reset({ token: resetToken, password: "a different secret" })).toEqual(linkError(400, "link-used"));
+    expect(await reset({ token: resetToken, password: "a-different-secret" })).toEqual(linkError(400, "link-used"));
     expect((await login({ login: "Anna_99", password: NEW_PASSWORD })).status).toBe(200);
   });
 
@@ -909,6 +955,7 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
 
     expect(await reset({ token: resetToken, password: "a".repeat(7) })).toEqual(linkError(400, "invalid-password"));
     expect(await reset({ token: resetToken, password: "a".repeat(129) })).toEqual(linkError(400, "invalid-password"));
+    expect(await reset({ token: resetToken, password: "brand new secret" })).toEqual(linkError(400, "invalid-password"));
     expect(await passwordHash()).toBe(before);
     expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
     expect(await reset({ token: resetToken, password: "a".repeat(8) })).toEqual(PASSWORD_CHANGED);

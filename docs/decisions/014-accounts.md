@@ -150,3 +150,12 @@ Update 16 Nov 2026 (team accounts): `npm run db:team-accounts` creates the accou
 usernames and passwords exist only in `.env.local` and the host's settings, never in the repository. Running it
 again gives an existing account its configured password back, keeps its username and sessions, and marks it
 verified; a username taken by another email is reported and left alone.
+
+Update 16 Nov 2026 (review of the team accounts): **passwords may not contain spaces** (no whitespace at all),
+at sign-up, password reset and in `TEAM_ACCOUNTS`, so a space typed by mistake at the start or end cannot lock
+anyone out. Login does not check this rule, so an older password with a space still works. **An abandoned sign-up
+frees its username:** an account that was never verified and has no working link left (its 24-hour link, or a
+newer one from "Send the email again") is deleted when someone else signs up with its username, or when a team
+account is created with it. Until then, signing up reserves the username. The team accounts script prints the
+username that is really stored when an email already had an account with another username; log in with the
+email in that case.

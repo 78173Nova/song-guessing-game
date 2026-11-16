@@ -47,10 +47,13 @@ export async function createPendingAccount(
                DELETE FROM users WHERE email = $1 AND email_verified_at IS NULL AND (SELECT free FROM slot_free)
                RETURNING id
              ),
+             abandoned AS (${deleteAbandonedSql("$2", "$1", "$4")}),
              new_user AS (
                INSERT INTO users (email, username, password_hash, created_at)
-               -- Reading "replaced" makes the delete happen before this insert, so the email is free again.
-               SELECT $1, $2, $3, $4 WHERE (SELECT free FROM slot_free) AND (SELECT count(*) FROM replaced) >= 0
+               -- Reading "replaced" and "abandoned" makes those deletes happen before this insert, so the email
+               -- and the username are free again.
+               SELECT $1, $2, $3, $4 WHERE (SELECT free FROM slot_free)
+                 AND (SELECT count(*) FROM replaced) >= 0 AND (SELECT count(*) FROM abandoned) >= 0
                ON CONFLICT DO NOTHING
                RETURNING id
              )
@@ -237,35 +240,51 @@ export async function redeemEmailToken(
   return { ok: false, reason: found[0].used_at === null ? "expired" : "used" };
 }
 
+// An abandoned sign-up: an account with this username (any case) and another email that was never verified and
+// has no link left that still works (the 24-hour verification link, or a newer one from "Send the email again").
+// Deleting it frees the username for someone else (decision 014); its links go with it (ON DELETE CASCADE).
+// Takes the SQL placeholders of the username, the email and now.
+function deleteAbandonedSql(username: string, email: string, now: string): string {
+  return `DELETE FROM users u
+          WHERE lower(u.username) = lower(${username}) AND u.email <> ${email} AND u.email_verified_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM email_tokens t WHERE t.user_id = u.id AND t.used_at IS NULL AND t.expires_at > ${now}
+            )
+          RETURNING u.id`;
+}
+
 export type UpsertVerifiedAccountResult =
-  | { ok: true; outcome: "created" | "updated" }
+  | { ok: true; outcome: "created" | "updated"; username: string }
   | { ok: false; reason: "username_taken" };
 
 // Team accounts (decision 014), for `npm run db:team-accounts`. In one query:
-//   - an account with this email exists → it gets this password and is verified; its username stays the same.
-//     Its sessions stay too, so running the script again does not log the team out.
+//   - an account with this email exists → it gets this password and is verified; its username stays the same
+//     and comes back in the result, so the script can show the username that really logs in. Its sessions stay
+//     too, so running the script again does not log the team out.
 //   - otherwise → a new account, verified from the start. A username taken by another email (any case) inserts
 //     nothing (ON CONFLICT DO NOTHING) and is reported as "username_taken".
 export async function upsertVerifiedAccount(
   db: TransactionDb,
   account: { email: string; username: string; passwordHash: string; now: Date },
 ): Promise<UpsertVerifiedAccountResult> {
-  const [row] = await db.query<{ updated: number; inserted: number }>(
+  const [row] = await db.query<{ updated: string | null; inserted: string | null }>(
     `WITH updated AS (
        UPDATE users SET password_hash = $3, email_verified_at = coalesce(email_verified_at, $4)
        WHERE email = $1
-       RETURNING id
+       RETURNING username
      ),
+     abandoned AS (${deleteAbandonedSql("$2", "$1", "$4")}),
      inserted AS (
        INSERT INTO users (email, username, password_hash, email_verified_at, created_at)
-       SELECT $1, $2, $3, $4, $4 WHERE NOT EXISTS (SELECT 1 FROM updated)
+       -- Reading "abandoned" makes that delete happen first, so its username is free again.
+       SELECT $1, $2, $3, $4, $4 WHERE NOT EXISTS (SELECT 1 FROM updated) AND (SELECT count(*) FROM abandoned) >= 0
        ON CONFLICT DO NOTHING
-       RETURNING id
+       RETURNING username
      )
-     SELECT (SELECT count(*) FROM updated)::int AS updated, (SELECT count(*) FROM inserted)::int AS inserted`,
+     SELECT (SELECT username FROM updated) AS updated, (SELECT username FROM inserted) AS inserted`,
     [account.email, account.username, account.passwordHash, account.now.toISOString()],
   );
-  if (row.updated === 1) return { ok: true, outcome: "updated" };
-  if (row.inserted === 1) return { ok: true, outcome: "created" };
+  if (row.updated !== null) return { ok: true, outcome: "updated", username: row.updated };
+  if (row.inserted !== null) return { ok: true, outcome: "created", username: row.inserted };
   return { ok: false, reason: "username_taken" };
 }

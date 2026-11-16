@@ -73,7 +73,7 @@ export default function ResetPasswordForm() {
         required
       />
       <p id="reset-password-rule" className={styles.hint}>
-        8–128 characters. Saving it logs you out everywhere.
+        8–128 characters, no spaces. Saving it logs you out everywhere.
       </p>
 
       <p className={styles.error} role="alert">

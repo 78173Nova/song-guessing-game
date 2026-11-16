@@ -71,7 +71,7 @@ const ERRORS = {
     status: 400,
     message: "Usernames are 3–20 characters long and use only letters, digits and _.",
   },
-  "invalid-password": { status: 400, message: "Passwords are 8–128 characters long." },
+  "invalid-password": { status: 400, message: "Passwords are 8–128 characters long, without spaces." },
   "username-taken": { status: 409, message: "This username is taken" },
   "wrong-login": { status: 401, message: "Wrong username/email or password" },
   "not-verified": { status: 403, message: "Verify your email first" },
@@ -335,7 +335,7 @@ const RESET_LINK_MESSAGES = {
 } as const;
 
 // POST /api/accounts/reset-password – { token, password } → replaces the password, ends every session of the
-// account and marks its email verified. A password that breaks the 8–128 rule is refused before the link is
+// account and marks its email verified. A password that breaks the rule (8–128 characters, no spaces) is refused before the link is
 // used, so the person can try again with the same link.
 export async function resetPassword(
   db: TransactionDb,

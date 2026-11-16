@@ -60,7 +60,7 @@ The team are **programming beginners**: explain proposals in plain language befo
   (retry/swap), countdown – tested with Vitest
 - `lib/api/` – what each server route does step by step (validate, load, apply `lib/game/` rules, save, reply);
   the route files in `app/api/` only call it. Takes the database as a parameter, so it is tested with PGlite
-- `db/` – schema (`schema.sql`), seed script and song list
+- `db/` – schema (`schema.sql`), seed script, song list and the team accounts script (`team-accounts.ts`)
 - `tests/` – tests
 - `specs/`, `docs/` – specs and documentation
 
