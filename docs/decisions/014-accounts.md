@@ -1,8 +1,8 @@
 # 014 – Accounts
 
 Date: 16 Nov 2026 · Status: started (sign-up built, issue #24; email verification, issue #26; login, sessions and
-log out, issue #27). Email delivery through Brevo, resending the link and password reset are added here as updates
-by their issues (#25, #28, #29).
+log out, issue #27; password reset, issue #29). Email delivery through Brevo and resending the link are added here
+as updates by their issues (#25, #28).
 
 Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname): `GLOSSARY.md`.
 
@@ -15,7 +15,7 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **Passwords** are stored only as **scrypt** hashes with a random 16-byte salt per password
   (`scrypt$<salt>$<hash>`), made with Node's built-in `crypto`, no extra package.
 - **Email-link tokens** are 32 random bytes; only their SHA-256 hash is stored in `email_tokens`, with a
-  purpose (`verify` now, `reset` later) and an end time. A verification link lasts 24 hours.
+  purpose (`verify` or `reset`) and an end time. A verification link lasts 24 hours, a reset link 1 hour.
 - **New accounts are not verified.** Signing up again with the email of an unverified account replaces it
   (new username, password and link). A valid sign-up always gets the same reply, "Check your inbox to
   finish signing up".
@@ -38,6 +38,17 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   time; deleting an account deletes its sessions. `GET /api/accounts/me` returns the username, or `null` for a
   missing, unknown or expired session. **Log out** deletes this browser's session and clears the cookie; other
   browsers of the same account stay logged in.
+- **Password reset:** `/login` links to "Forgot password?" (`/forgot-password`, also linked from the "already
+  have an account" email). `POST /api/accounts/forgot-password` takes an email and always answers "If an account
+  exists for that address, we sent an email"; only a known email gets a link to `/reset-password?token=…`. The
+  page removes the token from the address bar and sends it with the new password (same 8–128 rule) to
+  `POST /api/accounts/reset-password`. One query uses the link (once, within 1 hour), replaces the password hash,
+  **ends every session of the account** and marks the email verified. A password that breaks the rule is refused
+  before the link is used, so the person can try again. Link replies: changed (200), unknown (404, also a
+  verification link), used or expired (410), with messages that point to the forgot-password page.
+- **One email per minute:** each account has `last_email_sent_at`. `claimEmailSlot` sets it to now in one
+  query, only when it is empty or at least 60 seconds old (`EMAIL_THROTTLE_MS`); otherwise the request gets
+  429 "Please wait a minute before asking for another email". Sign-up fills it, so the sign-up email counts too.
 - **Emails go through `lib/email/`.** The accounts API receives the email sender as a parameter. Until the
   Brevo issue (#25) is built, every email is printed to the server terminal.
 
@@ -62,6 +73,11 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   like every other token, so a leaked database cannot log anyone in.
 - **The landing page asks `/me`:** page JavaScript cannot read an `HttpOnly` cookie, and the landing page can
   stay a fast static page.
+- **Reset ends every session:** someone who changes a password because it leaked must be able to throw out
+  whoever logged in with it. Opening the reset link proves the person reads the inbox, so the email counts
+  as verified too. One hour is short, because a reset link can take over the account.
+- **One email per minute:** without it, the forgot-password form could flood a stranger's inbox. One query
+  takes the slot, so two requests at the same moment cannot both send.
 - **Rules in the database:** they hold even if the code has a mistake, and they handle requests at the same moment.
 
 ## Alternatives
@@ -82,10 +98,14 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   guessing a password. scrypt makes each guess slow, and a lockout would let anyone lock a stranger out.
 - Sessions are not renewed while in use: after 30 days the person logs in again. Expired sessions stay in the
   table (no clean-up job); they no longer work.
+- **The 429 reveals a little:** forgot password answers an unknown email always with 200, but a known email
+  asked again within 60 seconds with 429. Someone who asks twice for the same address can tell it has an
+  account. Accepted: the spec asks for the "please wait" message, and it costs a minute per guess.
+- Asking for a new reset link does not cancel older ones; each still works once until its hour is up.
+- Changing the password while logged in (without the email) is not built; use "Forgot password?".
 - "Looks like an email" does not prove the address exists; only opening the link does.
 - Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
 
 ## How it could change
-- Brevo delivery (#25), resend (#28) and password reset (#29)
-  extend `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
+- Brevo delivery (#25) and resend (#28) extend `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
 - A login provider could later be linked to the same `users` table.
