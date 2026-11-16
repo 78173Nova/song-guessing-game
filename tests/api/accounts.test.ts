@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { signUp, verifyEmail } from "@/lib/api/accounts";
+import { logIn, logOut, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import type { Email } from "@/lib/email/sender";
 import { createTestDb } from "../helpers/test-db";
@@ -335,5 +335,193 @@ describe("POST /api/accounts/signup – email of a verified account", () => {
 
     expect((await signup(valid)).status).toBe(409);
     expect(sent).toEqual([]);
+  });
+});
+
+const DAY = 24 * HOUR;
+const login = (body: unknown) => logIn(db, typeof body === "string" ? body : JSON.stringify(body), deps);
+
+// Signs up `valid` and opens the verification link, so the account can log in.
+async function verifiedAccount() {
+  await signup(valid);
+  await verify({ token: firstToken });
+}
+
+describe("POST /api/accounts/login", () => {
+  it("logs in by username in another letter case and starts a 30-day session in a safe cookie", async () => {
+    await verifiedAccount();
+
+    const result = await login({ login: "anna_99", password: valid.password });
+
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ username: "Anna_99" });
+    const sessionToken = `token-2-${"a".repeat(40)}`;
+    expect(result.setCookie).toBe(
+      `session=${sessionToken}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax`,
+    );
+  });
+});
+
+describe("POST /api/accounts/login – other ways in and refusals", () => {
+  const WRONG_LOGIN = { status: 401, body: { error: "wrong-login", message: "Wrong username/email or password" } };
+  const sessionCount = async () => (await db.query("SELECT token_hash FROM sessions")).length;
+
+  it("logs in by email in another letter case", async () => {
+    await verifiedAccount();
+
+    const result = await login({ login: "ANNA@example.COM", password: valid.password });
+
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ username: "Anna_99" });
+    expect(await sessionCount()).toBe(1);
+  });
+
+  it("gives the same reply for a wrong password, an unknown username and an unknown email, with no session", async () => {
+    await verifiedAccount();
+
+    const replies = [
+      await login({ login: "Anna_99", password: "wrong password" }),
+      await login({ login: "anna@example.com", password: "Correct Horse" }),
+      await login({ login: "Nobody", password: valid.password }),
+      await login({ login: "nobody@example.com", password: valid.password }),
+    ];
+
+    for (const reply of replies) expect(reply).toEqual(WRONG_LOGIN);
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it("does not treat a username as an email or the other way round", async () => {
+    await verifiedAccount();
+
+    expect(await login({ login: "Anna_99@example.com", password: valid.password })).toEqual(WRONG_LOGIN);
+    expect(await login({ login: "anna", password: valid.password })).toEqual(WRONG_LOGIN);
+  });
+
+  it("refuses the right password of an account that is not verified yet, with no session", async () => {
+    await signup(valid);
+
+    expect(await login({ login: "Anna_99", password: valid.password })).toEqual({
+      status: 403,
+      body: { error: "not-verified", message: "Verify your email first" },
+    });
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it("gives an unverified account with a wrong password the normal wrong-login reply", async () => {
+    await signup(valid);
+
+    expect(await login({ login: "Anna_99", password: "wrong password" })).toEqual(WRONG_LOGIN);
+  });
+
+  it("rejects missing fields, wrong types, too long values and bad JSON", async () => {
+    await verifiedAccount();
+    const malformed = { status: 400, body: { error: "malformed", message: expect.any(String) } };
+
+    expect(await login({ login: "Anna_99" })).toEqual(malformed);
+    expect(await login({ login: 42, password: valid.password })).toEqual(malformed);
+    expect(await login({ login: "Anna_99", password: "a".repeat(129) })).toEqual(malformed);
+    expect(await login({ login: `${"a".repeat(243)}@example.com`, password: valid.password })).toEqual(malformed);
+    expect(await login(null)).toEqual(malformed);
+    expect(await login("not json")).toEqual(malformed);
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it("stores only the SHA-256 hash of the session token, ending after 30 days", async () => {
+    await verifiedAccount();
+    await login({ login: "Anna_99", password: valid.password });
+
+    // SHA-256 of token-2-aaaa… (40 a), worked out independently (`printf %s <token> | sha256sum`).
+    expect(await db.query("SELECT token_hash, created_at, expires_at FROM sessions")).toEqual([
+      {
+        token_hash: "0dd69f20828bcfa911a43435a372bbc348f88047df35a1c36ba3265c699a88b6",
+        created_at: new Date("2026-11-16T12:00:00.000Z"),
+        expires_at: new Date("2026-12-16T12:00:00.000Z"),
+      },
+    ]);
+  });
+});
+
+const sessionToken = `token-2-${"a".repeat(40)}`;
+const me = (token: string | undefined) => whoIsLoggedIn(db, token, deps);
+const NOBODY = { status: 200, body: { username: null } };
+
+async function loggedIn() {
+  await verifiedAccount();
+  await login({ login: "Anna_99", password: valid.password });
+}
+
+describe("GET /api/accounts/me", () => {
+  it("returns the username for a valid session, up to just before 30 days", async () => {
+    await loggedIn();
+
+    expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
+    clock = new Date(clock.getTime() + 30 * DAY - 1);
+    expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
+  });
+
+  it("returns nobody once the session is 30 days old", async () => {
+    await loggedIn();
+    clock = new Date(clock.getTime() + 30 * DAY);
+
+    expect(await me(sessionToken)).toEqual(NOBODY);
+  });
+
+  it("returns nobody for an unknown, empty, too long or missing session token", async () => {
+    await loggedIn();
+
+    expect(await me(`token-9-${"a".repeat(40)}`)).toEqual(NOBODY);
+    expect(await me("")).toEqual(NOBODY);
+    expect(await me("a".repeat(201))).toEqual(NOBODY);
+    expect(await me(undefined)).toEqual(NOBODY);
+  });
+});
+
+describe("POST /api/accounts/logout", () => {
+  const CLEAR_COOKIE = "session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
+
+  it("ends the session on the server and clears the cookie", async () => {
+    await loggedIn();
+
+    const result = await logOut(db, sessionToken);
+
+    expect(result).toEqual({ status: 200, body: { username: null }, setCookie: CLEAR_COOKIE });
+    expect(await me(sessionToken)).toEqual(NOBODY);
+    expect(await db.query("SELECT token_hash FROM sessions")).toEqual([]);
+  });
+
+  it("ends only this session: another browser of the same account stays logged in", async () => {
+    await loggedIn();
+    await login({ login: "anna@example.com", password: valid.password });
+
+    await logOut(db, sessionToken);
+
+    expect(await me(`token-3-${"a".repeat(40)}`)).toEqual({ status: 200, body: { username: "Anna_99" } });
+  });
+
+  it("still clears the cookie without a session or with an unknown one", async () => {
+    expect(await logOut(db, undefined)).toEqual({ status: 200, body: { username: null }, setCookie: CLEAR_COOKIE });
+    expect(await logOut(db, "unknown-token")).toEqual({ status: 200, body: { username: null }, setCookie: CLEAR_COOKIE });
+  });
+});
+
+describe("Login, me and logout – no secrets in replies", () => {
+  it("never puts the password, its hash, a session token or a token hash in a reply body", async () => {
+    await verifiedAccount();
+    const replies = [
+      await login({ login: "Anna_99", password: valid.password }),
+      await login({ login: "Anna_99", password: "wrong password" }),
+      await login({ login: "nobody@example.com", password: valid.password }),
+      await me(sessionToken),
+      await logOut(db, sessionToken),
+    ];
+    const [{ password_hash }] = await db.query<{ password_hash: string }>("SELECT password_hash FROM users");
+
+    const bodies = JSON.stringify(replies.map((r) => r.body));
+    expect(bodies).not.toContain(valid.password);
+    expect(bodies).not.toContain(password_hash);
+    expect(bodies).not.toContain("scrypt");
+    expect(bodies).not.toContain("token-");
+    expect(bodies).not.toContain("0dd69f20828bcfa911a43435a372bbc348f88047df35a1c36ba3265c699a88b6");
+    expect(bodies).not.toContain("anna@example.com");
   });
 });

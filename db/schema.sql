@@ -119,3 +119,16 @@ CREATE TABLE IF NOT EXISTS email_tokens (
   expires_at timestamptz NOT NULL,
   used_at    timestamptz
 );
+
+-- One row per logged-in browser. The cookie holds a long random token; only its SHA-256 hash is stored here,
+-- so a leaked copy of the database cannot be used to log in. A session lasts 30 days.
+-- Deleting an account deletes its sessions.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash text        PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL
+);
+
+-- Finds every session of one account quickly (log out everywhere after a password reset).
+CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions (user_id);

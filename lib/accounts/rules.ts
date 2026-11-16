@@ -1,12 +1,15 @@
 // The rules for accounts, without database or network: what a valid username, email and password look like,
 // password hashing, email-link tokens and how long they last (spec 004, decision 014).
-import { randomBytes, scrypt as scryptCallback } from "node:crypto";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 // A verification link is valid for 24 hours.
 export const VERIFY_LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+// A login session lasts 30 days.
+export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type SignupInput = { email: string; username: string; password: string };
 
@@ -62,5 +65,34 @@ export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const hash = await scrypt(password, salt, KEY_LENGTH);
   return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
+}
+
+// Checks a password against a stored "scrypt$<salt>$<hash>". Pass null when there is no account: then a dummy
+// hash is checked instead and the answer is always false, so an unknown account takes as long as a wrong
+// password and the time of the reply does not tell whether an account exists.
+const DUMMY_HASH = `scrypt$${"0".repeat(32)}$${"0".repeat(KEY_LENGTH * 2)}`;
+
+export async function checkPassword(password: string, storedHash: string | null): Promise<boolean> {
+  const [scheme, saltHex, hashHex] = (storedHash ?? DUMMY_HASH).split("$");
+  const expected = Buffer.from(hashHex ?? "", "hex");
+  if (scheme !== "scrypt" || !saltHex || expected.length !== KEY_LENGTH) return false;
+  const actual = await scrypt(password, Buffer.from(saltHex, "hex"), KEY_LENGTH);
+  // Compares every byte, however early they differ, so the time does not show how much of the hash matched.
+  return timingSafeEqual(actual, expected) && storedHash !== null;
+}
+
+export type LoginInput = { by: "email" | "username"; value: string; password: string };
+
+// Checks the login form: { login, password }. A login with @ is an email (stored lowercase), otherwise a
+// username (compared ignoring case). Values longer than any real email or password are refused here, so a
+// huge value never reaches scrypt.
+export function parseLoginInput(body: unknown): { ok: true; input: LoginInput } | { ok: false } {
+  if (typeof body !== "object" || body === null) return { ok: false };
+  const { login, password } = body as Record<string, unknown>;
+  if (typeof login !== "string" || typeof password !== "string") return { ok: false };
+  const value = login.trim();
+  if (value.length > MAX_EMAIL_LENGTH || [...password].length > MAX_PASSWORD_LENGTH) return { ok: false };
+  if (value.includes("@")) return { ok: true, input: { by: "email", value: value.toLowerCase(), password } };
+  return { ok: true, input: { by: "username", value, password } };
 }
 

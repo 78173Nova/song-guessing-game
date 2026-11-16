@@ -97,3 +97,49 @@ export async function redeemVerifyToken(db: TransactionDb, token: string, now: D
   if (found.length === 0) return { ok: false, reason: "unknown" };
   return { ok: false, reason: found[0].used_at === null ? "expired" : "used" };
 }
+
+export type LoginAccount = { id: string; username: string; passwordHash: string; verified: boolean };
+
+// Finds the account to log in to: by email (stored lowercase, so pass it lowercase) or by username (any case).
+export async function findAccountForLogin(
+  db: TransactionDb,
+  by: "email" | "username",
+  value: string,
+): Promise<LoginAccount | null> {
+  const where = by === "email" ? "email = $1" : "lower(username) = lower($1)";
+  const rows = await db.query<{ id: string; username: string; password_hash: string; verified: boolean }>(
+    `SELECT id, username, password_hash, email_verified_at IS NOT NULL AS verified FROM users WHERE ${where}`,
+    [value],
+  );
+  if (rows.length === 0) return null;
+  const [row] = rows;
+  return { id: row.id, username: row.username, passwordHash: row.password_hash, verified: row.verified };
+}
+
+// Starts a session for an account. Only the SHA-256 hash of the token is stored.
+export async function createSession(
+  db: TransactionDb,
+  session: { token: string; userId: string; now: Date; expiresAt: Date },
+): Promise<void> {
+  await db.query("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)", [
+    hashToken(session.token),
+    session.userId,
+    session.now.toISOString(),
+    session.expiresAt.toISOString(),
+  ]);
+}
+
+// Who is logged in with this session token: the username, or null for an unknown or expired session.
+export async function findSessionUsername(db: TransactionDb, token: string, now: Date): Promise<string | null> {
+  const rows = await db.query<{ username: string }>(
+    `SELECT users.username FROM sessions JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = $1 AND sessions.expires_at > $2`,
+    [hashToken(token), now.toISOString()],
+  );
+  return rows.length === 1 ? rows[0].username : null;
+}
+
+// Ends one session (log out). Nothing happens if it does not exist.
+export async function deleteSession(db: TransactionDb, token: string): Promise<void> {
+  await db.query("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
+}

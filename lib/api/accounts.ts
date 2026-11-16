@@ -2,13 +2,30 @@
 // send the email, and build the reply. The route files in app/api/accounts/ only call these functions.
 // The database, the clock, the email sender and the token maker are passed in, so the tests can use PGlite,
 // a fake clock, a fake sender and predictable tokens.
-import { createToken, hashPassword, parseSignupInput, VERIFY_LINK_LIFETIME_MS } from "../accounts/rules";
+import {
+  checkPassword,
+  createToken,
+  hashPassword,
+  parseLoginInput,
+  parseSignupInput,
+  SESSION_LIFETIME_MS,
+  VERIFY_LINK_LIFETIME_MS,
+} from "../accounts/rules";
 import type { TransactionDb } from "../db/client";
-import { createPendingAccount, redeemVerifyToken } from "../db/accounts";
+import {
+  createPendingAccount,
+  createSession,
+  deleteSession,
+  findAccountForLogin,
+  findSessionUsername,
+  redeemVerifyToken,
+} from "../db/accounts";
 import { alreadyHaveAccountMessage, appUrl, linkWithToken, verifyEmailMessage } from "../email/messages";
 import { getEmailSender, type EmailSender } from "../email/sender";
 
-export type ApiResult = { status: number; body: Record<string, unknown> };
+// setCookie is the value of a Set-Cookie header for the route to send (log in, log out). It is the only place a
+// session token leaves the server; the body never contains one.
+export type ApiResult = { status: number; body: Record<string, unknown>; setCookie?: string };
 
 export type AccountDeps = {
   now?: () => Date;
@@ -31,6 +48,8 @@ const ERRORS = {
   },
   "invalid-password": { status: 400, message: "Passwords are 8–128 characters long." },
   "username-taken": { status: 409, message: "This username is taken" },
+  "wrong-login": { status: 401, message: "Wrong username/email or password" },
+  "not-verified": { status: 403, message: "Verify your email first" },
   "link-unknown": { status: 404, message: "This link is not valid. Please use the newest link we sent you." },
   "link-used": { status: 410, message: "This link was already used. If your email is verified, you can log in." },
   "link-expired": { status: 410, message: "This link has expired. Please sign up again to get a new one." },
@@ -119,4 +138,62 @@ export async function verifyEmail(db: TransactionDb, rawBody: string, deps: Acco
   const result = await redeemVerifyToken(db, token, now);
   if (!result.ok) return fail(`link-${result.reason}`);
   return { status: 200, body: { message: VERIFIED_MESSAGE } };
+}
+
+// The session cookie: page JavaScript cannot read it (HttpOnly), it is sent only over HTTPS (Secure; browsers
+// also allow it on http://localhost), not with requests started by other sites (SameSite=Lax), for the whole
+// site (Path=/), and it lasts as long as the session.
+export const SESSION_COOKIE = "session";
+
+// Max-Age 0 tells the browser to delete the cookie (log out).
+function sessionCookie(token: string, maxAgeSeconds: number): string {
+  return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+// POST /api/accounts/login – { login, password } → starts a session and replies with the username.
+// A login with @ is an email, otherwise a username; both ignore case. A wrong password and an unknown account
+// get the same reply and take the same time, so the page never reveals whether an account exists.
+export async function logIn(db: TransactionDb, rawBody: string, deps: AccountDeps = {}): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+  const makeToken = deps.makeToken ?? createToken;
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const parsed = parseLoginInput(json.body);
+  if (!parsed.ok) return fail("malformed");
+  const { by, value, password } = parsed.input;
+
+  const account = await findAccountForLogin(db, by, value);
+  // With no account a dummy hash is checked, so this takes as long as a wrong password.
+  if (!(await checkPassword(password, account?.passwordHash ?? null)) || !account) return fail("wrong-login");
+  if (!account.verified) return fail("not-verified");
+
+  const token = makeToken();
+  await createSession(db, {
+    token,
+    userId: account.id,
+    now,
+    expiresAt: new Date(now.getTime() + SESSION_LIFETIME_MS),
+  });
+  const setCookie = sessionCookie(token, SESSION_LIFETIME_MS / 1000);
+  return { status: 200, body: { username: account.username }, setCookie };
+}
+
+// GET /api/accounts/me – who is logged in with this session cookie: { username }, or { username: null } for a
+// missing, unknown or expired session.
+export async function whoIsLoggedIn(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+  if (!sessionToken || sessionToken.length > MAX_TOKEN_LENGTH) return { status: 200, body: { username: null } };
+  return { status: 200, body: { username: await findSessionUsername(db, sessionToken, now) } };
+}
+
+// POST /api/accounts/logout – ends this browser's session on the server and clears the cookie. Always works,
+// even without a session, so the browser always ends up logged out.
+export async function logOut(db: TransactionDb, sessionToken: string | undefined): Promise<ApiResult> {
+  if (sessionToken && sessionToken.length <= MAX_TOKEN_LENGTH) await deleteSession(db, sessionToken);
+  return { status: 200, body: { username: null }, setCookie: sessionCookie("", 0) };
 }
