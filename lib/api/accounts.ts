@@ -6,6 +6,7 @@ import {
   checkPassword,
   createToken,
   hashPassword,
+  isValidEmail,
   parseLoginInput,
   parseSignupInput,
   SESSION_LIFETIME_MS,
@@ -13,11 +14,14 @@ import {
 } from "../accounts/rules";
 import type { TransactionDb } from "../db/client";
 import {
+  claimEmailSlot,
   createPendingAccount,
   createSession,
+  createVerifyToken,
   deleteSession,
   findAccountForLogin,
   findSessionUsername,
+  findUnverifiedUserId,
   redeemVerifyToken,
 } from "../db/accounts";
 import { alreadyHaveAccountMessage, appUrl, linkWithToken, verifyEmailMessage } from "../email/messages";
@@ -50,6 +54,7 @@ const ERRORS = {
   "username-taken": { status: 409, message: "This username is taken" },
   "wrong-login": { status: 401, message: "Wrong username/email or password" },
   "not-verified": { status: 403, message: "Verify your email first" },
+  "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
   "link-unknown": { status: 404, message: "This link is not valid. Please use the newest link we sent you." },
   "link-used": { status: 410, message: "This link was already used. If your email is verified, you can log in." },
   "link-expired": { status: 410, message: "This link has expired. Please sign up again to get a new one." },
@@ -110,18 +115,60 @@ export async function signUp(db: TransactionDb, rawBody: string, deps: AccountDe
     if (created.reason === "username_taken") return fail("username-taken");
     // The email belongs to a verified account: nothing is created, the owner of that inbox is told, and the
     // reply stays the same, so the page never reveals that the email is registered.
-    if (created.reason === "email_verified") {
+    // Like every email, it is sent only if that address got none in the last minute.
+    if (created.reason === "email_verified" && (await claimEmailSlot(db, created.userId, now))) {
       await sendEmail(alreadyHaveAccountMessage(email, `${appUrl()}/forgot-password`));
     }
     return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
   }
 
+  // At most one email per address per minute. A pending account that signs up again too soon is still replaced,
+  // and the reply stays the same; its new link comes with "Send the email again" a minute later.
   // Delivery problems are handled with the real email service (issue #25).
-  await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+  if (await claimEmailSlot(db, created.userId, now)) {
+    await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+  }
   return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
 }
 
-const VERIFIED_MESSAGE = "Your email is verified – you can log in now";
+const RESENT_MESSAGE = "If that address has an account that is not verified yet, we sent it a new link";
+
+// POST /api/accounts/resend-verification – { email } → a new verification link for an account that is not
+// verified yet. A verified account and an unknown address get the same reply and no email, so the reply never
+// reveals whether an unverified account exists.
+export async function resendVerification(
+  db: TransactionDb,
+  rawBody: string,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+  const sendEmail = deps.sendEmail ?? getEmailSender();
+  const makeToken = deps.makeToken ?? createToken;
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const email = (json.body as { email?: unknown } | null)?.email;
+  if (typeof email !== "string") return fail("malformed");
+  const address = email.trim().toLowerCase();
+  if (!isValidEmail(address)) return fail("invalid-email");
+
+  const userId = await findUnverifiedUserId(db, address);
+  if (userId) {
+    // This 429 only tells someone who already knows the email and password that it is waiting for its first
+    // click (login says "Verify your email first"); a stranger gets it only right after sending one themselves.
+    if (!(await claimEmailSlot(db, userId, now))) return fail("too-soon");
+    const verifyToken = makeToken();
+    await createVerifyToken(db, {
+      userId,
+      token: verifyToken,
+      expiresAt: new Date(now.getTime() + VERIFY_LINK_LIFETIME_MS),
+    });
+    await sendEmail(verifyEmailMessage(address, linkWithToken("/verify-email", verifyToken)));
+  }
+  return { status: 200, body: { message: RESENT_MESSAGE } };
+}
+
+const VERIFIED_MESSAGE ="Your email is verified – you can log in now";
 
 // Link tokens are 43 characters; anything much longer is not one of ours.
 const MAX_TOKEN_LENGTH = 200;

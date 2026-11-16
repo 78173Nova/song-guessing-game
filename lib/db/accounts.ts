@@ -1,23 +1,26 @@
 // Saving and loading accounts and their email-link tokens. All SQL for accounts lives here.
 // Tokens come in as the raw value and are hashed here (SHA-256, like room tokens in decision 012), so a raw
 // token can never reach the database. Password hashes are made in lib/accounts before they get here.
+import { EMAIL_THROTTLE_MS } from "../accounts/rules";
 import type { TransactionDb } from "./client";
 import { hashToken } from "./rooms";
 
 export type CreatePendingAccountResult =
   | { ok: true; userId: string }
-  | { ok: false; reason: "username_taken" | "email_verified" | "email_taken" };
+  | { ok: false; reason: "username_taken" | "email_taken" }
+  | { ok: false; reason: "email_verified"; userId: string };
 
-// Creates an account that is not verified yet, together with its verification link token.
+// Creates an account that is not verified yet, together with its verification link token. It does not send
+// or count an email: the caller takes the email slot (claimEmailSlot) before sending.
 //
-// Three queries in one transaction:
-//   1. Delete an unverified account with this email, if there is one: signing up again replaces it
-//      (new username, password and link), so nobody can block an address by registering it first.
-//      Its old links go with it (ON DELETE CASCADE).
-//   2. Insert the account and its token in one query. A taken username (any case) or email inserts nothing
-//      instead of raising an error (ON CONFLICT DO NOTHING). The unique indexes decide, so of two sign-ups
-//      at the same moment exactly one wins.
-//   3. Read whether the username is taken or the email belongs to a verified account, to say why nothing was
+// Two queries in one transaction:
+//   1. In one query: delete an unverified account with this email, if there is one, then insert the account
+//      and its token. Signing up again replaces a pending account (new username, password and link), so nobody
+//      can block an address by registering it first. Its old links go with it (ON DELETE CASCADE), but the
+//      time of its last email is carried over, so signing up again does not get around the one-email-per-minute
+//      limit. A taken username (any case) or email inserts nothing instead of raising an error (ON CONFLICT DO
+//      NOTHING). The unique indexes decide, so of two sign-ups at the same moment exactly one wins.
+//   2. Read whether the username is taken or the email belongs to a verified account, to say why nothing was
 //      inserted. "email_taken" alone means another sign-up with this email won at the same moment.
 export async function createPendingAccount(
   db: TransactionDb,
@@ -31,12 +34,15 @@ export async function createPendingAccount(
   },
 ): Promise<CreatePendingAccountResult> {
   const now = account.now.toISOString();
-  const [, inserted, check] = await db.transaction([
-    { text: "DELETE FROM users WHERE email = $1 AND email_verified_at IS NULL", params: [account.email] },
+  const [inserted, check] = await db.transaction([
     {
-      text: `WITH new_user AS (
+      text: `WITH replaced AS (
+               DELETE FROM users WHERE email = $1 AND email_verified_at IS NULL
+               RETURNING last_email_sent_at
+             ),
+             new_user AS (
                INSERT INTO users (email, username, password_hash, last_email_sent_at, created_at)
-               VALUES ($1, $2, $3, $4, $4)
+               VALUES ($1, $2, $3, (SELECT max(last_email_sent_at) FROM replaced), $4)
                ON CONFLICT DO NOTHING
                RETURNING id
              )
@@ -54,15 +60,15 @@ export async function createPendingAccount(
     },
     {
       text: `SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1)) AS username_taken,
-                    EXISTS (SELECT 1 FROM users WHERE email = $2 AND email_verified_at IS NOT NULL) AS email_verified`,
+                    (SELECT id FROM users WHERE email = $2 AND email_verified_at IS NOT NULL) AS verified_user_id`,
       params: [account.username, account.email],
     },
   ]);
 
   if (inserted.length === 1) return { ok: true, userId: (inserted[0] as { user_id: string }).user_id };
-  const why = check[0] as { username_taken: boolean; email_verified: boolean };
+  const why = check[0] as { username_taken: boolean; verified_user_id: string | null };
   if (why.username_taken) return { ok: false, reason: "username_taken" };
-  if (why.email_verified) return { ok: false, reason: "email_verified" };
+  if (why.verified_user_id) return { ok: false, reason: "email_verified", userId: why.verified_user_id };
   return { ok: false, reason: "email_taken" };
 }
 
@@ -142,4 +148,37 @@ export async function findSessionUsername(db: TransactionDb, token: string, now:
 // Ends one session (log out). Nothing happens if it does not exist.
 export async function deleteSession(db: TransactionDb, token: string): Promise<void> {
   await db.query("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);
+}
+
+// Takes the "one email per minute" slot of an account before an email is sent to its address: sets
+// last_email_sent_at to now, but only if no email went there in the last 60 seconds. Returns false when the
+// slot is still taken. One UPDATE, so of two requests at the same moment exactly one gets the slot.
+export async function claimEmailSlot(db: TransactionDb, userId: string, now: Date): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE users SET last_email_sent_at = $2
+     WHERE id = $1 AND (last_email_sent_at IS NULL OR last_email_sent_at <= $3)
+     RETURNING id`,
+    [userId, now.toISOString(), new Date(now.getTime() - EMAIL_THROTTLE_MS).toISOString()],
+  );
+  return rows.length === 1;
+}
+
+// Finds the account with this email (stored lowercase, so pass it lowercase) if it is not verified yet.
+export async function findUnverifiedUserId(db: TransactionDb, email: string): Promise<string | null> {
+  const rows = await db.query<{ id: string }>("SELECT id FROM users WHERE email = $1 AND email_verified_at IS NULL", [
+    email,
+  ]);
+  return rows.length === 1 ? rows[0].id : null;
+}
+
+// Stores a new verification link token for an account. Only its SHA-256 hash is stored.
+export async function createVerifyToken(
+  db: TransactionDb,
+  link: { userId: string; token: string; expiresAt: Date },
+): Promise<void> {
+  await db.query("INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at) VALUES ($1, $2, 'verify', $3)", [
+    hashToken(link.token),
+    link.userId,
+    link.expiresAt.toISOString(),
+  ]);
 }

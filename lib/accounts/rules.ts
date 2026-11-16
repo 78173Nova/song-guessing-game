@@ -8,6 +8,10 @@ const scrypt = promisify(scryptCallback) as (password: string, salt: Buffer, key
 // A verification link is valid for 24 hours.
 export const VERIFY_LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
+// At most one email per address per 60 seconds (sign-up, resend, reset), to protect inboxes and the daily
+// email quota.
+export const EMAIL_THROTTLE_MS = 60_000;
+
 // A login session lasts 30 days.
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -39,7 +43,7 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL_LENGTH = 254;
 
-function isValidEmail(email: string): boolean {
+export function isValidEmail(email: string): boolean {
   return email.length <= MAX_EMAIL_LENGTH && EMAIL_PATTERN.test(email);
 }
 

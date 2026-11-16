@@ -15,9 +15,20 @@ export function apiVerifyEmail(token: string, fetchFn: FetchFn = fetch) {
 
 export type LoginForm = { login: string; password: string };
 
-// The server sets the session cookie; the page only gets the username.
-export function apiLogIn(form: LoginForm, fetchFn: FetchFn = fetch) {
-  return post<{ username: string }>("/api/accounts/login", form, fetchFn);
+// The server sets the session cookie; the page only gets the username. notVerified is true for the 403 "Verify
+// your email first", so the page can offer "Send the email again".
+export async function apiLogIn(form: LoginForm, fetchFn: FetchFn = fetch) {
+  let status = 0;
+  const result = await post<{ username: string }>("/api/accounts/login", form, async (url, init) => {
+    const response = await fetchFn(url, init);
+    status = response.status;
+    return response;
+  });
+  return result.ok ? result : { ...result, notVerified: status === 403 };
+}
+
+export function apiResendVerification(email: string, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/resend-verification", { email }, fetchFn);
 }
 
 export function apiLogOut(fetchFn: FetchFn = fetch) {

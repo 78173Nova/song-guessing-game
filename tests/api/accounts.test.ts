@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { logIn, logOut, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
+import { logIn, logOut, resendVerification, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import type { Email } from "@/lib/email/sender";
 import { createTestDb } from "../helpers/test-db";
@@ -27,6 +27,12 @@ beforeEach(async () => {
   sent = [];
   tokenCount = 0;
 });
+
+// Moves the fake clock forward. Each address gets at most one email per minute.
+const MINUTE = 60 * 1000;
+const later = (ms: number) => {
+  clock = new Date(clock.getTime() + ms);
+};
 
 const CHECK_INBOX = { status: 200, body: { message: "Check your inbox to finish signing up" } };
 
@@ -121,6 +127,7 @@ describe("POST /api/accounts/signup – taken and replaced accounts", () => {
   it("replaces a pending account when its email signs up again: new username, password and link", async () => {
     await signup(valid);
     const [before] = await db.query<{ password_hash: string }>("SELECT password_hash FROM users");
+    later(MINUTE);
 
     const result = await signup({ email: "ANNA@example.com", username: "Anna_New", password: "another secret" });
 
@@ -308,6 +315,7 @@ describe("POST /api/accounts/signup – email of a verified account", () => {
   it("creates nothing, sends the 'you already have an account' email and gives the same reply", async () => {
     await signup(valid);
     await verify({ token: firstToken });
+    later(MINUTE);
     sent = [];
 
     const result = await signup({ email: "ANNA@example.com", username: "Someone_Else", password: "another secret" });
@@ -523,5 +531,123 @@ describe("Login, me and logout – no secrets in replies", () => {
     expect(bodies).not.toContain("token-");
     expect(bodies).not.toContain("0dd69f20828bcfa911a43435a372bbc348f88047df35a1c36ba3265c699a88b6");
     expect(bodies).not.toContain("anna@example.com");
+  });
+});
+
+const resend = (body: unknown) =>
+  resendVerification(db, typeof body === "string" ? body : JSON.stringify(body), deps);
+const RESENT = {
+  status: 200,
+  body: { message: "If that address has an account that is not verified yet, we sent it a new link" },
+};
+const TOO_SOON = {
+  status: 429,
+  body: { error: "too-soon", message: "Please wait a minute before asking for another email" },
+};
+
+describe("POST /api/accounts/resend-verification", () => {
+  it("sends an unverified account a new link that verifies it", async () => {
+    await signup(valid);
+    later(MINUTE);
+    sent = [];
+
+    const result = await resend({ email: "ANNA@example.com" });
+
+    expect(result).toEqual(RESENT);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("anna@example.com");
+    expect(sent[0].text).toContain(`/verify-email?token=token-2-${"a".repeat(40)}`);
+    expect(await verify({ token: `token-2-${"a".repeat(40)}` })).toEqual({
+      status: 200,
+      body: { message: "Your email is verified – you can log in now" },
+    });
+  });
+});
+
+describe("POST /api/accounts/resend-verification – nothing to send", () => {
+  it("gives a verified account and an unknown address the same reply and sends nothing", async () => {
+    await verifiedAccount();
+    later(MINUTE);
+    sent = [];
+
+    expect(await resend({ email: "anna@example.com" })).toEqual(RESENT);
+    expect(await resend({ email: "nobody@example.com" })).toEqual(RESENT);
+    expect(sent).toEqual([]);
+    expect(await db.query("SELECT token_hash FROM email_tokens")).toHaveLength(1);
+  });
+
+  it("rejects a missing or invalid email and bad JSON, and sends nothing", async () => {
+    await signup(valid);
+    later(MINUTE);
+    sent = [];
+
+    expect(await resend({})).toEqual({ status: 400, body: { error: "malformed", message: expect.any(String) } });
+    expect(await resend({ email: 42 })).toEqual({ status: 400, body: { error: "malformed", message: expect.any(String) } });
+    expect(await resend("{not json")).toEqual({ status: 400, body: { error: "malformed", message: expect.any(String) } });
+    expect(await resend({ email: "anna.example.com" })).toEqual({
+      status: 400,
+      body: { error: "invalid-email", message: expect.any(String) },
+    });
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("At most one email per address per minute", () => {
+  const SECOND = 1000;
+
+  it("refuses a second resend within 60 seconds and sends nothing; at 60 seconds it sends again", async () => {
+    await signup(valid);
+    later(MINUTE);
+    await resend({ email: valid.email });
+    sent = [];
+
+    later(59 * SECOND);
+    expect(await resend({ email: valid.email })).toEqual(TOO_SOON);
+    expect(sent).toEqual([]);
+
+    later(1 * SECOND);
+    expect(await resend({ email: valid.email })).toEqual(RESENT);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("counts the sign-up email: a resend 59 seconds after signing up is refused", async () => {
+    await signup(valid);
+    sent = [];
+
+    later(59 * SECOND);
+    expect(await resend({ email: valid.email })).toEqual(TOO_SOON);
+    expect(sent).toEqual([]);
+    expect(await db.query("SELECT token_hash FROM email_tokens")).toHaveLength(1);
+  });
+
+  it("counts a replaced pending account: signing up again within 60 seconds replaces it but sends nothing", async () => {
+    await signup(valid);
+    sent = [];
+
+    later(59 * SECOND);
+    expect(await signup({ ...valid, username: "Anna_New" })).toEqual(CHECK_INBOX);
+    expect(sent).toEqual([]);
+    expect(await db.query("SELECT username FROM users")).toEqual([{ username: "Anna_New" }]);
+
+    later(1 * SECOND);
+    expect(await resend({ email: valid.email })).toEqual(RESENT);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("counts the 'you already have an account' email: within 60 seconds of the last email it is not sent", async () => {
+    await verifiedAccount();
+    sent = [];
+
+    later(59 * SECOND);
+    expect(await signup({ ...valid, username: "Someone_Else" })).toEqual(CHECK_INBOX);
+    expect(sent).toEqual([]);
+
+    later(1 * SECOND);
+    expect(await signup({ ...valid, username: "Someone_Else" })).toEqual(CHECK_INBOX);
+    expect(sent.map((e) => e.subject)).toEqual(["You already have an account"]);
+
+    later(59 * SECOND);
+    expect(await signup({ ...valid, username: "Someone_Else" })).toEqual(CHECK_INBOX);
+    expect(sent).toHaveLength(1);
   });
 });
