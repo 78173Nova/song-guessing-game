@@ -62,3 +62,77 @@ room games) are added here as updates when `feature/room-api` builds them.
 - If players should be able to leave or be removed, the limit keeps working, because it counts the rows.
 - If old rooms should be cleaned up, codes would need a separate "used codes" list to stay unique forever.
 - If the lock turns out to be a bottleneck, the player counter above is the next step.
+
+## Update 15 Nov 2026: the game rules and the routes (`feature/room-api`)
+
+The rules live in `lib/game/rooms.ts`, the steps of each route in `lib/api/rooms.ts`. The route list with
+all replies and errors is in `specs/002-room-core.md` ("Routes").
+
+### Decision
+- **Host-paced rounds:** only the host token can start the game and open a round ("Next"). A round closes
+  when every player has answered or 15 seconds have passed. There is no timer in the background: every
+  "state" and "next" request first brings the game up to date (close the round if it is due, finish the room
+  after the last round).
+- **The time limit:** an answer at exactly 15.000 seconds still counts, the same as in `scoring.ts`. Anything
+  later is rejected as "too late" and nothing is stored. Points are worked out when the answer arrives.
+- **Nothing leaks while a round is open:** the answer route only confirms the choice. The correct option, the
+  song and all points appear in the state only once the round has closed, and scores count closed rounds only.
+- **Lobby-only joining:** players can join until the host taps Start. A room game is one game: after round 5
+  the room is finished and the scores stay.
+- **Shared ranks:** equal scores share a rank and the next rank is skipped (1, 1, 3). A rank is 1 + the number
+  of players with more points. Players with equal scores are listed in the order they joined.
+- **Solo routes closed to room games:** `/api/games/[id]/next`, `/answer` and `/replace` answer 404 for a game
+  that belongs to a room. The host page swaps a song through `/api/rooms/[code]/replace` instead, which
+  needs the host token.
+- **Tokens and codes:** a token is 32 random bytes from Node's `crypto.randomBytes`, sent as 64 hex
+  characters in the header `Authorization: Bearer <token>`. A code is drawn with `crypto.randomInt`; if it is
+  taken, the server draws again, up to 10 times.
+- **The game ID never leaves the server.** Every room action goes through the room code and a token, so
+  neither the host page nor the phones need it.
+- **One order of checks in every route:** room exists (404), room not expired (409), token (403),
+  input (400), right moment (409).
+
+### Why
+- **Host-paced:** the host plays the music, so only the host knows when the room is ready for the next song.
+- **No background timer:** Vercel has none (decision 008). With pages polling every 1–2 seconds, a due round
+  is closed at most one poll late.
+- **Nothing leaks:** a score that jumps during a round would tell a player that their answer was right, and
+  they could call it out to the room.
+- **Lobby-only joining:** a player who joins in round 3 could never catch up, and the "everyone has answered"
+  rule needs a fixed number of players.
+- **1, 1, 3:** this is how sports tables and most quiz apps rank, so nobody has to have it explained.
+- **Solo routes closed:** they only ask for a game ID and no token. Anyone who learned the ID could otherwise
+  open rounds, answer or swap songs for the whole room.
+- **`Authorization` header:** it is the standard place for a token. URLs end up in browser history and logs.
+- **404 for a badly shaped code:** the same reply as for an unknown code, like the solo routes do with game IDs.
+
+### Alternatives
+- **Rounds that open by themselves** after a pause: no tapping for the host, but the music and the phones
+  would have to be kept in step, which is the hard part of the online duel.
+- **Telling the player right/wrong immediately:** more exciting on the phone, but it gives the answer away
+  to everyone sitting next to them.
+- **Dense ranks (1, 1, 2):** equally simple, but less familiar.
+- **Giving the host page the game ID** and letting it use the solo replace route (the spec's first idea):
+  one route fewer, but that route would have to stay open to room games.
+- **Two header names** (`X-Host-Token`, `X-Player-Token`): saves one small query per player poll, but is not
+  the standard header.
+- **410 "Gone" for an expired room:** a little more exact than 409, but one more status code to explain.
+
+### Limits
+- Time is measured when the answer **arrives** at the server. A tap at 14.9 seconds on a slow connection can
+  be too late.
+- A round's closing time in the database is the moment of the request that noticed it, not exactly 15 seconds
+  after it opened. Points are not affected, because they are worked out per answer.
+- If nobody polls, a due round stays "open" in the database until the next request. Nothing can be gained
+  from this: late answers are rejected by the clock, not by the status.
+- A state request costs about 6 small queries. With 50 players polling every 1–2 seconds that is fine for a
+  class, not for thousands (decision 008).
+- Codes are only 6 digits and nothing limits requests, so someone could try codes until one fits and join a
+  stranger's lobby. They could only play along, and the host sees every nickname before starting.
+- Nicknames may contain invisible characters (not control characters), so two names can look alike.
+- If two Starts arrive at the same moment, the loser's game stays behind unused (see above).
+
+### How it could change
+- A grace period for slow connections would be one number in `isTimeUp`.
+- Showing the whole scoreboard on the phones means adding `scoreboard` to the player's state.
+- "Play again" in the same room would need a way to point a room at a second game.
