@@ -188,3 +188,10 @@ all replies and errors is in `specs/002-room-core.md` ("Routes").
 - Closing a tab does not leave the room: the nickname stays in the lobby. Leaving comes with "Away, kick and
   leave" (#40).
 - One account can create any number of rooms (spec 002, still out of scope).
+
+## Update 16 Nov 2026: server-paced rounds, clips and standings for everyone (issue #33)
+The "host-paced rounds" and the creator-only `previewUrls` / `scoreboard` above are replaced. Nobody taps "Next"
+any more: Start schedules round 1, and every state request closes due rounds and schedules the next one from
+the stored times. `POST /api/rooms/[code]/next` is removed. Every player now gets `previewUrls`, `serverNow`,
+`nextRound` and the `standings` (the glossary term, instead of "scoreboard"). The creator's token is still needed
+for Start and Replace. Why, alternatives and limits: decision 015.

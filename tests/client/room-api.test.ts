@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from "@/lib/client/game-api";
-import { apiCreateRoom, apiJoinRoom, apiRoomState, apiStartRoom } from "@/lib/client/room-api";
+import { apiAnswerRoom, apiCreateRoom, apiJoinRoom, apiRoomState, apiStartRoom } from "@/lib/client/room-api";
 
 const TOKEN = "ab".repeat(32);
 
@@ -55,6 +55,24 @@ describe("room API calls from the browser", () => {
     expect(url).toBe("/api/rooms/482913/start");
     expect(init?.method).toBe("POST");
     expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("sends an answer with the round, the option and the token, and passes on a refusal", async () => {
+    const fetchFn = reply(200, { round: 2, answer: 3 });
+
+    expect(await apiAnswerRoom("482913", TOKEN, 2, 3, fetchFn)).toEqual({ ok: true, data: { round: 2, answer: 3 } });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("/api/rooms/482913/answer");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ round: 2, answer: 3 });
+    expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
+
+    const late = reply(409, { error: "too-late", message: "Too late – the time for this round is over." });
+    expect(await apiAnswerRoom("482913", TOKEN, 2, 3, late)).toEqual({
+      ok: false,
+      message: "Too late – the time for this round is over.",
+    });
   });
 
   it("asks for the state with the token, or without a header when this tab has none", async () => {

@@ -4,7 +4,6 @@ import {
   createNewRoom,
   getRoomState,
   joinRoom,
-  openNextRound,
   replaceRoomSong,
   startRoomGame,
 } from "@/lib/api/rooms";
@@ -51,7 +50,6 @@ const create = (sessionToken: string | undefined, body: unknown, extra = {}) =>
   createNewRoom(db, sessionToken, json(body), { ...deps, ...extra });
 const join = (code: string, nickname: unknown) => joinRoom(db, code, json({ nickname }), deps);
 const start = (code: string, token: string | null) => startRoomGame(db, code, bearer(token), deps);
-const next = (code: string, token: string | null) => openNextRound(db, code, bearer(token), deps);
 const answer = (code: string, token: string | null, body: unknown) =>
   answerRoomRound(db, code, bearer(token), json(body), deps);
 const state = (code: string, token: string | null) => getRoomState(db, code, bearer(token), deps);
@@ -94,14 +92,22 @@ async function roundsOf(code: string) {
   return (await getGameRounds(db, await gameIdOf(code)))!;
 }
 
-// The room creator taps Next. Returns the round number with one right and one wrong option (read from the database).
+type NextRound = { number: number; startsAt: string; options: string[] };
+
+// Nobody taps Next (issue #33): the server schedules each round itself. This asks the room state for the round
+// that comes next and moves the clock to its start time. Returns the round number with one right and one wrong
+// option (read from the database).
 async function openRound(room: RoomKeys) {
-  const result = await next(room.code, room.creatorToken);
-  if (result.status !== 200) throw new Error("Test setup: the round did not open");
-  const number = (result.body as { round: number }).round;
+  const upcoming = (await state(room.code, room.creatorToken)).body.nextRound as NextRound | null;
+  if (!upcoming) throw new Error("Test setup: no round is scheduled");
+  clock = new Date(upcoming.startsAt);
+  const number = upcoming.number;
   const right = (await roundsOf(room.code))[number - 1].correctOption;
   return { number, right, wrong: (right + 1) % 4 };
 }
+
+// The moment `seconds` after `time`, as the state writes it.
+const plus = (time: Date, seconds: number) => new Date(time.getTime() + seconds * 1000).toISOString();
 
 const statusOf = async (code: string) =>
   (await db.query<{ status: string }>("SELECT status FROM rooms WHERE code = $1", [code]))[0].status;
@@ -313,9 +319,10 @@ describe("POST /api/rooms/[code]/join", () => {
 });
 
 describe("POST /api/rooms/[code]/start", () => {
-  it("starts the game: 5 waiting rounds, the 5 clip addresses, no titles and no game ID", async () => {
+  it("starts the game: round 1 starts 5 s later, the 5 clip addresses, no titles and no game ID", async () => {
     const room = await newRoom("Anna");
     await joined(room.code, "Ben");
+    const startedAt = clock;
 
     const result = await start(room.code, room.creatorToken);
 
@@ -324,7 +331,8 @@ describe("POST /api/rooms/[code]/start", () => {
     expect(await statusOf(room.code)).toBe("playing");
     const rounds = await roundsOf(room.code);
     expect(rounds).toHaveLength(5);
-    expect(rounds.every((r) => r.status === "waiting")).toBe(true);
+    expect(rounds.map((r) => r.status)).toEqual(["open", "waiting", "waiting", "waiting", "waiting"]);
+    expect(rounds[0].startedAt!.toISOString()).toBe(plus(startedAt, 5));
     expect(result.body).toEqual({ totalRounds: 5, previewUrls: rounds.map((r) => r.song.previewUrl) });
     const text = JSON.stringify(result.body);
     expect(text).not.toContain(await gameIdOf(room.code));
@@ -438,95 +446,115 @@ describe("closing rules", () => {
   });
 });
 
-describe("POST /api/rooms/[code]/next", () => {
-  it("opens round 1, notes the time, and sends nothing that gives the answer away", async () => {
-    const room = await startedRoom("Anna", "Ben");
-    wait(20);
-
-    const result = await next(room.code, room.creatorToken);
-
-    const round = (await roundsOf(room.code))[0];
-    expect(result).toEqual({
-      status: 200,
-      body: { round: 1, totalRounds: 5, previewUrl: round.song.previewUrl, options: round.options, secondsLeft: 15 },
-    });
-    expect(round.status).toBe("open");
-    expect(round.startedAt).toEqual(clock);
-  });
-
-  it("is rejected in the lobby", async () => {
+describe("server-paced rounds (nobody taps Next)", () => {
+  it("after Start, every player sees round 1 coming with its start time and options, but not the answer", async () => {
     const room = await newRoom("Anna");
-    await joined(room.code, "Ben");
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 409, body: { error: "not-started" } });
+    const ben = await joined(room.code, "Ben");
+    const startedAt = clock;
+    await start(room.code, room.creatorToken);
+    wait(2);
+
+    const stored = (await roundsOf(room.code))[0];
+    for (const token of [room.creatorToken, ben]) {
+      const body = (await state(room.code, token)).body;
+      expect(body).toMatchObject({ status: "playing", round: null, serverNow: clock.toISOString() });
+      expect(body.nextRound).toEqual({ number: 1, startsAt: plus(startedAt, 5), options: stored.options });
+      expect(JSON.stringify(body)).not.toContain("correctOption");
+    }
   });
 
-  it("is rejected while the round is still open", async () => {
+  it("opens round 1 at its start time: 15 seconds left and nothing scheduled after it yet", async () => {
     const room = await startedRoom("Anna", "Ben");
     const round = await openRound(room);
-    await answer(room.code, room.tokens[0], { round: round.number, answer: round.right }); // Ben has not answered
 
-    wait(15); // exactly 15 s: still open
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 409, body: { error: "round-still-open" } });
-    expect((await roundsOf(room.code))[1].status).toBe("waiting");
+    const body = (await state(room.code, room.tokens[1])).body;
+    expect(body.round).toMatchObject({ number: round.number, status: "open", secondsLeft: 15, startsAt: clock.toISOString() });
+    expect(body.nextRound).toBeNull();
   });
 
-  it("opens round 2 once every player – the creator included – has answered, without a state request in between", async () => {
-    const room = await startedRoom("Anna", "Ben");
-    const round = await openRound(room);
-    await answer(room.code, room.tokens[0], { round: 1, answer: round.right });
-    await answer(room.code, room.tokens[1], { round: 1, answer: round.wrong });
-    wait(4);
-
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 200, body: { round: 2 } });
-    const rounds = await roundsOf(room.code);
-    expect(rounds[0].status).toBe("answered");
-    expect(rounds[1].status).toBe("open");
-  });
-
-  it("opens round 2 after the 15 seconds are over, even if nobody answered", async () => {
+  it("keeps the round open at exactly 15 seconds and closes it just after", async () => {
     const room = await startedRoom("Anna", "Ben");
     await openRound(room);
-    wait(15.001);
+    await answer(room.code, room.tokens[0], { round: 1, answer: 0 }); // Ben has not answered
 
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 200, body: { round: 2 } });
+    wait(15);
+    expect((await state(room.code, room.tokens[1])).body.round).toMatchObject({ status: "open", secondsLeft: 0 });
+    expect((await roundsOf(room.code))[1].status).toBe("waiting");
+
+    wait(0.001);
+    expect((await state(room.code, room.tokens[1])).body.round).toMatchObject({ number: 1, status: "closed" });
+    expect((await roundsOf(room.code))[0].status).toBe("answered");
   });
 
-  it("is rejected after the last round, and the room is finished", async () => {
+  it("schedules the next round 8 s after the 15 seconds are over when not everyone answered", async () => {
     const room = await startedRoom("Anna", "Ben");
-    for (let i = 1; i <= 5; i++) {
-      const round = await openRound(room);
-      for (const token of room.tokens) await answer(room.code, token, { round: round.number, answer: round.right });
-    }
+    await openRound(room);
+    const roundStart = clock;
+    wait(16);
 
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 409, body: { error: "game-finished" } });
-    expect(await statusOf(room.code)).toBe("finished");
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 409, body: { error: "game-finished" } });
+    const body = (await state(room.code, room.creatorToken)).body;
+    expect(body.round).toMatchObject({ number: 1, status: "closed" });
+    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(roundStart, 15 + 8) });
   });
 
-  it("rejects another player's token and another room's creator token", async () => {
+  it("closes the round once every player – the creator included – has answered, and the next one starts 8 s after the last answer", async () => {
     const room = await startedRoom("Anna", "Ben");
-    const other = await newRoom("Zoe");
+    const round = await openRound(room);
+    wait(2);
+    await answer(room.code, room.tokens[0], { round: 1, answer: round.right });
+    wait(2);
+    const lastAnswer = clock;
+    await answer(room.code, room.tokens[1], { round: 1, answer: round.wrong });
+    wait(1);
 
-    for (const token of [null, room.tokens[1], other.creatorToken]) {
-      expect(await next(room.code, token)).toMatchObject({ status: 403, body: { error: "wrong-token" } });
-    }
-    expect((await roundsOf(room.code))[0].status).toBe("waiting");
+    const body = (await state(room.code, room.tokens[1])).body;
+    expect(body.round).toMatchObject({ number: 1, status: "closed", correctOption: round.right });
+    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(lastAnswer, 8) });
+    const rounds = await roundsOf(room.code);
+    expect(rounds[0].answeredAt).toEqual(lastAnswer);
+    expect(rounds[1].status).toBe("open"); // scheduled: open in the database, but not started yet
   });
 
-  it("opens only one round when two requests arrive at the same moment", async () => {
+  it("refuses an answer for the next round before its start time and accepts it from the start time on", async () => {
     const room = await startedRoom("Anna", "Ben");
+    const upcoming = (await state(room.code, room.creatorToken)).body.nextRound as NextRound;
 
-    const results = await Promise.all([next(room.code, room.creatorToken), next(room.code, room.creatorToken)]);
-
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect(results.find((r) => r.status === 409)!.body.error).toBe("round-still-open");
-    expect((await roundsOf(room.code)).map((r) => r.status)).toEqual(["open", "waiting", "waiting", "waiting", "waiting"]);
+    clock = new Date(new Date(upcoming.startsAt).getTime() - 1);
+    expect(await answer(room.code, room.tokens[1], { round: 1, answer: 0 })).toMatchObject({
+      status: 409,
+      body: { error: "round-not-open" },
+    });
+    wait(0.001);
+    expect((await answer(room.code, room.tokens[1], { round: 1, answer: 0 })).status).toBe(200);
   });
 
-  it("is rejected in a closed room", async () => {
+  it("plays a whole game without anyone answering or asking: after a long pause it catches up and is finished", async () => {
     const room = await startedRoom("Anna", "Ben");
-    wait(3 * HOURS);
-    expect(await next(room.code, room.creatorToken)).toMatchObject({ status: 409, body: { error: "room-closed" } });
+    const startedAt = clock;
+    // Round 1 starts at 5 s and closes at 20 s; each next round starts 8 s later and lasts 15 s.
+    // Round 5 closes at 20 + 4 × 23 = 112 s.
+    clock = new Date(startedAt.getTime() + 112 * 1000);
+    expect((await state(room.code, room.creatorToken)).body).toMatchObject({ status: "playing", round: { number: 5, status: "open" } });
+
+    wait(0.001);
+    const body = (await state(room.code, room.creatorToken)).body;
+    expect(body).toMatchObject({ status: "finished", round: { number: 5, status: "closed" }, nextRound: null });
+    const rounds = await roundsOf(room.code);
+    expect(rounds.every((r) => r.status === "answered")).toBe(true);
+    expect(rounds.map((r) => r.startedAt!.toISOString())).toEqual([5, 28, 51, 74, 97].map((s) => plus(startedAt, s)));
+  });
+
+  it("answers two requests at the closing moment the same way and schedules the next round once", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    await openRound(room);
+    wait(16);
+
+    const [a, b] = await Promise.all([state(room.code, room.creatorToken), state(room.code, room.creatorToken)]);
+
+    expect(a.status).toBe(200);
+    expect(a).toEqual(b);
+    expect(a.body.round).toMatchObject({ number: 1, status: "closed" });
+    expect(a.body.nextRound).toMatchObject({ number: 2 });
   });
 });
 
@@ -692,10 +720,12 @@ describe("GET /api/rooms/[code] – room state", () => {
         role: "creator",
         players: ["Anna", "Ben"],
         totalRounds: 5,
+        serverNow: clock.toISOString(),
         round: null,
-        me: { nickname: "Anna", score: 0, rank: 1, answer: null, correct: null, points: null },
+        nextRound: null,
         previewUrls: null,
-        scoreboard: [
+        me: { nickname: "Anna", score: 0, rank: 1, answer: null, correct: null, points: null },
+        standings: [
           { rank: 1, nickname: "Anna", score: 0 },
           { rank: 1, nickname: "Ben", score: 0 },
         ],
@@ -715,30 +745,34 @@ describe("GET /api/rooms/[code] – room state", () => {
         role: "player",
         players: ["Anna", "Ben"],
         totalRounds: 5,
+        serverNow: clock.toISOString(),
         round: null,
+        nextRound: null,
+        previewUrls: null,
         me: { nickname: "Ben", score: 0, rank: 1, answer: null, correct: null, points: null },
+        standings: [
+          { rank: 1, nickname: "Anna", score: 0 },
+          { rank: 1, nickname: "Ben", score: 0 },
+        ],
       },
     };
     expect(await state(room.code, ben)).toEqual(expected);
     expect(await state(room.code, ben)).toEqual(expected);
   });
 
-  it("after Start and before the first Next: no round yet, clip addresses only for the room creator", async () => {
+  it("after Start: every player gets the 5 clip addresses, so every device can load the clips in advance", async () => {
     const room = await startedRoom("Anna", "Ben");
+    const urls = (await roundsOf(room.code)).map((r) => r.song.previewUrl);
 
-    const creator = (await state(room.code, room.creatorToken)).body;
-    const player = (await state(room.code, room.tokens[1])).body;
-
-    expect(creator).toMatchObject({ status: "playing", round: null, me: { nickname: "Anna" } });
-    expect(creator.previewUrls).toEqual((await roundsOf(room.code)).map((r) => r.song.previewUrl));
-    expect(player).toMatchObject({ status: "playing", round: null, me: { nickname: "Ben" } });
-    expect(player).not.toHaveProperty("previewUrls");
-    expect(player).not.toHaveProperty("scoreboard");
+    for (const token of room.tokens) {
+      expect((await state(room.code, token)).body).toMatchObject({ status: "playing", round: null, previewUrls: urls });
+    }
   });
 
   it("never contains the correct answer while a round is open – not for the creator, not for the other players", async () => {
     const room = await startedRoom("Anna", "Ben", "Cleo");
     const round = await openRound(room);
+    const roundStart = clock;
     wait(5.6);
     await answer(room.code, room.tokens[1], { round: 1, answer: round.right }); // Ben has answered, the others not
 
@@ -749,6 +783,8 @@ describe("GET /api/rooms/[code] – room state", () => {
       expect(body.round).toEqual({
         number: 1,
         status: "open",
+        startsAt: roundStart.toISOString(),
+        endsAt: plus(roundStart, 15),
         options: stored.options,
         secondsLeft: 9.4,
         answeredCount: 1,
@@ -773,7 +809,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       correct: null,
       points: null,
     });
-    expect((await state(room.code, room.creatorToken)).body.scoreboard).toEqual([
+    expect((await state(room.code, room.tokens[1])).body.standings).toEqual([
       { rank: 1, nickname: "Anna", score: 0 },
       { rank: 1, nickname: "Ben", score: 0 },
     ]);
@@ -782,6 +818,7 @@ describe("GET /api/rooms/[code] – room state", () => {
   it("closes the round when every player has answered and then shows the song, results and scores", async () => {
     const room = await startedRoom("Anna", "Ben");
     const round = await openRound(room);
+    const roundStart = clock;
     wait(3);
     await answer(room.code, room.tokens[0], { round: 1, answer: round.right });
     await answer(room.code, room.tokens[1], { round: 1, answer: round.wrong });
@@ -794,6 +831,8 @@ describe("GET /api/rooms/[code] – room state", () => {
     expect(creator.round).toEqual({
       number: 1,
       status: "closed",
+      startsAt: roundStart.toISOString(),
+      endsAt: plus(roundStart, 15),
       options: stored.options,
       secondsLeft: 0,
       answeredCount: 2,
@@ -805,7 +844,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         storeUrl: stored.song.storeUrl,
       },
     });
-    expect(creator.scoreboard).toEqual([
+    expect(creator.standings).toEqual([
       { rank: 1, nickname: "Anna", score: 140 },
       { rank: 2, nickname: "Ben", score: 0 },
     ]);
@@ -827,18 +866,6 @@ describe("GET /api/rooms/[code] – room state", () => {
     });
   });
 
-  it("keeps the round open at exactly 15 seconds and closes it just after – on a player's request too", async () => {
-    const room = await startedRoom("Anna", "Ben");
-    await openRound(room);
-
-    wait(15);
-    expect((await state(room.code, room.tokens[1])).body.round).toMatchObject({ status: "open", secondsLeft: 0 });
-
-    wait(0.001);
-    expect((await state(room.code, room.tokens[1])).body.round).toMatchObject({ status: "closed", answeredCount: 0 });
-    expect((await roundsOf(room.code))[0].status).toBe("answered");
-  });
-
   it("gives a player who did not answer 0 points", async () => {
     const room = await startedRoom("Anna", "Ben");
     const round = await openRound(room);
@@ -855,19 +882,7 @@ describe("GET /api/rooms/[code] – room state", () => {
     });
   });
 
-  it("answers two requests at the closing moment the same way and closes the round once", async () => {
-    const room = await startedRoom("Anna", "Ben");
-    await openRound(room);
-    wait(16);
-
-    const [a, b] = await Promise.all([state(room.code, room.creatorToken), state(room.code, room.creatorToken)]);
-
-    expect(a.status).toBe(200);
-    expect(a).toEqual(b);
-    expect(a.body.round).toMatchObject({ number: 1, status: "closed" });
-  });
-
-  it("finishes the room after round 5 with shared ranks, and stays finished", async () => {
+  it("finishes the room after round 5 with final standings for everyone – equal points share a rank – and stays finished", async () => {
     const room = await startedRoom("Anna", "Ben", "Cleo");
     const [anna, ben, cleo] = room.tokens;
     for (let i = 1; i <= 5; i++) {
@@ -883,17 +898,20 @@ describe("GET /api/rooms/[code] – room state", () => {
 
     expect(creator.status).toBe("finished");
     expect(creator.round).toMatchObject({ number: 5, status: "closed" });
-    expect(creator.scoreboard).toEqual([
+    expect(creator.nextRound).toBeNull();
+    const standings = [
       { rank: 1, nickname: "Anna", score: 700 },
       { rank: 1, nickname: "Ben", score: 700 },
       { rank: 3, nickname: "Cleo", score: 0 },
-    ]);
-    expect((await state(room.code, ben)).body.me).toMatchObject({ nickname: "Ben", score: 700, rank: 1 });
-    expect((await state(room.code, cleo)).body.me).toMatchObject({ nickname: "Cleo", score: 0, rank: 3 });
+    ];
+    expect(creator.standings).toEqual(standings);
+    expect((await state(room.code, ben)).body).toMatchObject({ standings, me: { nickname: "Ben", score: 700, rank: 1 } });
+    expect((await state(room.code, cleo)).body).toMatchObject({ standings, me: { nickname: "Cleo", score: 0, rank: 3 } });
     expect(await statusOf(room.code)).toBe("finished");
 
     wait(60);
-    expect((await state(room.code, room.creatorToken)).body).toEqual(creator);
+    const later = (await state(room.code, room.creatorToken)).body;
+    expect({ ...later, serverNow: null }).toEqual({ ...creator, serverNow: null });
   });
 
   it("rejects a wrong token and a token from another room", async () => {
@@ -952,7 +970,7 @@ describe("POST /api/rooms/[code]/replace", () => {
     expect(after[2].status).toBe("waiting");
     expect(result).toEqual({ status: 200, body: { round: 3, previewUrl: after[2].song.previewUrl } });
     expect(after.filter((_, i) => i !== 2)).toEqual(before.filter((_, i) => i !== 2));
-    expect((await state(room.code, room.creatorToken)).body.previewUrls).toEqual(after.map((r) => r.song.previewUrl));
+    expect((await state(room.code, room.tokens[1])).body.previewUrls).toEqual(after.map((r) => r.song.previewUrl));
   });
 
   it("rejects another player's token and another room's creator token, and changes nothing", async () => {
@@ -966,8 +984,13 @@ describe("POST /api/rooms/[code]/replace", () => {
     expect(await roundsOf(room.code)).toEqual(before);
   });
 
-  it("rejects a round that has started", async () => {
+  it("rejects a round that is scheduled or has started", async () => {
     const room = await startedRoom("Anna", "Ben");
+    // Round 1 is scheduled by Start: every device may already have loaded its clip.
+    expect(await replace(room.code, room.creatorToken, { round: 1 })).toMatchObject({
+      status: 409,
+      body: { error: "round-already-started" },
+    });
     await openRound(room);
     expect(await replace(room.code, room.creatorToken, { round: 1 })).toMatchObject({
       status: 409,
@@ -1020,7 +1043,10 @@ describe("a whole room game", () => {
     keep(await start(code, anna));
 
     for (let i = 1; i <= 5; i++) {
-      expect(keep(await next(code, anna))).toMatchObject({ status: 200, body: { round: i } });
+      // Nobody taps Next: both devices only ask for the state, and the round starts at the time it names.
+      const upcoming = keep(await state(code, ben)).body.nextRound as NextRound;
+      expect(upcoming.number).toBe(i);
+      clock = new Date(upcoming.startsAt);
       const right = (await roundsOf(code))[i - 1].correctOption;
       keep(await state(code, ben));
 
@@ -1036,7 +1062,7 @@ describe("a whole room game", () => {
 
     const creator = keep(await state(code, anna)).body;
     expect(creator.status).toBe("finished");
-    expect(creator.scoreboard).toEqual([
+    expect(creator.standings).toEqual([
       { rank: 1, nickname: "Anna", score: 700 },
       { rank: 2, nickname: "Ben", score: 300 },
     ]);

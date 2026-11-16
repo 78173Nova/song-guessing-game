@@ -63,6 +63,29 @@ export function isRoundClosed(
   return everyoneAnswered || isTimeUp(round.startedAt, now);
 }
 
+// The server moves the game forward by itself (issue #33). Round 1 starts this long after Start, so every
+// device has time to see the start time and load the first clip.
+export const FIRST_ROUND_DELAY_SECONDS = 5;
+// Every device shows a round's result for this long after it closes …
+export const RESULT_SECONDS = 5;
+// … and the next round starts this long after the close: the result, then a few seconds of
+// "Next round starting…", so a device that polls a little late still sees the start time before it comes.
+export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 3;
+
+// The moment a closed round closed: when the last player answered if everyone did, otherwise at the end of
+// its 15 seconds. Worked out from the stored times, so every request gets the same moment – and with it the
+// same start time for the next round – no matter when it notices the close.
+export function roundClosedAt(startedAt: Date, answerTimes: Date[], playerCount: number): Date {
+  const everyoneAnswered = playerCount > 0 && answerTimes.length >= playerCount;
+  if (everyoneAnswered) return new Date(Math.max(...answerTimes.map((time) => time.getTime())));
+  return new Date(startedAt.getTime() + ANSWER_TIME_SECONDS * 1000);
+}
+
+// When the next round starts after a round that closed at `closedAt`.
+export function nextRoundStartsAt(closedAt: Date): Date {
+  return new Date(closedAt.getTime() + NEXT_ROUND_DELAY_SECONDS * 1000);
+}
+
 export type ParsedRoomAnswer =
   | { ok: true; round: number; answer: number }
   | { ok: false; error: "malformed" | "invalid-option" };

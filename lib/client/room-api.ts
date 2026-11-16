@@ -4,13 +4,40 @@ import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE, post, type FetchFn } from
 
 export type JoinedRoom = { code: string; playerToken: string; nickname: string };
 
-// The parts of the room state the lobby needs (the full reply is described in lib/api/rooms.ts).
+export type Song = { title: string; artist: string; artworkUrl: string | null; storeUrl: string | null };
+export type Standing = { rank: number; nickname: string; score: number };
+
+// The room state every page polls (described in lib/api/rooms.ts, getRoomState). Times are ISO strings on the
+// server's clock. correctOption and song only come once the round has closed.
 export type RoomState = {
   code: string;
   status: "lobby" | "playing" | "finished";
   role: "creator" | "player";
   players: string[];
-  me: { nickname: string };
+  totalRounds: number;
+  serverNow: string;
+  previewUrls: string[] | null;
+  round: {
+    number: number;
+    status: "open" | "closed";
+    startsAt: string;
+    endsAt: string;
+    options: string[];
+    secondsLeft: number;
+    answeredCount: number;
+    correctOption?: number;
+    song?: Song;
+  } | null;
+  nextRound: { number: number; startsAt: string; options: string[] } | null;
+  me: {
+    nickname: string;
+    score: number;
+    rank: number;
+    answer: number | null;
+    correct: boolean | null;
+    points: number | null;
+  };
+  standings: Standing[];
 };
 
 // What a state request can lead to: the state, or why there is none.
@@ -37,9 +64,20 @@ export async function apiJoinRoom(code: string, nickname: string, fetchFn: Fetch
   return result.ok ? { ok: true as const, data: { code, ...result.data } } : result;
 }
 
+// `post` with the token added to the headers it sets.
+const withToken = (token: string, fetchFn: FetchFn): FetchFn => (url, init) =>
+  fetchFn(url, { ...init, headers: { ...init?.headers, ...authorization(token) } });
+
 export async function apiStartRoom(code: string, token: string, fetchFn: FetchFn = fetch) {
-  return post<{ totalRounds: number }>(`/api/rooms/${encodeURIComponent(code)}/start`, undefined, (url, init) =>
-    fetchFn(url, { ...init, headers: { ...init?.headers, ...authorization(token) } }),
+  return post<{ totalRounds: number }>(`/api/rooms/${encodeURIComponent(code)}/start`, undefined, withToken(token, fetchFn));
+}
+
+// The reply only confirms the choice: right or wrong shows in the state once the round has closed.
+export async function apiAnswerRoom(code: string, token: string, round: number, answer: number, fetchFn: FetchFn = fetch) {
+  return post<{ round: number; answer: number }>(
+    `/api/rooms/${encodeURIComponent(code)}/answer`,
+    { round, answer },
+    withToken(token, fetchFn),
   );
 }
 

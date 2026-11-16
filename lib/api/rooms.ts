@@ -25,17 +25,20 @@ import {
   type RoomStatus,
 } from "../db/rooms";
 import { listSongsWithPreview } from "../db/songs";
-import { nextRoundNumber, parseRoundInput } from "../game/answers";
+import { parseRoundInput } from "../game/answers";
 import {
+  FIRST_ROUND_DELAY_SECONDS,
   isRoomClosed,
   MIN_PLAYERS_TO_START,
   isRoundClosed,
   isTimeUp,
   isValidRoomCode,
+  nextRoundStartsAt,
   parseNickname,
   parseRoomAnswerInput,
   rankByScore,
   readBearerToken,
+  roundClosedAt,
   secondsLeft,
 } from "../game/rooms";
 import { buildReplacementRound, buildRounds, ROUNDS_PER_GAME } from "../game/rounds";
@@ -65,8 +68,6 @@ const ERRORS = {
   "log-in-needed": { status: 401, message: "Please log in to create a room." },
   "not-enough-players": { status: 409, message: "At least 2 players are needed to start." },
   "not-started": { status: 409, message: "The game has not started yet." },
-  "round-still-open": { status: 409, message: "The current round is still running." },
-  "game-finished": { status: 409, message: "The game is over – there are no more rounds." },
   "round-not-open": { status: 409, message: "This round is not open." },
   "too-late": { status: 409, message: "Too late – the time for this round is over." },
   "already-answered": { status: 409, message: "You have already answered this round." },
@@ -203,8 +204,9 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
 }
 
 // POST /api/rooms/[code]/start – the room creator starts the game ("Start now", at least 2 players): picks the
-// songs and builds the rounds with the same game core as the solo game. Returns the 5 clip addresses in round
-// order, so the creator's page can load the clips in advance. No titles, no answers, and not the game ID.
+// songs, builds the rounds with the same game core as the solo game and schedules round 1 to start 5 seconds
+// later (issue #33). From then on the server moves the game forward by itself. Returns the 5 clip addresses in
+// round order, so the creator's page can load the clips at once. No titles, no answers, and not the game ID.
 export async function startRoomGame(
   db: Db,
   code: string,
@@ -224,6 +226,8 @@ export async function startRoomGame(
   if (!built.ok) return fail("not-enough-songs");
 
   const gameId = await createGame(db, built.rounds);
+  // Round 1 is scheduled before the room counts as started, so a playing room always has a round coming.
+  await markRoundSent(db, gameId, 1, new Date(now().getTime() + FIRST_ROUND_DELAY_SECONDS * 1000));
   // Only succeeds if the room is still in the lobby – protects against two Start taps at once.
   if (!(await startRoom(db, room.id, gameId))) return fail("room-started");
 
@@ -243,22 +247,58 @@ async function loadRoomGame(db: Db, room: Room): Promise<RoomGame> {
   return { status: room.status, rounds: rounds ?? [], players, answers };
 }
 
-// There is no background timer (decision 008). Instead, every "state" and "next" request first brings the
-// game up to date:
-//   1. If a round is open and everyone has answered or the time is up, close it.
-//   2. If every round is closed, the room is finished.
-// Both steps only change something once in the database, so two requests at the same moment are harmless.
-async function bringUpToDate(db: Db, room: Room, game: RoomGame, now: Date): Promise<RoomGame> {
-  let { status, rounds } = game;
+// Has this round's start time come? A round in the database is "open" from the moment it is scheduled, but
+// it only starts at its start time.
+const hasStarted = (round: StoredRound, now: Date) =>
+  round.status !== "waiting" && round.startedAt !== null && round.startedAt.getTime() <= now.getTime();
 
-  const open = rounds.find((round) => round.status === "open");
-  if (open && open.startedAt !== null) {
-    const answeredCount = game.answers.filter((a) => a.roundNumber === open.roundNumber).length;
-    if (isRoundClosed({ startedAt: open.startedAt, answeredCount, playerCount: game.players.length }, now)) {
-      await closeRoomRound(db, room.gameId!, open.roundNumber, now);
-      rounds = rounds.map((round) => (round === open ? { ...round, status: "answered", answeredAt: now } : round));
+// There is no background timer (decision 008) and nobody taps Next (issue #33). Instead, every state request
+// first brings the game up to date, worked out from the stored times:
+// Looks at the first round that has not closed yet:
+//   - waiting (the round before it has closed): schedule it to start 8 seconds after that close.
+//   - open, started, and everyone has answered or its 15 seconds are over: close it at the moment it closed
+//     (the last answer, or the end of the 15 seconds).
+// Then it looks again: if nobody asked for a while, several rounds can be due at once. When every round is
+// closed, the room is finished.
+// Each step only changes something once in the database. If another request at the same moment already made
+// the change, this one reloads the game and uses the saved times, so every device hears the same start time.
+async function bringUpToDate(db: Db, room: Room, loaded: RoomGame, now: Date): Promise<RoomGame> {
+  let game = loaded;
+  let rounds = [...game.rounds];
+  const reload = async () => {
+    game = await loadRoomGame(db, room);
+    rounds = [...game.rounds];
+  };
+
+  // Repeats until nothing more is due ("for (;;)" = repeat until a "break").
+  for (;;) {
+    const index = rounds.findIndex((round) => round.status !== "answered");
+    if (index === -1) break;
+    const round = rounds[index];
+
+    if (round.status === "waiting") {
+      // Round 1 is scheduled by Start, so there is always a closed round before a waiting one here.
+      const previousClose = rounds[index - 1]?.answeredAt;
+      if (!previousClose) break;
+      const startsAt = nextRoundStartsAt(previousClose);
+      if (!(await markRoundSent(db, room.gameId!, round.roundNumber, startsAt))) await reload();
+      else rounds[index] = { ...round, status: "open", startedAt: startsAt };
+      continue;
     }
+
+    if (!hasStarted(round, now)) break; // scheduled, but its start time has not come yet
+    const startedAt = round.startedAt!;
+    const answerTimes = game.answers.filter((a) => a.roundNumber === round.roundNumber).map((a) => a.answeredAt);
+    const playerCount = game.players.length;
+    if (!isRoundClosed({ startedAt, answeredCount: answerTimes.length, playerCount }, now)) break;
+
+    const closedAt = roundClosedAt(startedAt, answerTimes, playerCount);
+    // false = another request closed it first, possibly having seen an answer this one had not: use its time.
+    if (!(await closeRoomRound(db, room.gameId!, round.roundNumber, closedAt))) await reload();
+    else rounds[index] = { ...round, status: "answered", answeredAt: closedAt };
   }
+
+  let { status } = game;
 
   const allClosed = rounds.length > 0 && rounds.every((round) => round.status === "answered");
   if (status === "playing" && allClosed) {
@@ -266,42 +306,6 @@ async function bringUpToDate(db: Db, room: Room, game: RoomGame, now: Date): Pro
     status = "finished";
   }
   return { ...game, status, rounds };
-}
-
-// POST /api/rooms/[code]/next – the room creator opens the next round. The server notes the time, and from then on
-// the players have 15 seconds. Sent without the correct answer.
-export async function openNextRound(
-  db: Db,
-  code: string,
-  authorization: string | null,
-  deps: Deps = {},
-): Promise<ApiResult> {
-  const now = deps.now ?? (() => new Date());
-  const found = await findRoomAsCreator(db, code, authorization, now());
-  if (!found.ok) return found.result;
-  const { room } = found;
-
-  if (room.status === "lobby") return fail("not-started");
-  const game = await bringUpToDate(db, room, await loadRoomGame(db, room), now());
-  if (game.status === "finished") return fail("game-finished");
-
-  const next = nextRoundNumber(game.rounds);
-  if (!next.ok) return fail(next.error);
-
-  // Only succeeds if the round is still waiting – protects against two "next" requests at once.
-  if (!(await markRoundSent(db, room.gameId!, next.roundNumber, now()))) return fail("round-still-open");
-
-  const round = game.rounds[next.roundNumber - 1];
-  return {
-    status: 200,
-    body: {
-      round: round.roundNumber,
-      totalRounds: game.rounds.length,
-      previewUrl: round.song.previewUrl,
-      options: round.options,
-      secondsLeft: ANSWER_TIME_SECONDS,
-    },
-  };
 }
 
 // POST /api/rooms/[code]/answer – a player answers the open round. The points are worked out and stored
@@ -330,7 +334,10 @@ export async function answerRoomRound(
   if (input.round > rounds.length) return fail("round-out-of-range");
 
   const round = rounds[input.round - 1];
-  if (round.status === "waiting" || round.startedAt === null) return fail("round-not-open");
+  const answeredAt = now();
+  // A round that is only scheduled does not take answers before its start time.
+  if (!hasStarted(round, answeredAt)) return fail("round-not-open");
+  const startedAt = round.startedAt!;
 
   // Why an answer does not count: this player already has one for this round, or the round is over.
   const whyNot = async (): Promise<ApiResult> => {
@@ -339,8 +346,7 @@ export async function answerRoomRound(
     return fail(hasAnswered ? "already-answered" : "too-late");
   };
 
-  const answeredAt = now();
-  if (round.status !== "open" || isTimeUp(round.startedAt, answeredAt)) return whyNot();
+  if (round.status !== "open" || isTimeUp(startedAt, answeredAt)) return whyNot();
 
   // Only saved if the round is still open and the player has no answer for it yet – so a second answer
   // cannot count, even at the same moment.
@@ -349,7 +355,7 @@ export async function answerRoomRound(
     roundNumber: round.roundNumber,
     playerId: player.id,
     chosenOption: input.answer,
-    points: scoreAnswer(input.answer === round.correctOption, round.startedAt, answeredAt),
+    points: scoreAnswer(input.answer === round.correctOption, startedAt, answeredAt),
     answeredAt,
   });
   if (!saved) return whyNot();
@@ -357,8 +363,17 @@ export async function answerRoomRound(
   return { status: 200, body: { round: round.roundNumber, answer: input.answer } };
 }
 
-// GET /api/rooms/[code] – the room as this viewer may see it. Every page asks for it every 1–2 seconds.
-// While a round is open, nobody gets the correct answer, the song or any points (decision 004).
+// GET /api/rooms/[code] – the room as this viewer may see it. Every page asks for it every 1–2 seconds, and the
+// request also moves the game forward (bringUpToDate). While a round is open or only scheduled, nobody gets the
+// correct answer, the song or any points (decision 004).
+//
+// For the game the reply has:
+//   serverNow   – the server's clock, so a device can work out how far its own clock is off
+//   previewUrls – the 5 clip addresses, for every player, so every device loads the clips in advance
+//   round       – the latest round that has started (open or closed), with the answer only once closed
+//   nextRound   – the round scheduled next: its number, start time and options; every device starts the
+//                 clip at that time
+//   standings   – every player's rank and score, counting closed rounds only
 export async function getRoomState(
   db: Db,
   code: string,
@@ -366,7 +381,8 @@ export async function getRoomState(
   deps: Deps = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
-  const found = await findOpenRoom(db, code, now());
+  const at = now(); // the moment every rule in this reply is checked against
+  const found = await findOpenRoom(db, code, at);
   if (!found.ok) return found.result;
   const { room } = found;
 
@@ -381,11 +397,13 @@ export async function getRoomState(
   const game: RoomGame =
     room.status === "lobby"
       ? { status: "lobby", rounds: [], players: await listPlayers(db, room.id), answers: [] }
-      : await bringUpToDate(db, room, await loadRoomGame(db, room), now());
+      : await bringUpToDate(db, room, await loadRoomGame(db, room), at);
 
-  // The round on screen: the latest one that was opened. null before the first "next".
-  const current = game.rounds.findLast((round) => round.status !== "waiting") ?? null;
+  // The round on screen: the latest one that has started. null before round 1's start time.
+  const current = game.rounds.findLast((round) => hasStarted(round, at)) ?? null;
   const isOpen = current?.status === "open";
+  // A round that is scheduled but has not started yet (at most one).
+  const upcoming = game.rounds.find((round) => round.status === "open" && !hasStarted(round, at)) ?? null;
   const currentAnswers = game.answers.filter((a) => a.roundNumber === current?.roundNumber);
 
   // Scores count closed rounds only. Otherwise a score that jumps during a round would give the answer away.
@@ -406,14 +424,25 @@ export async function getRoomState(
     role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
     totalRounds: game.rounds.length || ROUNDS_PER_GAME,
+    // Read again just before replying: the database calls above take time, and the device compares this with
+    // the moment the reply arrives.
+    serverNow: now().toISOString(),
+    // The clip addresses contain no titles.
+    previewUrls: room.status === "lobby" ? null : game.rounds.map((round) => round.song.previewUrl),
+    nextRound:
+      upcoming === null
+        ? null
+        : { number: upcoming.roundNumber, startsAt: upcoming.startedAt!.toISOString(), options: upcoming.options },
     round:
       current === null
         ? null
         : {
             number: current.roundNumber,
             status: isOpen ? "open" : "closed",
+            startsAt: current.startedAt!.toISOString(),
+            endsAt: new Date(current.startedAt!.getTime() + ANSWER_TIME_SECONDS * 1000).toISOString(),
             options: current.options,
-            secondsLeft: isOpen && current.startedAt !== null ? secondsLeft(current.startedAt, now()) : 0,
+            secondsLeft: isOpen ? secondsLeft(current.startedAt!, at) : 0,
             answeredCount: currentAnswers.length,
             // Only once the round has closed:
             ...(isOpen
@@ -442,12 +471,7 @@ export async function getRoomState(
     correct: revealed ? myAnswer?.chosenOption === current.correctOption : null,
     points: revealed ? (myAnswer?.points ?? 0) : null,
   };
-
-  if (isCreator) {
-    // The clip addresses let the creator's page load the clips in advance. They contain no titles.
-    body.previewUrls = room.status === "lobby" ? null : game.rounds.map((round) => round.song.previewUrl);
-    body.scoreboard = ranking.map(({ rank, nickname, score }) => ({ rank, nickname, score }));
-  }
+  body.standings = ranking.map(({ rank, nickname, score }) => ({ rank, nickname, score }));
   return { status: 200, body };
 }
 

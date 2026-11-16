@@ -282,9 +282,11 @@ describe("solo routes on a room game", () => {
 
   it("next returns 404 and opens no round", async () => {
     const gameId = await startedRoomGame();
+    // Start already scheduled round 1 (issue #33); the solo route must not change any round.
+    const before = await getGameRounds(db, gameId);
 
     expect(await sendNextRound(db, gameId, deps)).toEqual(notFound);
-    expect((await getGameRounds(db, gameId))!.every((round) => round.status === "waiting")).toBe(true);
+    expect(await getGameRounds(db, gameId)).toEqual(before);
   });
 
   it("answer returns 404 and stores nothing, even while the room's round is open", async () => {
