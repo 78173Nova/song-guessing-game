@@ -17,12 +17,14 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **Email-link tokens** are 32 random bytes; only their SHA-256 hash is stored in `email_tokens`, with a
   purpose (`verify` or `reset`) and an end time. A verification link lasts 24 hours, a reset link 1 hour.
 - **New accounts are not verified.** Signing up again with the email of an unverified account replaces it
-  (new username, password and link). A valid sign-up always gets the same reply, "Check your inbox to
+  (new username, password and link), unless that address got an email in the last minute: then nothing changes
+  and the old account and its link stay valid. A valid sign-up always gets the same reply, "Check your inbox to
   finish signing up".
 - **Email verification:** the email links to `/verify-email?token=…`. The page reads the token, removes it
   from the address bar and sends it to `POST /api/accounts/verify-email`, which marks the account verified.
   The link works once (`used_at`) and for 24 hours. Replies: verified (200), unknown link (404, also the
-  old link of a replaced pending account), already used or expired (410), each with its own message.
+  old link of a replaced pending account), already used or expired (400, error codes `link-used` and
+  `link-expired`), each with its own message. An expired link points to logging in and "Send the email again".
 - **Never reveal a registered email:** signing up with the email of a **verified** account creates nothing
   and sends that address a "You already have an account. Forgot your password?" email instead of a
   verification email. The page gets the same "Check your inbox" reply as every other valid sign-up.
@@ -45,14 +47,19 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   `POST /api/accounts/reset-password`. One query uses the link (once, within 1 hour), replaces the password hash,
   **ends every session of the account** and marks the email verified. A password that breaks the rule is refused
   before the link is used, so the person can try again. Link replies: changed (200), unknown (404, also a
-  verification link), used or expired (410), with messages that point to the forgot-password page.
-- **One email per minute:** each account has `last_email_sent_at`. `claimEmailSlot` sets it to now in one
-  query, only when it is empty or at least 60 seconds old (`EMAIL_THROTTLE_MS`); otherwise the request gets
-  429 "Please wait a minute before asking for another email". **Every** email to an address goes through it:
-  sign-up, "you already have an account", "Send the email again" and forgot password. Sign-up never answers 429
-  (that would reveal the email): when the slot is taken it gives the normal reply and sends nothing. A pending
-  account that is replaced passes its `last_email_sent_at` on to the new one, so signing up again does not
-  get around the limit.
+  verification link), used or expired (400 with `link-used` / `link-expired`), with messages that point to the
+  forgot-password page.
+- **One email per minute, per address:** the table `email_throttle` keeps, for every address that was asked
+  for (with or without an account), the time of its last email, keyed by the SHA-256 hash of the lowercase
+  address. `claimEmailSlot` sets it to now in one query, only when there is none yet or it is at least 60
+  seconds old (`EMAIL_THROTTLE_MS`); otherwise forgot password and "Send the email again" answer 429 "Please
+  wait a minute before asking for another email", for an unknown address the same as for a known one.
+  **Every** email goes through it: sign-up, "you already have an account", "Send the email again" and forgot
+  password. Sign-up never answers 429 (that would reveal the email): within the minute it changes nothing,
+  gives the normal reply and sends nothing.
+- **Request bodies are small:** a route refuses a body whose `Content-Length` is too big before reading it, and
+  stops reading once the body passes the limit, so a huge body is never held in memory. Both get the normal
+  400 "malformed" reply.
 - **Send the email again:** after "Verify your email first", the login page offers **"Send the email again"**
   (with an email box when the person logged in with a username). `POST /api/accounts/resend-verification`
   takes an email; an unverified account gets a new 24-hour link, and a verified account or an unknown address
@@ -87,7 +94,13 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   as verified too. One hour is short, because a reset link can take over the account.
 - **One email per minute:** without it, the forgot-password, resend and sign-up forms could flood a stranger's
   inbox and use up the daily email quota. One query takes the slot, so two requests at the same moment cannot
-  both send. One limit for all emails, so switching forms does not get around it.
+  both send. One limit for all emails, so switching forms does not get around it. Kept **per address, not per
+  account**, so "please wait" looks the same whether or not the address has an account. Only a hash is stored,
+  so the table holds no plain address of someone who never signed up.
+- **Signing up again within the minute changes nothing:** replacing the account would cancel the link that was
+  just sent, and no new link could be sent yet, so the person would be left with no working link.
+- **400 instead of 410 for used or expired links:** the spec lists the error statuses the app uses
+  (400/401/403/404/409/429/500); the error code still tells the page which case it is.
 - **Rules in the database:** they hold even if the code has a mistake, and they handle requests at the same moment.
 
 ## Alternatives
@@ -110,11 +123,13 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   guessing a password. scrypt makes each guess slow, and a lockout would let anyone lock a stranger out.
 - Sessions are not renewed while in use: after 30 days the person logs in again. Expired sessions stay in the
   table (no clean-up job); they no longer work.
-- **The 429 reveals a little:** forgot password answers an unknown email always with 200, but a known email
-  asked again within 60 seconds with 429. Someone who asks twice for the same address can tell it has an
-  account. Accepted: the spec asks for the "please wait" message, and it costs a minute per guess. "Send the email
-  again" works the same way for unverified accounts (the login form already says "Verify your email first" to
-  whoever knows the password).
+- ~~**The 429 reveals a little:** a known email asked again within 60 seconds got 429, an unknown one always
+  200.~~ Fixed (see the update below): the limit is per address, so both get 429.
+- **Someone can delay a sign-up:** asking for a reset or a new link for an address every minute keeps its email
+  slot taken, so signing up with it changes nothing and sends nothing until a minute passes without a request.
+- Two requests for the same address at the same moment: sign-up checks the slot, then takes it after saving the
+  account; if another email took it in between, the account is saved but no email is sent ("Send the email
+  again" a minute later helps).
 - Asking for a new reset link does not cancel older ones; each still works once until its hour is up.
 - Changing the password while logged in (without the email) is not built; use "Forgot password?".
 - "Looks like an email" does not prove the address exists; only opening the link does.
@@ -123,3 +138,8 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 ## How it could change
 - Brevo delivery (#25) extends `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
 - A login provider could later be linked to the same `users` table.
+
+Update 16 Nov 2026 (code review of #24–#29): the one-email-per-minute limit moved from `users.last_email_sent_at`
+(per account; the column is dropped) to the table `email_throttle` (per address, hashed), so the 429 no longer
+reveals whether an address has an account. Signing up again within the minute no longer replaces the pending
+account. Used and expired links answer 400 instead of 410. Routes cap the request body while reading it.

@@ -125,9 +125,10 @@ When a line below can be read two ways, choose the simpler option that keeps the
 ### Database
 | Table | Columns | Rules in the database |
 |---|---|---|
-| `users` | id (uuid), username, email, password_hash, email_verified_at (empty until verified), last_email_sent_at, created_at | username 3–20 characters, unique ignoring case; email stored lowercase, unique |
+| `users` | id (uuid), username, email, password_hash, email_verified_at (empty until verified), created_at | username 3–20 characters, unique ignoring case; email stored lowercase, unique |
 | `sessions` | token_hash, user_id, created_at, expires_at | token_hash = 64 hex characters, primary key; deleting a user deletes their sessions |
 | `email_tokens` | token_hash, user_id, purpose (`verify` / `reset`), expires_at, used_at | token_hash = 64 hex characters, primary key; deleting a user deletes their tokens |
+| `email_throttle` | email_hash, last_sent_at | email_hash = SHA-256 of the lowercase address (64 hex characters), primary key; one row per address asked for, with or without an account |
 
 - Rooms are not linked to users in this spec. Making "create room" require a login is part of the room pages
   (spec 002 steps 3–4), which will add the link.

@@ -26,4 +26,4 @@ Rules:
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
 | 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, database part built |
-| 014 | [Accounts](014-accounts.md) | started (sign-up built) |
+| 014 | [Accounts](014-accounts.md) | started (sign-up, verification, login, resend and password reset built; Brevo email #25 open) |
