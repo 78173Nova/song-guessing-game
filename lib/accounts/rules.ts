@@ -11,7 +11,7 @@ export const VERIFY_LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
 // A password reset link is valid for 1 hour.
 export const RESET_LINK_LIFETIME_MS = 60 * 60 * 1000;
 
-// At most one email per account every 60 seconds, so a form cannot be used to flood someone's inbox.
+// At most one email per address every 60 seconds, so a form cannot be used to flood someone's inbox.
 export const EMAIL_THROTTLE_MS = 60_000;
 
 // A login session lasts 30 days.
@@ -102,9 +102,9 @@ export function parseLoginInput(body: unknown): { ok: true; input: LoginInput } 
   return { ok: true, input: { by: "username", value, password } };
 }
 
-
-// Checks the forgot-password form: { email }. The email comes back lowercase.
-export function parseForgotPasswordInput(
+// Checks a form with only an email: { email } (forgot password, "Send the email again"). The email comes back
+// lowercase.
+export function parseEmailInput(
   body: unknown,
 ): { ok: true; email: string } | { ok: false; error: "malformed" | "invalid-email" } {
   if (typeof body !== "object" || body === null) return { ok: false, error: "malformed" };
@@ -115,7 +115,26 @@ export function parseForgotPasswordInput(
   return { ok: true, email: trimmed.toLowerCase() };
 }
 
-// Checks the new password from the reset page; the same 8–128 character rule as at sign-up.
-export function isValidNewPassword(password: unknown): password is string {
-  return typeof password === "string" && isValidPassword(password);
+// Link and session tokens are 43 characters; anything empty or much longer is not one of ours.
+const MAX_TOKEN_LENGTH = 200;
+
+export function looksLikeToken(token: unknown): token is string {
+  return typeof token === "string" && token.length > 0 && token.length <= MAX_TOKEN_LENGTH;
+}
+
+// Checks the body of the verify-email page: { token }.
+export function parseTokenInput(body: unknown): { ok: true; token: string } | { ok: false } {
+  const token = (body as { token?: unknown } | null)?.token;
+  return looksLikeToken(token) ? { ok: true, token } : { ok: false };
+}
+
+// Checks the reset page: { token, password }. The new password follows the same 8–128 character rule as at
+// sign-up.
+export function parseResetPasswordInput(
+  body: unknown,
+): { ok: true; token: string; password: string } | { ok: false; error: "malformed" | "invalid-password" } {
+  const { token, password } = (body ?? {}) as { token?: unknown; password?: unknown };
+  if (!looksLikeToken(token) || typeof password !== "string") return { ok: false, error: "malformed" };
+  if (!isValidPassword(password)) return { ok: false, error: "invalid-password" };
+  return { ok: true, token, password };
 }

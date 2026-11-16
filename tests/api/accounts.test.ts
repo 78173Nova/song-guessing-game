@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { forgotPassword, logIn, logOut, resendVerification, resetPassword, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
+import {
+  forgotPassword,
+  logIn,
+  logOut,
+  readRequestBody,
+  resendVerification,
+  resetPassword,
+  signUp,
+  verifyEmail,
+  whoIsLoggedIn,
+} from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import type { Email } from "@/lib/email/sender";
 import { createTestDb } from "../helpers/test-db";
@@ -143,6 +153,7 @@ describe("POST /api/accounts/signup – taken and replaced accounts", () => {
 
   it("frees the old username of a replaced pending account", async () => {
     await signup(valid);
+    later(MINUTE);
     await signup({ ...valid, username: "Anna_New" });
 
     expect(await signup({ ...valid, email: "other@example.com", username: "anna_99" })).toEqual(CHECK_INBOX);
@@ -250,8 +261,18 @@ describe("POST /api/accounts/verify-email – links that do not work", () => {
     await signup(valid);
     clock = new Date(clock.getTime() + 24 * HOUR + 1);
 
-    expect(await verify({ token: firstToken })).toEqual(linkError(410, "link-expired"));
+    expect(await verify({ token: firstToken })).toEqual(linkError(400, "link-expired"));
     expect(await verifiedAt()).toEqual([{ email_verified_at: null }]);
+  });
+
+  it("tells the person with an expired link to log in and ask for the email again, not to sign up again", async () => {
+    await signup(valid);
+    clock = new Date(clock.getTime() + 24 * HOUR + 1);
+
+    const { message } = (await verify({ token: firstToken })).body as { message: string };
+    expect(message).toContain("log in");
+    expect(message).toContain("Send the email again");
+    expect(message).not.toContain("sign up");
   });
 
   it("works only once: the second click says the link was already used", async () => {
@@ -259,7 +280,7 @@ describe("POST /api/accounts/verify-email – links that do not work", () => {
     await verify({ token: firstToken });
     clock = new Date(clock.getTime() + HOUR);
 
-    expect(await verify({ token: firstToken })).toEqual(linkError(410, "link-used"));
+    expect(await verify({ token: firstToken })).toEqual(linkError(400, "link-used"));
     // Still verified at the time of the first click.
     expect(await verifiedAt()).toEqual([{ email_verified_at: new Date("2026-11-16T12:00:00.000Z") }]);
   });
@@ -269,7 +290,7 @@ describe("POST /api/accounts/verify-email – links that do not work", () => {
 
     const results = await Promise.all([verify({ token: firstToken }), verify({ token: firstToken })]);
 
-    expect(results.map((r) => r.status).sort()).toEqual([200, 410]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
   });
 
   it("refuses an unknown token", async () => {
@@ -281,6 +302,7 @@ describe("POST /api/accounts/verify-email – links that do not work", () => {
 
   it("refuses the old link of a pending account that signed up again", async () => {
     await signup(valid);
+    later(MINUTE);
     await signup({ ...valid, username: "Anna_New" });
 
     expect(await verify({ token: firstToken })).toEqual(linkError(404, "link-unknown"));
@@ -620,18 +642,47 @@ describe("At most one email per address per minute", () => {
     expect(await db.query("SELECT token_hash FROM email_tokens")).toHaveLength(1);
   });
 
-  it("counts a replaced pending account: signing up again within 60 seconds replaces it but sends nothing", async () => {
+  it("limits an unknown address and a verified account like an unverified one, so the reply does not reveal an account", async () => {
+    await verifiedAccount();
+    later(MINUTE);
+    sent = [];
+
+    expect(await resend({ email: "nobody@example.com" })).toEqual(RESENT);
+    expect(await resend({ email: "anna@example.com" })).toEqual(RESENT);
+    later(59 * SECOND);
+    expect(await resend({ email: "nobody@example.com" })).toEqual(TOO_SOON);
+    expect(await resend({ email: "anna@example.com" })).toEqual(TOO_SOON);
+    later(1 * SECOND);
+    expect(await resend({ email: "nobody@example.com" })).toEqual(RESENT);
+    expect(sent).toEqual([]);
+  });
+
+  it("keeps a pending account and its link when its email signs up again within 60 seconds, and sends nothing", async () => {
     await signup(valid);
     sent = [];
 
     later(59 * SECOND);
-    expect(await signup({ ...valid, username: "Anna_New" })).toEqual(CHECK_INBOX);
+    expect(await signup({ ...valid, username: "Anna_New", password: "another secret" })).toEqual(CHECK_INBOX);
     expect(sent).toEqual([]);
-    expect(await db.query("SELECT username FROM users")).toEqual([{ username: "Anna_New" }]);
+    expect(await db.query("SELECT username FROM users")).toEqual([{ username: "Anna_99" }]);
+    expect(await db.query("SELECT purpose FROM email_tokens")).toEqual([{ purpose: "verify" }]);
 
     later(1 * SECOND);
     expect(await resend({ email: valid.email })).toEqual(RESENT);
     expect(sent).toHaveLength(1);
+    // The first link still works, and the account keeps its first password.
+    expect((await verify({ token: firstToken })).status).toBe(200);
+    expect((await login({ login: "Anna_99", password: valid.password })).status).toBe(200);
+  });
+
+  it("keeps a pending account when its email signs up again with the same username within 60 seconds", async () => {
+    await signup(valid);
+    sent = [];
+
+    later(59 * SECOND);
+    expect(await signup(valid)).toEqual(CHECK_INBOX);
+    expect(sent).toEqual([]);
+    expect((await verify({ token: firstToken })).status).toBe(200);
   });
 
   it("counts the 'you already have an account' email: within 60 seconds of the last email it is not sent", async () => {
@@ -698,9 +749,22 @@ describe("POST /api/accounts/forgot-password – one email per minute and input 
     expect(sent).toEqual([]);
   });
 
-  it("never limits an unknown address", async () => {
+  it("limits an unknown address the same way as a known one, so the reply does not reveal an account", async () => {
     expect(await forgot({ email: "nobody@example.com" })).toEqual(IF_EXISTS);
+    clock = new Date(clock.getTime() + MINUTE - 1);
+    expect(await forgot({ email: "NOBODY@example.com" })).toEqual(TOO_SOON);
+    clock = new Date(clock.getTime() + 1);
     expect(await forgot({ email: "nobody@example.com" })).toEqual(IF_EXISTS);
+    expect(sent).toEqual([]);
+  });
+
+  it("stores no plain address for an unknown email, only the SHA-256 hash of the lowercase address", async () => {
+    await forgot({ email: "Nobody@Example.com" });
+
+    const text = JSON.stringify(await db.query("SELECT * FROM email_throttle"));
+    expect(text).not.toContain("nobody");
+    // SHA-256 of "nobody@example.com", worked out independently (`printf %s nobody@example.com | sha256sum`).
+    expect(text).toContain("e788ea2014693dcdb86767aceb3860a432fc626c6477a6c53016aff40726842b");
   });
 
   it("rejects a missing, non-text or invalid email and bad JSON", async () => {
@@ -804,7 +868,7 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
 
     const result = await reset({ token: resetToken, password: NEW_PASSWORD });
 
-    expect(result).toEqual(linkError(410, "link-expired"));
+    expect(result).toEqual(linkError(400, "link-expired"));
     expect(result.body.message).toContain("Forgot password");
     expect(await passwordHash()).toBe(before);
     expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
@@ -814,7 +878,7 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
     await loggedInTwiceAndAskedForReset();
     await reset({ token: resetToken, password: NEW_PASSWORD });
 
-    expect(await reset({ token: resetToken, password: "a different secret" })).toEqual(linkError(410, "link-used"));
+    expect(await reset({ token: resetToken, password: "a different secret" })).toEqual(linkError(400, "link-used"));
     expect((await login({ login: "Anna_99", password: NEW_PASSWORD })).status).toBe(200);
   });
 
@@ -826,7 +890,7 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
       reset({ token: resetToken, password: NEW_PASSWORD }),
     ]);
 
-    expect(results.map((r) => r.status).sort()).toEqual([200, 410]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
   });
 
   it("refuses an unknown token, and a verification link used as a reset link", async () => {
@@ -875,5 +939,46 @@ describe("POST /api/accounts/reset-password – links and passwords that do not 
     expect(bodies).not.toContain(NEW_PASSWORD);
     expect(bodies).not.toContain("scrypt");
     expect(bodies).not.toContain("token-");
+  });
+});
+
+describe("Reading a request body", () => {
+  const post = (body: BodyInit, headers: Record<string, string> = {}) =>
+    new Request("http://localhost/api/accounts/signup", { method: "POST", body, headers, duplex: "half" } as RequestInit);
+
+  // A body that would never end: the reader must stop on its own.
+  function endlessStream(onPull: () => void): ReadableStream<Uint8Array> {
+    return new ReadableStream({
+      pull(controller) {
+        onPull();
+        controller.enqueue(new TextEncoder().encode("x".repeat(1000)));
+      },
+    });
+  }
+
+  it("returns a small body as text, including characters outside English", async () => {
+    expect(await readRequestBody(post(JSON.stringify({ username: "Zoë 🎵" })))).toBe('{"username":"Zoë 🎵"}');
+  });
+
+  it("refuses a body whose Content-Length is too big without reading it", async () => {
+    let pulls = 0;
+    const request = post(endlessStream(() => pulls++), { "content-length": "1000000" });
+
+    expect(await readRequestBody(request)).toBeNull();
+    expect(pulls).toBeLessThanOrEqual(1);
+  });
+
+  it("stops reading a body without Content-Length once it is too big", async () => {
+    let pulls = 0;
+
+    expect(await readRequestBody(post(endlessStream(() => pulls++)))).toBeNull();
+    expect(pulls).toBeLessThan(20);
+  });
+
+  it("gives the normal 400 reply for a body that was refused", async () => {
+    expect(await signUp(db, null, deps)).toEqual({
+      status: 400,
+      body: { error: "malformed", message: expect.any(String) },
+    });
   });
 });

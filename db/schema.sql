@@ -95,7 +95,6 @@ CREATE TABLE IF NOT EXISTS room_answers (
 -- ---------------------------------------------------------------------------------------------
 
 -- One row per account. email_verified_at stays empty until the link in the verification email is opened.
--- last_email_sent_at is when this address last got an email from us (for the one-email-per-minute limit).
 CREATE TABLE IF NOT EXISTS users (
   id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   username           text        NOT NULL CHECK (username ~ '^[A-Za-z0-9_]{3,20}$'),  -- shown as typed
@@ -103,9 +102,12 @@ CREATE TABLE IF NOT EXISTS users (
                                  CHECK (email = lower(email) AND char_length(email) <= 254 AND email LIKE '%@%'),
   password_hash      text        NOT NULL CHECK (password_hash LIKE 'scrypt$%'),
   email_verified_at  timestamptz,
-  last_email_sent_at timestamptz,
   created_at         timestamptz NOT NULL DEFAULT now()
 );
+
+-- The one-email-per-minute limit moved to email_throttle (below). Removes the old column from databases that
+-- already have it.
+ALTER TABLE users DROP COLUMN IF EXISTS last_email_sent_at;
 
 -- A username may only exist once, ignoring upper/lower case ("Jasper" = "jasper").
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (lower(username));
@@ -132,3 +134,11 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- Finds every session of one account quickly (log out everywhere after a password reset).
 CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions (user_id);
+
+-- When an email address last got an email from us, for the one-email-per-minute limit (decision 014).
+-- One row per address that was asked for, with or without an account. Only the SHA-256 hash of the lowercase
+-- address is stored, so this table holds no plain address of someone who has no account.
+CREATE TABLE IF NOT EXISTS email_throttle (
+  email_hash   text        PRIMARY KEY CHECK (email_hash ~ '^[0-9a-f]{64}$'),
+  last_sent_at timestamptz NOT NULL
+);
