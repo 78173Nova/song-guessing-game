@@ -7,8 +7,11 @@ import {
   createToken,
   hashPassword,
   isValidEmail,
+  isValidNewPassword,
+  parseForgotPasswordInput,
   parseLoginInput,
   parseSignupInput,
+  RESET_LINK_LIFETIME_MS,
   SESSION_LIFETIME_MS,
   VERIFY_LINK_LIFETIME_MS,
 } from "../accounts/rules";
@@ -16,15 +19,23 @@ import type { TransactionDb } from "../db/client";
 import {
   claimEmailSlot,
   createPendingAccount,
+  createResetToken,
   createSession,
   createVerifyToken,
   deleteSession,
   findAccountForLogin,
   findSessionUsername,
   findUnverifiedUserId,
+  redeemResetToken,
   redeemVerifyToken,
 } from "../db/accounts";
-import { alreadyHaveAccountMessage, appUrl, linkWithToken, verifyEmailMessage } from "../email/messages";
+import {
+  alreadyHaveAccountMessage,
+  appUrl,
+  linkWithToken,
+  resetPasswordMessage,
+  verifyEmailMessage,
+} from "../email/messages";
 import { getEmailSender, type EmailSender } from "../email/sender";
 
 // setCookie is the value of a Set-Cookie header for the route to send (log in, log out). It is the only place a
@@ -54,10 +65,10 @@ const ERRORS = {
   "username-taken": { status: 409, message: "This username is taken" },
   "wrong-login": { status: 401, message: "Wrong username/email or password" },
   "not-verified": { status: 403, message: "Verify your email first" },
-  "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
   "link-unknown": { status: 404, message: "This link is not valid. Please use the newest link we sent you." },
   "link-used": { status: 410, message: "This link was already used. If your email is verified, you can log in." },
   "link-expired": { status: 410, message: "This link has expired. Please sign up again to get a new one." },
+  "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
 
@@ -243,4 +254,64 @@ export async function whoIsLoggedIn(
 export async function logOut(db: TransactionDb, sessionToken: string | undefined): Promise<ApiResult> {
   if (sessionToken && sessionToken.length <= MAX_TOKEN_LENGTH) await deleteSession(db, sessionToken);
   return { status: 200, body: { username: null }, setCookie: sessionCookie("", 0) };
+}
+
+const IF_EXISTS_MESSAGE = "If an account exists for that address, we sent an email";
+
+// POST /api/accounts/forgot-password – { email } → sends a reset link if an account has that email.
+// A known and an unknown email get the same reply, so the page never reveals whether an email is registered.
+// Only a known email asked again within a minute gets "please wait" (spec 004, issue #29).
+export async function forgotPassword(db: TransactionDb, rawBody: string, deps: AccountDeps = {}): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+  const sendEmail = deps.sendEmail ?? getEmailSender();
+  const makeToken = deps.makeToken ?? createToken;
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const parsed = parseForgotPasswordInput(json.body);
+  if (!parsed.ok) return fail(parsed.error);
+
+  const account = await findAccountForLogin(db, "email", parsed.email);
+  if (!account) return { status: 200, body: { message: IF_EXISTS_MESSAGE } };
+  if (!(await claimEmailSlot(db, account.id, now))) return fail("too-soon");
+
+  const resetToken = makeToken();
+  await createResetToken(db, {
+    userId: account.id,
+    token: resetToken,
+    expiresAt: new Date(now.getTime() + RESET_LINK_LIFETIME_MS),
+  });
+  // Delivery problems are handled with the real email service (issue #25).
+  await sendEmail(resetPasswordMessage(parsed.email, linkWithToken("/reset-password", resetToken)));
+  return { status: 200, body: { message: IF_EXISTS_MESSAGE } };
+}
+
+const PASSWORD_CHANGED_MESSAGE = "Your password is changed – you can log in now";
+
+// The reset page's own messages for links that do not work (the verify messages talk about signing up).
+const RESET_LINK_MESSAGES = {
+  "link-unknown": "This link is not valid. Please use the newest link we sent you.",
+  "link-used": "This link was already used. Ask for a new one on the Forgot password page if you need it.",
+  "link-expired": "This link has expired. Please ask for a new one on the Forgot password page.",
+} as const;
+
+// POST /api/accounts/reset-password – { token, password } → replaces the password, ends every session of the
+// account and marks its email verified. A password that breaks the 8–128 rule is refused before the link is
+// used, so the person can try again with the same link.
+export async function resetPassword(db: TransactionDb, rawBody: string, deps: AccountDeps = {}): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const { token, password } = (json.body ?? {}) as { token?: unknown; password?: unknown };
+  if (typeof token !== "string" || token.length === 0 || token.length > MAX_TOKEN_LENGTH) return fail("malformed");
+  if (typeof password !== "string") return fail("malformed");
+  if (!isValidNewPassword(password)) return fail("invalid-password");
+
+  const result = await redeemResetToken(db, { token, passwordHash: await hashPassword(password), now });
+  if (!result.ok) {
+    const error = `link-${result.reason}` as const;
+    return { status: ERRORS[error].status, body: { error, message: RESET_LINK_MESSAGES[error] } };
+  }
+  return { status: 200, body: { message: PASSWORD_CHANGED_MESSAGE } };
 }

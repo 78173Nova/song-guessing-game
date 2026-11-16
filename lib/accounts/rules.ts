@@ -8,8 +8,10 @@ const scrypt = promisify(scryptCallback) as (password: string, salt: Buffer, key
 // A verification link is valid for 24 hours.
 export const VERIFY_LINK_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
-// At most one email per address per 60 seconds (sign-up, resend, reset), to protect inboxes and the daily
-// email quota.
+// A password reset link is valid for 1 hour.
+export const RESET_LINK_LIFETIME_MS = 60 * 60 * 1000;
+
+// At most one email per account every 60 seconds, so a form cannot be used to flood someone's inbox.
 export const EMAIL_THROTTLE_MS = 60_000;
 
 // A login session lasts 30 days.
@@ -100,3 +102,20 @@ export function parseLoginInput(body: unknown): { ok: true; input: LoginInput } 
   return { ok: true, input: { by: "username", value, password } };
 }
 
+
+// Checks the forgot-password form: { email }. The email comes back lowercase.
+export function parseForgotPasswordInput(
+  body: unknown,
+): { ok: true; email: string } | { ok: false; error: "malformed" | "invalid-email" } {
+  if (typeof body !== "object" || body === null) return { ok: false, error: "malformed" };
+  const { email } = body as Record<string, unknown>;
+  if (typeof email !== "string") return { ok: false, error: "malformed" };
+  const trimmed = email.trim();
+  if (!isValidEmail(trimmed)) return { ok: false, error: "invalid-email" };
+  return { ok: true, email: trimmed.toLowerCase() };
+}
+
+// Checks the new password from the reset page; the same 8–128 character rule as at sign-up.
+export function isValidNewPassword(password: unknown): password is string {
+  return typeof password === "string" && isValidPassword(password);
+}

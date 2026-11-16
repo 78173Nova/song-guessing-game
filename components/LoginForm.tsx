@@ -73,6 +73,9 @@ export default function LoginForm() {
         onChange={(event) => setPassword(event.target.value)}
         required
       />
+      <p className={styles.hint}>
+        <Link href="/forgot-password">Forgot password?</Link>
+      </p>
 
       <p className={styles.error} role="alert">
         {error}
