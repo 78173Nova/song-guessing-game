@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import ComingSoon from "@/components/ComingSoon";
-import { parseRoomCode } from "@/lib/client/room-code";
+import { parseRoomCode, ROOM_CODE_RULE } from "@/lib/client/room-code";
 
 export const metadata = { title: "Join a room · Song Guessing Game" };
 
@@ -19,7 +19,7 @@ async function RoomPlaceholder({ params }: { params: Promise<{ code: string }> }
   const { code } = await params;
 
   if (parseRoomCode(code) === null) {
-    return <ComingSoon title="That is not a room code" text="Room codes are 6 digits and never start with 0." />;
+    return <ComingSoon title="That is not a room code" text={ROOM_CODE_RULE} />;
   }
   return <ComingSoon title={`Room ${code}`} text="Rooms are coming soon. For now, try a solo game." />;
 }

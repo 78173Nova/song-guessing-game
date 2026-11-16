@@ -33,7 +33,7 @@ export default function Home() {
 
         <RoomCodeForm />
 
-        <Link href="/solo" className={styles.soloLink}>
+        <Link href="/solo" className={styles.textLink}>
           Play solo →
         </Link>
       </main>

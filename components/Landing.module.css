@@ -78,7 +78,7 @@
 .primary:focus-visible,
 .secondary:focus-visible,
 .codeInput:focus-visible,
-.soloLink:focus-visible {
+.textLink:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
@@ -124,7 +124,7 @@
   color: var(--bad);
 }
 
-.soloLink {
+.textLink {
   align-self: center;
   font-weight: 600;
   color: var(--accent);

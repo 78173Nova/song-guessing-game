@@ -8,7 +8,7 @@ export default function ComingSoon({ title, text }: { title: string; text: strin
       <main className={styles.card}>
         <h1 className={styles.title}>{title}</h1>
         <p className={styles.pitch}>{text}</p>
-        <Link href="/" className={styles.soloLink}>
+        <Link href="/" className={styles.textLink}>
           ← Back to the front page
         </Link>
       </main>

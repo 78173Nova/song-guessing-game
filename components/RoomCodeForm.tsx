@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { parseRoomCode } from "@/lib/client/room-code";
+import { parseRoomCode, ROOM_CODE_RULE } from "@/lib/client/room-code";
 import styles from "./Landing.module.css";
 
 // The room code box on the landing page: checks the format, then opens /join/<code>.
@@ -15,7 +15,7 @@ export default function RoomCodeForm() {
     event.preventDefault();
     const code = parseRoomCode(input);
     if (code === null) {
-      setError("Room codes are 6 digits and never start with 0");
+      setError(ROOM_CODE_RULE);
       return;
     }
     setError("");

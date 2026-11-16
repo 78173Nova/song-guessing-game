@@ -22,8 +22,9 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] One card: the game's name, a one-line pitch, and 3 short points about what the game does
       (hear a clip, guess fast, play alone or with friends in a room)
 - [ ] **Log in** and **Sign up** buttons. When logged in, these become "Logged in as **<username>**" and **Log out**
-- [ ] Below them: a **room code** box and an **Enter** button. Enter checks that the code is exactly 6 digits
-      (otherwise "Room codes are 6 digits") and goes to `/join/<code>`
+- [ ] Below them: a **room code** box and an **Enter** button. Enter checks that the code is exactly 6 digits,
+      not starting with 0 like every real room code (otherwise "Room codes are 6 digits and never start with 0"),
+      and goes to `/join/<code>`. The join page checks the code again, because anyone can type an address by hand
 - [ ] A **Play solo** link. The solo game moves from `/` to `/solo`, unchanged, and needs no account
 - [ ] `/join/<code>` shows "Rooms are coming soon" until the room pages (spec 002) are built
 - [ ] Usable on a phone-sized screen; the iTunes credit stays on `/solo`
@@ -152,7 +153,8 @@ Three seams, agreed on 15 Nov 2026. Almost everything is tested through the firs
 - [ ] **Seam 2 – `lib/email/`** with a fake `fetch`, like `tests/music/itunes.test.ts`: sent, Brevo error code,
       timeout, network error; links use `APP_URL`, then `VERCEL_URL`, then localhost; no key in development →
       printed, no key on Vercel → error
-- [ ] **Seam 3 – `lib/client/`:** room code check on the landing page (6 digits, letters, 5 or 7 digits, spaces trimmed)
+- [ ] **Seam 3 – `lib/client/`:** room code check on the landing page (6 digits, letters, 5 or 7 digits, spaces trimmed,
+      a space inside, full-width digits, a leading 0)
 - [ ] Pages are checked by hand on the Vercel preview (see "Done when"), like the solo screens
 - [ ] No test calls the real Brevo API or the real Neon database
 
