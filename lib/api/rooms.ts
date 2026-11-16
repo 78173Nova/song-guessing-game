@@ -12,7 +12,7 @@ import {
   closeRoomRound,
   createRoom,
   findPlayerByToken,
-  findRoomByHostToken,
+  findRoomByCreatorToken,
   finishRoom,
   getRoomByCode,
   listPlayers,
@@ -113,7 +113,7 @@ async function findRoomAsCreator(
   const found = await findOpenRoom(db, code, now);
   if (!found.ok) return found;
   const token = readBearerToken(authorization);
-  if (token === null || (await findRoomByHostToken(db, code, token)) === null) {
+  if (token === null || (await findRoomByCreatorToken(db, code, token)) === null) {
     return { ok: false, result: fail("wrong-token") };
   }
   return found;
@@ -373,8 +373,10 @@ export async function getRoomState(
   // The token decides who is asking: one of this room's players, and whether it is the room creator.
   const token = readBearerToken(authorization);
   const me = token === null ? null : await findPlayerByToken(db, room.id, token);
-  if (token === null || me === null) return fail("wrong-token");
-  const isCreator = (await findRoomByHostToken(db, code, token)) !== null;
+  // Someone without a seat can only join in the lobby. Once the game has started, say so, so the room page
+  // does not offer a nickname form that can only be refused.
+  if (token === null || me === null) return fail(room.status === "lobby" ? "wrong-token" : "room-started");
+  const isCreator = (await findRoomByCreatorToken(db, code, token)) !== null;
 
   const game: RoomGame =
     room.status === "lobby"

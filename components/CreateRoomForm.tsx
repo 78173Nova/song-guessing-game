@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiWhoIsLoggedIn } from "@/lib/client/account-api";
 import { apiCreateRoom, saveRoomToken } from "@/lib/client/room-api";
+import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import styles from "./Landing.module.css";
 
 // "Create a room": an account holder picks a nickname and becomes the room creator, a player like everyone else.
@@ -50,7 +51,7 @@ export default function CreateRoomForm() {
         id="create-nickname"
         className={styles.textInput}
         autoComplete="nickname"
-        maxLength={20}
+        maxLength={NICKNAME_MAX_LENGTH}
         value={nickname}
         onChange={(event) => setNickname(event.target.value)}
         required

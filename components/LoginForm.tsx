@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiLogIn, apiResendVerification } from "@/lib/client/account-api";
-import { safeNextPath } from "@/lib/client/next-path";
+import { rememberNextPath, takeNextPath } from "@/lib/client/next-path";
 import styles from "./Landing.module.css";
 
 // The login form: username or email, and password. The server checks everything and sets the session cookie;
@@ -21,6 +21,11 @@ export default function LoginForm() {
   const [resendNote, setResendNote] = useState("");
   const [resending, setResending] = useState(false);
 
+  // Remember ?next= in case the person signs up first: the address loses it on the way through the email.
+  useEffect(() => {
+    rememberNextPath(new URLSearchParams(window.location.search).get("next"));
+  }, []);
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSending(true);
@@ -28,9 +33,9 @@ export default function LoginForm() {
     setResendNote("");
     const result = await apiLogIn({ login: login.trim(), password });
     if (result.ok) {
-      // Back to where the person came from (e.g. /login?next=/create from "Create a room"), but only to a page
-      // on this site.
-      router.push(safeNextPath(new URLSearchParams(window.location.search).get("next")));
+      // Back to where the person came from (e.g. /login?next=/create from "Create a room", also after signing
+      // up first), but only to a page on this site.
+      router.push(takeNextPath(new URLSearchParams(window.location.search).get("next")));
       return;
     }
     setSending(false);

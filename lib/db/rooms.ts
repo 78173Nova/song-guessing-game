@@ -9,12 +9,12 @@ export const MAX_PLAYERS = 25;
 
 export type RoomStatus = "lobby" | "playing" | "finished";
 
-// What the rest of the app may know about a room. The host token hash never leaves this file.
+// What the rest of the app may know about a room. The room creator's token hash never leaves this file.
 export type Room = {
   id: string;
   code: string;
   status: RoomStatus;
-  gameId: string | null; // empty until the host starts the game
+  gameId: string | null; // empty until the room creator starts the game
   createdAt: Date; // the room expires 3 hours after this (rule in lib/game/rooms.ts)
 };
 
@@ -110,11 +110,11 @@ export async function getRoomByCode(db: Db, code: string): Promise<Room | null> 
   return rows.length === 1 ? toRoom(rows[0]) : null;
 }
 
-// The room with this code, but only if the token is its host token. null = unknown room or wrong token.
-export async function findRoomByHostToken(db: Db, code: string, hostToken: string): Promise<Room | null> {
+// The room with this code, but only if the token is its room creator's token. null = unknown room or wrong token.
+export async function findRoomByCreatorToken(db: Db, code: string, creatorToken: string): Promise<Room | null> {
   const rows = await db.query<RoomRow>(
     `SELECT ${ROOM_COLUMNS} FROM rooms WHERE code = $1 AND host_token_hash = $2`,
-    [code, hashToken(hostToken)],
+    [code, hashToken(creatorToken)],
   );
   return rows.length === 1 ? toRoom(rows[0]) : null;
 }

@@ -909,6 +909,17 @@ describe("GET /api/rooms/[code] – room state", () => {
     }
   });
 
+  it("tells a visitor without a seat that the game has started, so the link does not offer the nickname form", async () => {
+    const room = await startedRoom("Anna", "Ben");
+
+    for (const token of [null, "f".repeat(64)]) {
+      expect(await state(room.code, token)).toEqual({
+        status: 409,
+        body: { error: "room-started", message: "This game has already started." },
+      });
+    }
+  });
+
   it("rejects an unknown room with 404", async () => {
     const room = await newRoom();
     expect(await state("999999", room.creatorToken)).toMatchObject({ status: 404, body: { error: "room-not-found" } });

@@ -7,7 +7,7 @@ import {
   closeRoomRound,
   createRoom,
   findPlayerByToken,
-  findRoomByHostToken,
+  findRoomByCreatorToken,
   finishRoom,
   getRoomByCode,
   hashToken,
@@ -228,8 +228,8 @@ describe("createRoom and lookups", () => {
     const second = await createRoom(db, { code: "482913", creatorToken: "second-creator", nickname: "Max", now: LATER });
 
     expect(second).toBeNull();
-    expect(await findRoomByHostToken(db, "482913", "first-creator")).toEqual(first);
-    expect(await findRoomByHostToken(db, "482913", "second-creator")).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "first-creator")).toEqual(first);
+    expect(await findRoomByCreatorToken(db, "482913", "second-creator")).toBeNull();
     expect((await listPlayers(db, first.id)).map((p) => p.nickname)).toEqual([CREATOR]);
   });
 
@@ -239,16 +239,16 @@ describe("createRoom and lookups", () => {
     expect(await getRoomByCode(db, "999999")).toBeNull();
   });
 
-  it("findRoomByHostToken only accepts this room's creator token", async () => {
+  it("findRoomByCreatorToken only accepts this room's creator token", async () => {
     const room = await newRoom("482913", "creator-a");
     await newRoom("482914", "creator-b");
     await joined(room.id, "Anna", "anna-token");
 
-    expect(await findRoomByHostToken(db, "482913", "creator-a")).toEqual(room);
-    expect(await findRoomByHostToken(db, "482913", "wrong")).toBeNull();
-    expect(await findRoomByHostToken(db, "482913", "anna-token")).toBeNull(); // another player is not the creator
-    expect(await findRoomByHostToken(db, "482913", "creator-b")).toBeNull(); // creator of another room
-    expect(await findRoomByHostToken(db, "999999", "creator-a")).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "creator-a")).toEqual(room);
+    expect(await findRoomByCreatorToken(db, "482913", "wrong")).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "anna-token")).toBeNull(); // another player is not the creator
+    expect(await findRoomByCreatorToken(db, "482913", "creator-b")).toBeNull(); // creator of another room
+    expect(await findRoomByCreatorToken(db, "999999", "creator-a")).toBeNull();
   });
 });
 

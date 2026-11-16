@@ -155,13 +155,16 @@ all replies and errors is in `specs/002-room-core.md` ("Routes").
   after it was created in any case (`isRoomClosed`, was `isRoomExpired`). Both are worked out from
   `created_at` and the room's status on every request – still no background job. A closed room's link or
   code shows "This room has closed": the state route answers 404/409 before it looks at the token, so the
-  room page can say so before anyone types a nickname.
+  room page can say so before anyone types a nickname. In the same way, someone without a seat in a started
+  room gets 409 "This game has already started" instead of 403, so the page does not offer a nickname form.
 - **Fixed settings for now:** Multiplayer, title mode, any genre and decade, one set of 5 rounds. Room
   settings come in a later ticket.
 - **The token in the browser** lives in `sessionStorage`, one per room code: it survives a reload of the tab,
   and a second tab can join as a second player.
 - **After logging in** the login page goes to `?next=` (e.g. back to "Create a room"), but only to a plain path
-  on this site (`safeNextPath`), so our login page cannot be used to send people to another site.
+  on this site (`safeNextPath`), so our login page cannot be used to send people to another site. The login
+  page also remembers `next` in `localStorage` and uses it once on the next login, so a guest who signs up
+  first (the verification email often opens a new tab) still comes back to "Create a room".
 
 ### Why
 - **The creator plays:** the reworked rooms are played by everyone on their own device; nobody only runs the

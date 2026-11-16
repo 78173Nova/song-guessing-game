@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import {
   apiJoinRoom,
   apiRoomState,
@@ -15,7 +16,6 @@ import styles from "./Landing.module.css";
 
 // How often the lobby asks the server for news (polling, decision 008).
 const POLL_MS = 1500;
-const MIN_PLAYERS_TO_START = 2; // the server checks this too
 
 // What the page shows.
 type Screen =
@@ -35,14 +35,23 @@ export default function Room({ code }: { code: string }) {
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState(""); // e.g. "can't reach the server" while polling
 
+  // Numbers each state request. Requests can overlap on a slow connection; only the newest answer counts, so
+  // an old "lobby" answer arriving late cannot put a started room back into the lobby.
+  const latestRequest = useRef(0);
+
   // Asks the server for the room and turns the answer into a screen.
   const refresh = useCallback(
     async (currentToken: string | null) => {
+      const request = ++latestRequest.current;
       const result = await apiRoomState(code, currentToken);
+      if (request !== latestRequest.current) return; // a newer request was sent meanwhile
       if (result.ok) {
         setNote("");
         const { state } = result;
-        setScreen(state.status === "lobby" ? { kind: "lobby", state } : { kind: "started", state });
+        // A started game never goes back to the lobby.
+        setScreen((previous) =>
+          state.status === "lobby" && previous.kind !== "started" ? { kind: "lobby", state } : { kind: "started", state },
+        );
         return;
       }
       if (result.reason === "gone") setScreen({ kind: "gone", message: result.message });
@@ -124,7 +133,7 @@ export default function Room({ code }: { code: string }) {
           id="join-nickname"
           className={styles.textInput}
           autoComplete="nickname"
-          maxLength={20}
+          maxLength={NICKNAME_MAX_LENGTH}
           value={nickname}
           onChange={(event) => setNickname(event.target.value)}
           required
@@ -172,7 +181,7 @@ export default function Room({ code }: { code: string }) {
           <button type="button" className={styles.primary} onClick={startNow} disabled={sending || !enoughPlayers}>
             {sending ? "Starting…" : "Start now"}
           </button>
-          {!enoughPlayers && <p className={styles.hint}>At least 2 players are needed to start.</p>}
+          {!enoughPlayers && <p className={styles.hint}>At least {MIN_PLAYERS_TO_START} players are needed to start.</p>}
         </>
       )}
       <p className={styles.error} role="alert">
