@@ -48,3 +48,20 @@ export function alreadyHaveAccountMessage(to: string, forgotPasswordLink: string
     ].join("\n"),
   };
 }
+
+// Sent when someone asks for a new password on the forgot-password page.
+export function resetPasswordMessage(to: string, link: string): Email {
+  return {
+    to,
+    subject: "Reset your password for the Song Guessing Game",
+    text: [
+      "Hi,",
+      "",
+      "someone (probably you) asked to reset the password of your account. Choose a new one here:",
+      link,
+      "",
+      "The link works once and is valid for 1 hour. Setting a new password logs you out everywhere.",
+      "If you did not ask for this, you can ignore this email. Nothing was changed.",
+    ].join("\n"),
+  };
+}

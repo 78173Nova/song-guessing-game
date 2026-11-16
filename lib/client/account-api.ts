@@ -34,3 +34,11 @@ export async function apiWhoIsLoggedIn(fetchFn: FetchFn = fetch): Promise<string
     return null;
   }
 }
+
+export function apiForgotPassword(email: string, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/forgot-password", { email }, fetchFn);
+}
+
+export function apiResetPassword(token: string, password: string, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/reset-password", { token, password }, fetchFn);
+}

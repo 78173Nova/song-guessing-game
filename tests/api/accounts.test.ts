@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { logIn, logOut, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
+import { forgotPassword, logIn, logOut, resetPassword, signUp, verifyEmail, whoIsLoggedIn } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import type { Email } from "@/lib/email/sender";
 import { createTestDb } from "../helpers/test-db";
@@ -523,5 +523,232 @@ describe("Login, me and logout – no secrets in replies", () => {
     expect(bodies).not.toContain("token-");
     expect(bodies).not.toContain("0dd69f20828bcfa911a43435a372bbc348f88047df35a1c36ba3265c699a88b6");
     expect(bodies).not.toContain("anna@example.com");
+  });
+});
+
+const forgot = (body: unknown) => forgotPassword(db, typeof body === "string" ? body : JSON.stringify(body), deps);
+const MINUTE = 60 * 1000;
+const IF_EXISTS = { status: 200, body: { message: "If an account exists for that address, we sent an email" } };
+
+describe("POST /api/accounts/forgot-password", () => {
+  it("gives the same reply for a known and an unknown email; only the known one gets a reset link", async () => {
+    await verifiedAccount();
+    clock = new Date(clock.getTime() + MINUTE);
+    sent = [];
+
+    expect(await forgot({ email: "nobody@example.com" })).toEqual(IF_EXISTS);
+    expect(sent).toEqual([]);
+    expect(await forgot({ email: "ANNA@example.com" })).toEqual(IF_EXISTS);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("anna@example.com");
+    expect(sent[0].text).toContain(`/reset-password?token=token-2-${"a".repeat(40)}`);
+  });
+});
+
+describe("POST /api/accounts/forgot-password – one email per minute and input rules", () => {
+  const TOO_SOON = {
+    status: 429,
+    body: { error: "too-soon", message: "Please wait a minute before asking for another email" },
+  };
+
+  it("refuses a known address asked again within 60 s, and allows it again once 60 s have passed", async () => {
+    await verifiedAccount();
+    clock = new Date(clock.getTime() + MINUTE);
+    sent = [];
+
+    expect(await forgot({ email: "anna@example.com" })).toEqual(IF_EXISTS);
+    clock = new Date(clock.getTime() + MINUTE - 1);
+    expect(await forgot({ email: "anna@example.com" })).toEqual(TOO_SOON);
+    expect(sent).toHaveLength(1);
+    clock = new Date(clock.getTime() + 1);
+    expect(await forgot({ email: "anna@example.com" })).toEqual(IF_EXISTS);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("counts the sign-up email: asking within 60 s of signing up is too soon", async () => {
+    await signup(valid);
+    sent = [];
+
+    expect(await forgot({ email: "anna@example.com" })).toEqual(TOO_SOON);
+    expect(sent).toEqual([]);
+  });
+
+  it("never limits an unknown address", async () => {
+    expect(await forgot({ email: "nobody@example.com" })).toEqual(IF_EXISTS);
+    expect(await forgot({ email: "nobody@example.com" })).toEqual(IF_EXISTS);
+  });
+
+  it("rejects a missing, non-text or invalid email and bad JSON", async () => {
+    const error = (code: string) => ({ status: 400, body: { error: code, message: expect.any(String) } });
+
+    expect(await forgot({})).toEqual(error("malformed"));
+    expect(await forgot({ email: 42 })).toEqual(error("malformed"));
+    expect(await forgot(null)).toEqual(error("malformed"));
+    expect(await forgot("not json")).toEqual(error("malformed"));
+    expect(await forgot({ email: "not-an-email" })).toEqual(error("invalid-email"));
+    expect(await forgot({ email: `${"a".repeat(243)}@example.com` })).toEqual(error("invalid-email"));
+    expect(sent).toEqual([]);
+  });
+
+  it("stores only the SHA-256 hash of the reset token, with purpose reset and a 1-hour lifetime", async () => {
+    await verifiedAccount();
+    clock = new Date(clock.getTime() + MINUTE);
+    await forgot({ email: "anna@example.com" });
+
+    // SHA-256 of token-2-aaaa… (40 a), the same value as in the session token test above.
+    const rows = await db.query("SELECT token_hash, purpose, expires_at, used_at FROM email_tokens WHERE purpose = 'reset'");
+    expect(rows).toEqual([
+      {
+        token_hash: "0dd69f20828bcfa911a43435a372bbc348f88047df35a1c36ba3265c699a88b6",
+        purpose: "reset",
+        expires_at: new Date("2026-11-16T13:01:00.000Z"),
+        used_at: null,
+      },
+    ]);
+  });
+});
+
+const reset = (body: unknown) => resetPassword(db, typeof body === "string" ? body : JSON.stringify(body), deps);
+const PASSWORD_CHANGED = { status: 200, body: { message: "Your password is changed – you can log in now" } };
+const NEW_PASSWORD = "brand new secret";
+
+// A verified account, logged in on two browsers (sessions token-2 and token-3), that asks for a reset a minute
+// later: the reset link is token-4.
+const resetToken = `token-4-${"a".repeat(40)}`;
+async function loggedInTwiceAndAskedForReset() {
+  await verifiedAccount();
+  await login({ login: "Anna_99", password: valid.password });
+  await login({ login: "Anna_99", password: valid.password });
+  clock = new Date(clock.getTime() + MINUTE);
+  await forgot({ email: "anna@example.com" });
+}
+
+describe("POST /api/accounts/reset-password", () => {
+  it("replaces the password and ends every session: old password and sessions stop working, the new one logs in", async () => {
+    await loggedInTwiceAndAskedForReset();
+
+    expect(await reset({ token: resetToken, password: NEW_PASSWORD })).toEqual(PASSWORD_CHANGED);
+
+    expect(await me(sessionToken)).toEqual(NOBODY);
+    expect(await me(`token-3-${"a".repeat(40)}`)).toEqual(NOBODY);
+    expect((await login({ login: "Anna_99", password: valid.password })).status).toBe(401);
+    expect(await login({ login: "Anna_99", password: NEW_PASSWORD })).toMatchObject({
+      status: 200,
+      body: { username: "Anna_99" },
+    });
+  });
+
+  it("marks an account that was never verified as verified, so it can log in", async () => {
+    await signup(valid);
+    clock = new Date(clock.getTime() + MINUTE);
+    await forgot({ email: "anna@example.com" });
+
+    expect(await reset({ token: `token-2-${"a".repeat(40)}`, password: NEW_PASSWORD })).toEqual(PASSWORD_CHANGED);
+    expect(await db.query("SELECT email_verified_at FROM users")).toEqual([
+      { email_verified_at: new Date("2026-11-16T12:01:00.000Z") },
+    ]);
+    expect((await login({ login: "Anna_99", password: NEW_PASSWORD })).status).toBe(200);
+  });
+
+  it("keeps the first verification time of an account that was already verified", async () => {
+    await loggedInTwiceAndAskedForReset();
+    await reset({ token: resetToken, password: NEW_PASSWORD });
+
+    expect(await db.query("SELECT email_verified_at FROM users")).toEqual([
+      { email_verified_at: new Date("2026-11-16T12:00:00.000Z") },
+    ]);
+  });
+});
+
+describe("POST /api/accounts/reset-password – links and passwords that do not work", () => {
+  const linkError = (status: number, error: string) => ({ status, body: { error, message: expect.any(String) } });
+  const passwordHash = async () =>
+    (await db.query<{ password_hash: string }>("SELECT password_hash FROM users"))[0].password_hash;
+
+  it("still works one millisecond before 1 hour is up", async () => {
+    await loggedInTwiceAndAskedForReset();
+    clock = new Date(clock.getTime() + HOUR - 1);
+
+    expect(await reset({ token: resetToken, password: NEW_PASSWORD })).toEqual(PASSWORD_CHANGED);
+  });
+
+  it("refuses a link opened after 1 hour: nothing changes and the sessions keep working", async () => {
+    await loggedInTwiceAndAskedForReset();
+    const before = await passwordHash();
+    clock = new Date(clock.getTime() + HOUR);
+
+    const result = await reset({ token: resetToken, password: NEW_PASSWORD });
+
+    expect(result).toEqual(linkError(410, "link-expired"));
+    expect(result.body.message).toContain("Forgot password");
+    expect(await passwordHash()).toBe(before);
+    expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
+  });
+
+  it("works only once: the second use says the link was already used and keeps the first new password", async () => {
+    await loggedInTwiceAndAskedForReset();
+    await reset({ token: resetToken, password: NEW_PASSWORD });
+
+    expect(await reset({ token: resetToken, password: "a different secret" })).toEqual(linkError(410, "link-used"));
+    expect((await login({ login: "Anna_99", password: NEW_PASSWORD })).status).toBe(200);
+  });
+
+  it("lets exactly one of two uses at the same moment change the password", async () => {
+    await loggedInTwiceAndAskedForReset();
+
+    const results = await Promise.all([
+      reset({ token: resetToken, password: NEW_PASSWORD }),
+      reset({ token: resetToken, password: NEW_PASSWORD }),
+    ]);
+
+    expect(results.map((r) => r.status).sort()).toEqual([200, 410]);
+  });
+
+  it("refuses an unknown token, and a verification link used as a reset link", async () => {
+    await signup(valid);
+
+    expect(await reset({ token: `token-9-${"a".repeat(40)}`, password: NEW_PASSWORD })).toEqual(
+      linkError(404, "link-unknown"),
+    );
+    expect(await reset({ token: firstToken, password: NEW_PASSWORD })).toEqual(linkError(404, "link-unknown"));
+    expect(await db.query("SELECT email_verified_at FROM users")).toEqual([{ email_verified_at: null }]);
+  });
+
+  it("refuses a password of 7 or 129 characters without using the link, so it can be tried again", async () => {
+    await loggedInTwiceAndAskedForReset();
+    const before = await passwordHash();
+
+    expect(await reset({ token: resetToken, password: "a".repeat(7) })).toEqual(linkError(400, "invalid-password"));
+    expect(await reset({ token: resetToken, password: "a".repeat(129) })).toEqual(linkError(400, "invalid-password"));
+    expect(await passwordHash()).toBe(before);
+    expect(await me(sessionToken)).toEqual({ status: 200, body: { username: "Anna_99" } });
+    expect(await reset({ token: resetToken, password: "a".repeat(8) })).toEqual(PASSWORD_CHANGED);
+  });
+
+  it("rejects a missing, empty, too long or non-text token, a missing password and bad JSON", async () => {
+    const malformed = linkError(400, "malformed");
+
+    expect(await reset({ password: NEW_PASSWORD })).toEqual(malformed);
+    expect(await reset({ token: "", password: NEW_PASSWORD })).toEqual(malformed);
+    expect(await reset({ token: "a".repeat(201), password: NEW_PASSWORD })).toEqual(malformed);
+    expect(await reset({ token: 42, password: NEW_PASSWORD })).toEqual(malformed);
+    expect(await reset({ token: resetToken })).toEqual(malformed);
+    expect(await reset(null)).toEqual(malformed);
+    expect(await reset("not json")).toEqual(malformed);
+  });
+
+  it("never puts the email, a password, a hash or a token in a reply", async () => {
+    await loggedInTwiceAndAskedForReset();
+    const replies = [
+      await forgot({ email: "anna@example.com" }),
+      await reset({ token: resetToken, password: NEW_PASSWORD }),
+      await reset({ token: resetToken, password: NEW_PASSWORD }),
+    ];
+
+    const bodies = JSON.stringify(replies.map((r) => r.body));
+    expect(bodies).not.toContain("anna@example.com");
+    expect(bodies).not.toContain(NEW_PASSWORD);
+    expect(bodies).not.toContain("scrypt");
+    expect(bodies).not.toContain("token-");
   });
 });
