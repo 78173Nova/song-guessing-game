@@ -27,3 +27,9 @@ browser sends it with every answer, and the server checks that the token belongs
 ## How it could change
 If we add features that need identity (e.g. personal statistics, friend lists), a login provider can be
 added and linked to the existing player records.
+
+Update 15 Nov 2026: accounts come back for one purpose only: **creating a room needs an account**, so every
+room has a known owner (spec 004, decision 014). Solo still needs no account, and anyone with a room code
+still joins as a guest with a nickname, so the demo stays fast. We build our own username/password system
+after all, with the safeguards the "Alternatives" above asked for: scrypt password hashes, hashed tokens and
+email verification (decision 014).
