@@ -1,7 +1,7 @@
 # 014 – Accounts
 
-Date: 16 Nov 2026 · Status: started (sign-up built, issue #24). Verification, login and sessions,
-email delivery through Brevo and password reset are added here as updates by their issues (#25–#29).
+Date: 16 Nov 2026 · Status: started (sign-up built, issue #24; email verification, issue #26). Login and sessions,
+email delivery through Brevo and password reset are added here as updates by their issues (#25, #27–#29).
 
 Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname): `GLOSSARY.md`.
 
@@ -18,6 +18,13 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **New accounts are not verified.** Signing up again with the email of an unverified account replaces it
   (new username, password and link). A valid sign-up always gets the same reply, "Check your inbox to
   finish signing up".
+- **Email verification:** the email links to `/verify-email?token=…`. The page reads the token, removes it
+  from the address bar and sends it to `POST /api/accounts/verify-email`, which marks the account verified.
+  The link works once (`used_at`) and for 24 hours. Replies: verified (200), unknown link (404, also the
+  old link of a replaced pending account), already used or expired (410), each with its own message.
+- **Never reveal a registered email:** signing up with the email of a **verified** account creates nothing
+  and sends that address a "You already have an account. Forgot your password?" email instead of a
+  verification email. The page gets the same "Check your inbox" reply as every other valid sign-up.
 - **The database decides who wins:** a unique index on `lower(username)` and a unique `email`. Sign-up
   runs one transaction (delete the unverified account with that email, insert with `ON CONFLICT DO
   NOTHING`, then read why nothing was inserted), so of two sign-ups at the same moment exactly one wins.
@@ -32,7 +39,11 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   (same reason as room tokens, decision 012). A plain SHA-256 is enough because tokens are long and random.
 - **Replacing unverified accounts:** nobody can block an email address by registering it first; only the
   person who reads that inbox can finish the sign-up.
-- **Same reply every time:** the sign-up page never tells a stranger whether an email is registered.
+- **Same reply every time:** the sign-up page never tells a stranger whether an email is registered. The
+  "already" email still helps the real owner, who may have forgotten they signed up.
+- **Token out of the address bar:** a token left in the URL can end up in the browser history, a shared
+  screenshot or a copied link. One query uses the token and verifies the account, so of two clicks at the
+  same moment exactly one wins.
 - **Rules in the database:** they hold even if the code has a mistake, and they handle requests at the same moment.
 
 ## Alternatives
@@ -43,10 +54,14 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 ## Limits
 - Usernames held by accounts that are never verified stay taken until someone signs up again with that
   email (no clean-up job).
+- Sign-up still says "This username is taken" when the username is taken, even if the email also belongs to
+  that account; usernames are public, so this reveals nothing about the email.
+- Two sign-ups with the same new email at the same moment: the loser gets the normal reply but no email.
+- An expired link can only be replaced by signing up again until "Send the email again" (#28) exists.
 - "Looks like an email" does not prove the address exists; only opening the link does.
 - Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
 
 ## How it could change
-- Brevo delivery (#25), verification (#26), login and sessions (#27), resend (#28) and password reset (#29)
+- Brevo delivery (#25), login and sessions (#27), resend (#28) and password reset (#29)
   extend `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
 - A login provider could later be linked to the same `users` table.
