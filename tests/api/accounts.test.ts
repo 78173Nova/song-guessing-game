@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { signUp } from "@/lib/api/accounts";
+import { signUp, verifyEmail } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import type { Email } from "@/lib/email/sender";
 import { createTestDb } from "../helpers/test-db";
@@ -208,5 +208,132 @@ describe("POST /api/accounts/signup – only hashes are stored", () => {
     expect(text).not.toContain("scrypt");
     for (const row of stored) expect(text).not.toContain(row.password_hash);
     for (const row of tokenHashes) expect(text).not.toContain(row.token_hash);
+  });
+});
+
+const verify = (body: unknown) => verifyEmail(db, typeof body === "string" ? body : JSON.stringify(body), deps);
+const firstToken = `token-1-${"a".repeat(40)}`;
+const HOUR = 60 * 60 * 1000;
+
+describe("POST /api/accounts/verify-email", () => {
+  it("marks the account verified with the link from the sign-up email", async () => {
+    await signup(valid);
+
+    const result = await verify({ token: firstToken });
+
+    expect(result).toEqual({ status: 200, body: { message: "Your email is verified – you can log in now" } });
+    expect(await db.query("SELECT email_verified_at FROM users")).toEqual([
+      { email_verified_at: new Date("2026-11-16T12:00:00.000Z") },
+    ]);
+  });
+});
+
+describe("POST /api/accounts/verify-email – links that do not work", () => {
+  const linkError = (status: number, error: string) => ({ status, body: { error, message: expect.any(String) } });
+  const verifiedAt = () => db.query("SELECT email_verified_at FROM users");
+
+  it("still works one millisecond before 24 hours are up", async () => {
+    await signup(valid);
+    clock = new Date(clock.getTime() + 24 * HOUR - 1);
+
+    expect((await verify({ token: firstToken })).status).toBe(200);
+  });
+
+  it("refuses a link opened just after 24 hours, and the account stays unverified", async () => {
+    await signup(valid);
+    clock = new Date(clock.getTime() + 24 * HOUR + 1);
+
+    expect(await verify({ token: firstToken })).toEqual(linkError(410, "link-expired"));
+    expect(await verifiedAt()).toEqual([{ email_verified_at: null }]);
+  });
+
+  it("works only once: the second click says the link was already used", async () => {
+    await signup(valid);
+    await verify({ token: firstToken });
+    clock = new Date(clock.getTime() + HOUR);
+
+    expect(await verify({ token: firstToken })).toEqual(linkError(410, "link-used"));
+    // Still verified at the time of the first click.
+    expect(await verifiedAt()).toEqual([{ email_verified_at: new Date("2026-11-16T12:00:00.000Z") }]);
+  });
+
+  it("lets exactly one of two clicks at the same moment use the link", async () => {
+    await signup(valid);
+
+    const results = await Promise.all([verify({ token: firstToken }), verify({ token: firstToken })]);
+
+    expect(results.map((r) => r.status).sort()).toEqual([200, 410]);
+  });
+
+  it("refuses an unknown token", async () => {
+    await signup(valid);
+
+    expect(await verify({ token: `token-9-${"a".repeat(40)}` })).toEqual(linkError(404, "link-unknown"));
+    expect(await verifiedAt()).toEqual([{ email_verified_at: null }]);
+  });
+
+  it("refuses the old link of a pending account that signed up again", async () => {
+    await signup(valid);
+    await signup({ ...valid, username: "Anna_New" });
+
+    expect(await verify({ token: firstToken })).toEqual(linkError(404, "link-unknown"));
+    expect((await verify({ token: `token-2-${"a".repeat(40)}` })).status).toBe(200);
+  });
+
+  it("rejects a missing, empty, too long or non-text token and bad JSON", async () => {
+    const malformed = linkError(400, "malformed");
+    expect(await verify({})).toEqual(malformed);
+    expect(await verify({ token: "" })).toEqual(malformed);
+    expect(await verify({ token: "a".repeat(201) })).toEqual(malformed);
+    expect(await verify({ token: 42 })).toEqual(malformed);
+    expect(await verify(null)).toEqual(malformed);
+    expect(await verify("not json")).toEqual(malformed);
+  });
+
+  it("never puts the token or its hash in a reply", async () => {
+    await signup(valid);
+    const [{ token_hash }] = await db.query<{ token_hash: string }>("SELECT token_hash FROM email_tokens");
+
+    const text = JSON.stringify([
+      await verify({ token: firstToken }),
+      await verify({ token: firstToken }),
+      await verify({ token: "unknown-token" }),
+    ]);
+    expect(text).not.toContain("token-1-");
+    expect(text).not.toContain(token_hash);
+  });
+});
+
+describe("POST /api/accounts/signup – email of a verified account", () => {
+  it("creates nothing, sends the 'you already have an account' email and gives the same reply", async () => {
+    await signup(valid);
+    await verify({ token: firstToken });
+    sent = [];
+
+    const result = await signup({ email: "ANNA@example.com", username: "Someone_Else", password: "another secret" });
+
+    expect(result).toEqual(CHECK_INBOX);
+    expect(await db.query("SELECT username, email FROM users")).toEqual([
+      { username: "Anna_99", email: "anna@example.com" },
+    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("anna@example.com");
+    expect(sent[0].subject).toBe("You already have an account");
+    expect(sent[0].text).toContain("Forgot your password?");
+    expect(sent[0].text).toContain("http://localhost:3000/forgot-password");
+    expect(sent[0].text).not.toContain("verify-email");
+    // No new verification link was made: only the used one is stored.
+    expect(await db.query("SELECT used_at FROM email_tokens")).toEqual([
+      { used_at: new Date("2026-11-16T12:00:00.000Z") },
+    ]);
+  });
+
+  it("still says the username is taken when both the username and the email belong to the verified account", async () => {
+    await signup(valid);
+    await verify({ token: firstToken });
+    sent = [];
+
+    expect((await signup(valid)).status).toBe(409);
+    expect(sent).toEqual([]);
   });
 });

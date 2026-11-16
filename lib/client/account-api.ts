@@ -8,3 +8,7 @@ export type SignupForm = { email: string; username: string; password: string };
 export function apiSignUp(form: SignupForm, fetchFn: FetchFn = fetch) {
   return post<{ message: string }>("/api/accounts/signup", form, fetchFn);
 }
+
+export function apiVerifyEmail(token: string, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/verify-email", { token }, fetchFn);
+}

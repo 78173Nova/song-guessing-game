@@ -4,8 +4,8 @@
 // a fake clock, a fake sender and predictable tokens.
 import { createToken, hashPassword, parseSignupInput, VERIFY_LINK_LIFETIME_MS } from "../accounts/rules";
 import type { TransactionDb } from "../db/client";
-import { createPendingAccount } from "../db/accounts";
-import { linkWithToken, verifyEmailMessage } from "../email/messages";
+import { createPendingAccount, redeemVerifyToken } from "../db/accounts";
+import { alreadyHaveAccountMessage, appUrl, linkWithToken, verifyEmailMessage } from "../email/messages";
 import { getEmailSender, type EmailSender } from "../email/sender";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -31,6 +31,9 @@ const ERRORS = {
   },
   "invalid-password": { status: 400, message: "Passwords are 8–128 characters long." },
   "username-taken": { status: 409, message: "This username is taken" },
+  "link-unknown": { status: 404, message: "This link is not valid. Please use the newest link we sent you." },
+  "link-used": { status: 410, message: "This link was already used. If your email is verified, you can log in." },
+  "link-expired": { status: 410, message: "This link has expired. Please sign up again to get a new one." },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
 
@@ -86,12 +89,34 @@ export async function signUp(db: TransactionDb, rawBody: string, deps: AccountDe
 
   if (!created.ok) {
     if (created.reason === "username_taken") return fail("username-taken");
-    // The email belongs to a verified account: nothing is created and the reply stays the same.
-    // (Issue #26 adds the "you already have an account" email here.)
+    // The email belongs to a verified account: nothing is created, the owner of that inbox is told, and the
+    // reply stays the same, so the page never reveals that the email is registered.
+    if (created.reason === "email_verified") {
+      await sendEmail(alreadyHaveAccountMessage(email, `${appUrl()}/forgot-password`));
+    }
     return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
   }
 
   // Delivery problems are handled with the real email service (issue #25).
   await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
   return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
+}
+
+const VERIFIED_MESSAGE = "Your email is verified – you can log in now";
+
+// Link tokens are 43 characters; anything much longer is not one of ours.
+const MAX_TOKEN_LENGTH = 200;
+
+// POST /api/accounts/verify-email – opens the link from the verification email: { token } → verified.
+export async function verifyEmail(db: TransactionDb, rawBody: string, deps: AccountDeps = {}): Promise<ApiResult> {
+  const now = (deps.now ?? (() => new Date()))();
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const token = (json.body as { token?: unknown } | null)?.token;
+  if (typeof token !== "string" || token.length === 0 || token.length > MAX_TOKEN_LENGTH) return fail("malformed");
+
+  const result = await redeemVerifyToken(db, token, now);
+  if (!result.ok) return fail(`link-${result.reason}`);
+  return { status: 200, body: { message: VERIFIED_MESSAGE } };
 }

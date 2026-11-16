@@ -29,3 +29,22 @@ export function verifyEmailMessage(to: string, link: string): Email {
     ].join("\n"),
   };
 }
+
+// Sent instead of a verification email when someone signs up with the email of a verified account.
+export function alreadyHaveAccountMessage(to: string, forgotPasswordLink: string): Email {
+  return {
+    to,
+    subject: "You already have an account",
+    text: [
+      "Hi,",
+      "",
+      "someone (probably you) tried to sign up for the Song Guessing Game with this email address,",
+      "but you already have an account. You can log in with your username or email.",
+      "",
+      "Forgot your password? Choose a new one here:",
+      forgotPasswordLink,
+      "",
+      "If this was not you, you can ignore this email. Nothing was changed.",
+    ].join("\n"),
+  };
+}
