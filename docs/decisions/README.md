@@ -26,3 +26,4 @@ Rules:
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
 | 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, database part built |
+| 013 | [Game modes: title, artist, year, mixed](013-game-modes.md) | decided, partly built |

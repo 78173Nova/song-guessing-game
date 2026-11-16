@@ -1,5 +1,7 @@
 // The browser's calls to our game server routes. Each call returns the data or a readable message –
 // it never throws, so the screen can always show something sensible.
+import type { Filters } from "../game/filters";
+import type { Mode } from "../game/modes";
 import type { Answer, AnswerResult, RoundInfo } from "./game-state";
 
 export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your internet connection and try again.";
@@ -9,7 +11,11 @@ export type ApiResponse<T> = { ok: true; data: T } | { ok: false; message: strin
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
-async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
+// A failed reply can also carry the server's error code (e.g. "too-few-songs"). Only apiStartGame uses it,
+// the other calls pass on the message only.
+type PostResult<T> = { ok: true; data: T } | { ok: false; message: string; code?: string };
+
+async function postWithCode<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<PostResult<T>> {
   let response: Response;
   try {
     response = await fetchFn(url, {
@@ -29,15 +35,48 @@ async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<Ap
   }
 
   if (!response.ok) {
-    const message = (data as { message?: unknown } | null)?.message;
-    return { ok: false, message: typeof message === "string" ? message : GENERIC_ERROR_MESSAGE };
+    const { message, error } = (data ?? {}) as { message?: unknown; error?: unknown };
+    return {
+      ok: false,
+      message: typeof message === "string" ? message : GENERIC_ERROR_MESSAGE,
+      ...(typeof error === "string" ? { code: error } : {}),
+    };
   }
   return { ok: true, data: data as T };
 }
 
-// `fetchFn` is only passed in tests; the browser uses the real fetch.
-export function apiStartGame(fetchFn: FetchFn = fetch) {
-  return post<{ gameId: string; previewUrls: string[] }>("/api/games", undefined, fetchFn);
+async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
+  const result = await postWithCode<T>(url, body, fetchFn);
+  return result.ok ? result : { ok: false, message: result.message };
+}
+
+export type StartResponse =
+  | { ok: true; data: { gameId: string; previewUrls: string[] } }
+  // tooFewSongs: too few songs match the chosen filters – the start screen shows the message.
+  | { ok: false; message: string; tooFewSongs?: true };
+
+// `fetchFn` is only passed in tests; the browser uses the real fetch. Without a mode or filters, no body is
+// sent and the server plays title mode. A filter that is "Any" is left out. `recentGames`: the player's last
+// games, newest first, so the server can avoid their songs (left out when empty).
+export async function apiStartGame(
+  fetchFn: FetchFn = fetch,
+  mode?: Mode,
+  filters: Filters = {},
+  recentGames: string[] = [],
+): Promise<StartResponse> {
+  const body = {
+    ...(mode === undefined ? {} : { mode }),
+    ...(filters.genre === undefined ? {} : { genre: filters.genre }),
+    ...(filters.decade === undefined ? {} : { decade: filters.decade }),
+    ...(recentGames.length === 0 ? {} : { recentGames }),
+  };
+  const result = await postWithCode<{ gameId: string; previewUrls: string[] }>(
+    "/api/games",
+    Object.keys(body).length === 0 ? undefined : body,
+    fetchFn,
+  );
+  if (result.ok) return result;
+  return { ok: false, message: result.message, ...(result.code === "too-few-songs" ? { tooFewSongs: true as const } : {}) };
 }
 
 export function apiNextRound(gameId: string, fetchFn: FetchFn = fetch) {

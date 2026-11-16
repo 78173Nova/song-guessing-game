@@ -3,6 +3,7 @@ import { answerRound, replaceRoundSong, safely, sendNextRound, startGame } from 
 import { createNewRoom, joinRoom, startRoomGame } from "@/lib/api/rooms";
 import type { Db, TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
+import { setCatalogue } from "@/lib/db/songs";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
 import { createTestDb } from "../helpers/test-db";
 import { addTestSongs } from "../helpers/songs";
@@ -62,19 +63,69 @@ describe("POST /api/games – start", () => {
   });
 });
 
+describe("POST /api/games – retired songs", () => {
+  it("never plays a retired song, nor uses its title as a wrong option", async () => {
+    const songs = await addTestSongs(db, 10);
+    // Songs 1–5 stay in the catalogue, songs 6–10 are retired (they still have a preview).
+    await setCatalogue(db, songs.slice(0, 5));
+    const retiredTitles = songs.slice(5).map((s) => s.title);
+
+    for (let i = 0; i < 10; i++) {
+      const result = await startGame(db);
+      expect(result.status).toBe(201);
+      const rounds = await getGameRounds(db, (result.body as { gameId: string }).gameId);
+      for (const round of rounds!) {
+        expect(retiredTitles).not.toContain(round.song.title);
+        for (const option of round.options) expect(retiredTitles).not.toContain(option);
+      }
+    }
+  });
+
+  it("returns 503 when fewer than 5 catalogue songs have a preview, even if retired songs do", async () => {
+    const songs = await addTestSongs(db, 8);
+    await setCatalogue(db, songs.slice(0, 4));
+
+    expect((await startGame(db)).status).toBe(503);
+  });
+
+  it("a game that was already running keeps its songs after they are retired", async () => {
+    const songs = await addTestSongs(db, 8);
+    const gameId = ((await startGame(db)).body as { gameId: string }).gameId;
+    await setCatalogue(db, songs.slice(0, 1)); // retire 7 of the 8 songs while the game runs
+
+    expect(await sendNextRound(db, gameId, deps)).toMatchObject({ status: 200, body: { round: 1 } });
+    expect(await getGameRounds(db, gameId)).toHaveLength(5);
+  });
+
+  it("a replacement round never gets a retired song", async () => {
+    const songs = await addTestSongs(db, 12);
+    const gameId = ((await startGame(db)).body as { gameId: string }).gameId;
+    const inGame = (await getGameRounds(db, gameId))!.map((r) => r.songId);
+    // Keep the 5 songs of the game plus exactly one other song; retire the remaining 6.
+    const spare = songs.find((s) => !inGame.includes(s.id))!;
+    await setCatalogue(db, [...songs.filter((s) => inGame.includes(s.id)), spare]);
+
+    const result = await replaceRoundSong(db, gameId, JSON.stringify({ round: 2 }));
+
+    expect(result.status).toBe(200);
+    expect((await getGameRounds(db, gameId))![1].songId).toBe(spare.id);
+  });
+});
+
 describe("POST /api/games/[id]/next", () => {
   it("sends round, totalRounds, previewUrl and options – and nothing that gives the answer away", async () => {
     const gameId = await startedGame();
     const result = await sendNextRound(db, gameId, deps);
 
     expect(result.status).toBe(200);
-    expect(Object.keys(result.body).sort()).toEqual(["options", "previewUrl", "round", "totalRounds"]);
+    expect(Object.keys(result.body).sort()).toEqual(["options", "previewUrl", "questionType", "round", "totalRounds"]);
     const round = (await getGameRounds(db, gameId))![0];
     expect(result.body).toEqual({
       round: 1,
       totalRounds: 5,
       previewUrl: round.song.previewUrl,
       options: round.options,
+      questionType: "title",
     });
     expect(round.status).toBe("open");
     expect(round.startedAt).toEqual(clock);
@@ -110,7 +161,7 @@ describe("POST /api/games/[id]/answer", () => {
         points: 140,
         totalScore: 140,
         correctOption: right,
-        song: { title: song.title, artist: song.artist, artworkUrl: song.artworkUrl, storeUrl: song.storeUrl },
+        song: { title: song.title, artist: song.artist, year: song.year, artworkUrl: song.artworkUrl, storeUrl: song.storeUrl },
       },
     });
   });

@@ -30,6 +30,7 @@ describe("db/schema.sql", () => {
       "artwork_url",
       "genre",
       "id",
+      "in_catalogue",
       "preview_cached_at",
       "preview_url",
       "store_url",
@@ -53,6 +54,24 @@ describe("db/schema.sql", () => {
     await expect(insertSong("Too New", "Someone", 2101, "pop")).rejects.toThrow();
     await expect(insertSong("Oldest", "Someone", 1900, "pop")).resolves.toBeDefined();
     await expect(insertSong("Newest", "Someone", 2100, "pop")).resolves.toBeDefined();
+  });
+
+  it("marks a new song as in the catalogue by default and refuses an empty in_catalogue", async () => {
+    await insertSong("Bohemian Rhapsody", "Queen", 1975, "rock");
+    const rows = await db.query<{ in_catalogue: boolean }>("SELECT in_catalogue FROM songs");
+    expect(rows).toEqual([{ in_catalogue: true }]);
+    await expect(db.query("UPDATE songs SET in_catalogue = NULL")).rejects.toThrow();
+  });
+
+  it("adds in_catalogue to a songs table that was created before the column existed", async () => {
+    // The live Neon database already has a songs table without the column: the seed must add it.
+    await db.query("ALTER TABLE songs DROP COLUMN in_catalogue");
+    await insertSong("Hey Jude", "The Beatles", 1968, "rock");
+
+    await applySchema(db);
+
+    const rows = await db.query<{ in_catalogue: boolean }>("SELECT in_catalogue FROM songs");
+    expect(rows).toEqual([{ in_catalogue: true }]);
   });
 
   it("rejects the same artist + title twice, ignoring upper/lower case", async () => {
