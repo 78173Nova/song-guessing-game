@@ -2,7 +2,7 @@
 // rules from lib/game, save, and build the reply. The route files in app/api/rooms/ only call these functions.
 // The database is passed in, so the tests can use PGlite instead of Neon.
 //
-// Every function checks in the same order: does the room exist (404), has it expired (409),
+// Every function checks in the same order: does the room exist (404), has it closed (409),
 // is the token right (403), is the input valid (400), is this the right moment (409).
 import { randomBytes, randomInt } from "node:crypto";
 import type { Db, TransactionDb } from "../db/client";
@@ -27,7 +27,8 @@ import {
 import { listSongsWithPreview } from "../db/songs";
 import { nextRoundNumber, parseRoundInput } from "../game/answers";
 import {
-  isRoomExpired,
+  isRoomClosed,
+  MIN_PLAYERS_TO_START,
   isRoundClosed,
   isTimeUp,
   isValidRoomCode,
@@ -40,6 +41,8 @@ import {
 import { buildReplacementRound, buildRounds, ROUNDS_PER_GAME } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
+import { looksLikeToken } from "../accounts/rules";
+import { findSessionUsername } from "../db/accounts";
 import { readJson, type ApiResult } from "./games";
 
 // The tests pass their own clock, song shuffle and room codes. The app uses the real ones.
@@ -59,7 +62,8 @@ const ERRORS = {
   "room-started": { status: 409, message: "This game has already started." },
   "room-full": { status: 409, message: "This room is full." },
   "nickname-taken": { status: 409, message: "This nickname is already taken in this room." },
-  "no-players": { status: 409, message: "At least one player has to join before the game can start." },
+  "log-in-needed": { status: 401, message: "Please log in to create a room." },
+  "not-enough-players": { status: 409, message: "At least 2 players are needed to start." },
   "not-started": { status: 409, message: "The game has not started yet." },
   "round-still-open": { status: 409, message: "The current round is still running." },
   "game-finished": { status: 409, message: "The game is over – there are no more rounds." },
@@ -90,17 +94,17 @@ function randomToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-// The room with this code, if it exists and has not expired.
+// The room with this code, if it exists and has not closed (30 minutes in the lobby, 3 hours in any case).
 async function findOpenRoom(db: Db, code: string, now: Date): Promise<Found<{ room: Room }>> {
   if (!isValidRoomCode(code)) return { ok: false, result: fail("room-not-found") };
   const room = await getRoomByCode(db, code);
   if (room === null) return { ok: false, result: fail("room-not-found") };
-  if (isRoomExpired(room.createdAt, now)) return { ok: false, result: fail("room-closed") };
+  if (isRoomClosed(room, now)) return { ok: false, result: fail("room-closed") };
   return { ok: true, room };
 }
 
-// The room, but only for a request that carries its host token.
-async function findRoomAsHost(
+// The room, but only for a request that carries the room creator's token.
+async function findRoomAsCreator(
   db: Db,
   code: string,
   authorization: string | null,
@@ -130,17 +134,44 @@ async function findRoomAsPlayer(
   return { ok: true, room: found.room, player };
 }
 
-// POST /api/rooms – creates a room in the lobby. Returns the code and the host token. The token is
-// returned only this once: the database keeps just its hash (decision 012).
-export async function createNewRoom(db: Db, deps: Deps = {}): Promise<ApiResult> {
+// Reads { nickname } from a request body: the nickname without the spaces around it, or the error to send.
+function readNickname(rawBody: string): Found<{ nickname: string }> {
+  const json = readJson(rawBody);
+  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
+    return { ok: false, result: fail("malformed") };
+  }
+  const nickname = parseNickname((json.body as Record<string, unknown>).nickname);
+  if (nickname === null) return { ok: false, result: fail("invalid-nickname") };
+  return { ok: true, nickname };
+}
+
+// POST /api/rooms – an account holder creates a room with { nickname } and becomes its room creator: the first
+// player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
+// creator's player token and the nickname as it was stored. The token is returned only this once: the database
+// keeps just its hash (decision 012). It is also the room's creator key for Start, Next and Replace.
+// For now every room has the same settings: Multiplayer, title mode, any genre and decade, one set of 5 rounds.
+export async function createNewRoom(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  rawBody: string,
+  deps: Deps = {},
+): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   const newCode = deps.newCode ?? randomRoomCode;
-  const hostToken = randomToken();
 
+  if (!looksLikeToken(sessionToken) || (await findSessionUsername(db, sessionToken, now())) === null) {
+    return fail("log-in-needed");
+  }
+  const input = readNickname(rawBody);
+  if (!input.ok) return input.result;
+
+  const playerToken = randomToken();
   // Codes are never reused, so a drawn code can be taken. Then we draw again.
   for (let draw = 1; draw <= MAX_CODE_DRAWS; draw++) {
-    const room = await createRoom(db, { code: newCode(), hostToken, now: now() });
-    if (room !== null) return { status: 201, body: { code: room.code, hostToken } };
+    const created = await createRoom(db, { code: newCode(), creatorToken: playerToken, nickname: input.nickname, now: now() });
+    if (created !== null) {
+      return { status: 201, body: { code: created.room.code, playerToken, nickname: created.creator.nickname } };
+    }
   }
   console.error(`Room API error: no free room code after ${MAX_CODE_DRAWS} draws`);
   return fail("server-error");
@@ -152,12 +183,9 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
 
-  const json = readJson(rawBody);
-  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
-    return fail("malformed");
-  }
-  const nickname = parseNickname((json.body as Record<string, unknown>).nickname);
-  if (nickname === null) return fail("invalid-nickname");
+  const input = readNickname(rawBody);
+  if (!input.ok) return input.result;
+  const { nickname } = input;
 
   const found = await findOpenRoom(db, code, now());
   if (!found.ok) return found.result;
@@ -174,9 +202,9 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
   return { status: 201, body: { playerToken, nickname: added.player.nickname } };
 }
 
-// POST /api/rooms/[code]/start – the host starts the game: picks the songs and builds the rounds with the
-// same game core as the solo game. Returns the 5 clip addresses in round order, so the host page can load
-// the clips in advance. No titles, no answers, and not the game ID.
+// POST /api/rooms/[code]/start – the room creator starts the game ("Start now", at least 2 players): picks the
+// songs and builds the rounds with the same game core as the solo game. Returns the 5 clip addresses in round
+// order, so the creator's page can load the clips in advance. No titles, no answers, and not the game ID.
 export async function startRoomGame(
   db: Db,
   code: string,
@@ -184,12 +212,12 @@ export async function startRoomGame(
   deps: Deps = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
-  const found = await findRoomAsHost(db, code, authorization, now());
+  const found = await findRoomAsCreator(db, code, authorization, now());
   if (!found.ok) return found.result;
   const { room } = found;
 
   if (room.status !== "lobby") return fail("room-started");
-  if ((await listPlayers(db, room.id)).length === 0) return fail("no-players");
+  if ((await listPlayers(db, room.id)).length < MIN_PLAYERS_TO_START) return fail("not-enough-players");
 
   const songs = await listSongsWithPreview(db);
   const built = buildRounds(songs, deps.random);
@@ -240,7 +268,7 @@ async function bringUpToDate(db: Db, room: Room, game: RoomGame, now: Date): Pro
   return { ...game, status, rounds };
 }
 
-// POST /api/rooms/[code]/next – the host opens the next round. The server notes the time, and from then on
+// POST /api/rooms/[code]/next – the room creator opens the next round. The server notes the time, and from then on
 // the players have 15 seconds. Sent without the correct answer.
 export async function openNextRound(
   db: Db,
@@ -249,7 +277,7 @@ export async function openNextRound(
   deps: Deps = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
-  const found = await findRoomAsHost(db, code, authorization, now());
+  const found = await findRoomAsCreator(db, code, authorization, now());
   if (!found.ok) return found.result;
   const { room } = found;
 
@@ -342,12 +370,11 @@ export async function getRoomState(
   if (!found.ok) return found.result;
   const { room } = found;
 
-  // The token decides who is asking: the host, or one of this room's players.
+  // The token decides who is asking: one of this room's players, and whether it is the room creator.
   const token = readBearerToken(authorization);
-  if (token === null) return fail("wrong-token");
-  const isHost = (await findRoomByHostToken(db, code, token)) !== null;
-  const me = isHost ? null : await findPlayerByToken(db, room.id, token);
-  if (!isHost && me === null) return fail("wrong-token");
+  const me = token === null ? null : await findPlayerByToken(db, room.id, token);
+  if (token === null || me === null) return fail("wrong-token");
+  const isCreator = (await findRoomByHostToken(db, code, token)) !== null;
 
   const game: RoomGame =
     room.status === "lobby"
@@ -374,7 +401,7 @@ export async function getRoomState(
   const body: Record<string, unknown> = {
     code: room.code,
     status: game.status,
-    role: isHost ? "host" : "player",
+    role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
     totalRounds: game.rounds.length || ROUNDS_PER_GAME,
     round:
@@ -401,28 +428,29 @@ export async function getRoomState(
           },
   };
 
-  if (isHost) {
-    // The clip addresses let the host page load the clips in advance. They contain no titles.
+  // Every viewer is a player, the room creator included.
+  const mine = ranking.find((player) => player.id === me.id)!;
+  const myAnswer = currentAnswers.find((a) => a.playerId === me.id) ?? null;
+  const revealed = current !== null && !isOpen;
+  body.me = {
+    nickname: me.nickname,
+    score: mine.score,
+    rank: mine.rank,
+    answer: myAnswer?.chosenOption ?? null, // the player's own choice – they know it anyway
+    correct: revealed ? myAnswer?.chosenOption === current.correctOption : null,
+    points: revealed ? (myAnswer?.points ?? 0) : null,
+  };
+
+  if (isCreator) {
+    // The clip addresses let the creator's page load the clips in advance. They contain no titles.
     body.previewUrls = room.status === "lobby" ? null : game.rounds.map((round) => round.song.previewUrl);
     body.scoreboard = ranking.map(({ rank, nickname, score }) => ({ rank, nickname, score }));
-  } else if (me !== null) {
-    const mine = ranking.find((player) => player.id === me.id)!;
-    const myAnswer = currentAnswers.find((a) => a.playerId === me.id) ?? null;
-    const revealed = current !== null && !isOpen;
-    body.me = {
-      nickname: me.nickname,
-      score: mine.score,
-      rank: mine.rank,
-      answer: myAnswer?.chosenOption ?? null, // the player's own choice – they know it anyway
-      correct: revealed ? myAnswer?.chosenOption === current.correctOption : null,
-      points: revealed ? (myAnswer?.points ?? 0) : null,
-    };
   }
   return { status: 200, body };
 }
 
-// POST /api/rooms/[code]/replace – the host page could not load a round's clip: give that round another
-// song. The same rules as the solo route (only rounds that have not started), but only for the host token.
+// POST /api/rooms/[code]/replace – the creator's page could not load a round's clip: give that round another
+// song. The same rules as the solo route (only rounds that have not started), but only for the creator's token.
 export async function replaceRoomSong(
   db: Db,
   code: string,
@@ -431,7 +459,7 @@ export async function replaceRoomSong(
   deps: Deps = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
-  const found = await findRoomAsHost(db, code, authorization, now());
+  const found = await findRoomAsCreator(db, code, authorization, now());
   if (!found.ok) return found.result;
   const { room } = found;
 

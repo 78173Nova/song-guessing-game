@@ -4,6 +4,7 @@ import { createNewRoom, joinRoom, startRoomGame } from "@/lib/api/rooms";
 import type { Db, TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
+import { loggedInSession } from "../helpers/session";
 import { createTestDb } from "../helpers/test-db";
 import { addTestSongs } from "../helpers/songs";
 
@@ -263,13 +264,15 @@ describe("POST /api/games/[id]/replace", () => {
 
 // Room games are closed to the solo routes (spec 002): they only ask for a game ID and no token.
 describe("solo routes on a room game", () => {
-  // A started room with one player. Returns the ID of its game (read from the database).
+  // A started room: the room creator and one more player. Returns the ID of its game (read from the database).
   async function startedRoomGame(): Promise<string> {
     const roomDb = db as TransactionDb; // the test database can always run transactions
     await addTestSongs(db, 8);
-    const room = (await createNewRoom(roomDb, deps)).body as { code: string; hostToken: string };
-    await joinRoom(roomDb, room.code, JSON.stringify({ nickname: "Anna" }), deps);
-    const started = await startRoomGame(roomDb, room.code, `Bearer ${room.hostToken}`, deps);
+    const session = await loggedInSession(roomDb, clock);
+    const created = await createNewRoom(roomDb, session, JSON.stringify({ nickname: "Anna" }), deps);
+    const room = created.body as { code: string; playerToken: string };
+    await joinRoom(roomDb, room.code, JSON.stringify({ nickname: "Ben" }), deps);
+    const started = await startRoomGame(roomDb, room.code, `Bearer ${room.playerToken}`, deps);
     expect(started.status).toBe(200);
     const rows = await db.query<{ game_id: string }>("SELECT game_id FROM rooms WHERE code = $1", [room.code]);
     return rows[0].game_id;

@@ -4,8 +4,8 @@
 import { createHash } from "node:crypto";
 import type { Db, TransactionDb } from "./client";
 
-// At most this many players per room (spec 002).
-export const MAX_PLAYERS = 50;
+// At most this many players per room, the room creator included (issue #32; spec 002 had 50).
+export const MAX_PLAYERS = 25;
 
 export type RoomStatus = "lobby" | "playing" | "finished";
 
@@ -72,19 +72,36 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-// Creates a room in the lobby. Returns null if the code is already used (codes are never reused),
-// so the caller can try again with a different code.
+// Creates a room in the lobby with the room creator as its first player (issue #32: the creator plays).
+// The creator has one token: it is their player token, and its hash is also kept in rooms.host_token_hash as the
+// room's creator key (the column keeps its old name). Room and player are inserted by one statement, so a room
+// never exists without its creator. Returns null if the code is already used (codes are never reused), so the
+// caller can try again with a different code.
 export async function createRoom(
   db: Db,
-  room: { code: string; hostToken: string; now: Date },
-): Promise<Room | null> {
-  const rows = await db.query<RoomRow>(
-    `INSERT INTO rooms (code, host_token_hash, created_at) VALUES ($1, $2, $3)
-     ON CONFLICT (code) DO NOTHING
-     RETURNING ${ROOM_COLUMNS}`,
-    [room.code, hashToken(room.hostToken), room.now.toISOString()],
+  room: { code: string; creatorToken: string; nickname: string; now: Date },
+): Promise<{ room: Room; creator: RoomPlayer } | null> {
+  const rows = await db.query<RoomRow & { player_id: string; nickname: string; joined_at: Date | string }>(
+    `WITH new_room AS (
+       INSERT INTO rooms (code, host_token_hash, created_at) VALUES ($1, $2, $3)
+       ON CONFLICT (code) DO NOTHING
+       RETURNING ${ROOM_COLUMNS}
+     ), creator AS (
+       INSERT INTO room_players (room_id, nickname, token_hash, joined_at)
+       SELECT id, $4, $2, $3 FROM new_room
+       RETURNING id, nickname, joined_at
+     )
+     SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.joined_at
+     FROM new_room, creator`,
+    [room.code, hashToken(room.creatorToken), room.now.toISOString(), room.nickname],
   );
-  return rows.length === 1 ? toRoom(rows[0]) : null;
+  if (rows.length !== 1) return null;
+  const [row] = rows;
+  const created = toRoom(row);
+  return {
+    room: created,
+    creator: toPlayer({ id: row.player_id, room_id: created.id, nickname: row.nickname, joined_at: row.joined_at }),
+  };
 }
 
 // The room with this code. null = there is no such room.
@@ -111,9 +128,9 @@ export type AddPlayerResult =
 //
 // Three queries in one transaction (decision 012):
 //   1. Lock the room's row. A second join for the same room waits here until this one is finished,
-//      and so does the host's Start. Without the lock, several people joining at the same moment
-//      would all count "49 players" and all get in.
-//   2. Insert the player – only if the room is in the lobby and has fewer than 50 players.
+//      and so does the room creator's Start. Without the lock, several people joining at the same moment
+//      would all count "24 players" and all get in.
+//   2. Insert the player – only if the room is in the lobby and has fewer than 25 players.
 //      A taken nickname inserts nothing instead of raising an error (ON CONFLICT DO NOTHING).
 //   3. Read the room again, to say why nothing was inserted.
 // The lock has to be its own query: one query only sees the data as it was when it began.

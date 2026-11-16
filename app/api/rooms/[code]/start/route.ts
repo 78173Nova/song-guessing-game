@@ -1,4 +1,4 @@
-// POST /api/rooms/[code]/start – the host starts the game. The steps live in lib/api/rooms.ts.
+// POST /api/rooms/[code]/start – the room creator starts the game. The steps live in lib/api/rooms.ts.
 import { safely } from "@/lib/api/games";
 import { startRoomGame } from "@/lib/api/rooms";
 import { getDb } from "@/lib/db/client";

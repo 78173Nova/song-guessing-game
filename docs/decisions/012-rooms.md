@@ -136,3 +136,52 @@ all replies and errors is in `specs/002-room-core.md` ("Routes").
 - A grace period for slow connections would be one number in `isTimeUp`.
 - Showing the whole scoreboard on the phones means adding `scoreboard` to the player's state.
 - "Play again" in the same room would need a way to point a room at a second game.
+
+## Update 16 Nov 2026: the room creator plays, 25 players, new closing rules (issue #32)
+
+### Decision
+- **The room creator plays.** Only an account holder can create a room (`POST /api/rooms` needs the session
+  cookie and a `{ nickname }`, otherwise 401). The creator is the room's first player: room and player are
+  inserted by one statement (`createRoom`), so a room never exists without its creator. There is no separate
+  host any more (`GLOSSARY.md`: "Room creator").
+- **One token for the creator.** The creator gets one player token like everyone else. Its hash is stored in
+  `room_players.token_hash` and also in `rooms.host_token_hash`, which now means "the room creator's key" (the
+  column keeps its name, so no database change). Start, Next and Replace still check that column; answering
+  and the room state check the player row, so the creator can answer like any player. The state says
+  `role: "creator" | "player"` and always contains `me`; only the creator also gets `previewUrls` and the
+  `scoreboard`, until the next ticket moves the clips to every device.
+- **At most 25 players**, the creator included (was 50). **Start needs at least 2 players** (was 1).
+- **Closing rules:** a room closes 30 minutes after it was created if its game has not started, and 3 hours
+  after it was created in any case (`isRoomClosed`, was `isRoomExpired`). Both are worked out from
+  `created_at` and the room's status on every request – still no background job. A closed room's link or
+  code shows "This room has closed": the state route answers 404/409 before it looks at the token, so the
+  room page can say so before anyone types a nickname.
+- **Fixed settings for now:** Multiplayer, title mode, any genre and decade, one set of 5 rounds. Room
+  settings come in a later ticket.
+- **The token in the browser** lives in `sessionStorage`, one per room code: it survives a reload of the tab,
+  and a second tab can join as a second player.
+- **After logging in** the login page goes to `?next=` (e.g. back to "Create a room"), but only to a plain path
+  on this site (`safeNextPath`), so our login page cannot be used to send people to another site.
+
+### Why
+- **The creator plays:** the reworked rooms are played by everyone on their own device; nobody only runs the
+  game. One token per person keeps it simple, and reusing `host_token_hash` avoids a schema change while the
+  role can still be handed to another player later (ticket "Play again") by copying that player's hash.
+- **25 players:** a class-sized room; the "Multiplayer room" in `GLOSSARY.md` says two to twenty-five.
+- **2 to start:** a room game with one player is a solo game.
+- **30 minutes in the lobby:** an abandoned lobby should not stay joinable for 3 hours.
+- **`sessionStorage`:** easy to test with two tabs, and nothing stays behind after the tab is closed.
+
+### Alternatives
+- **A `creator_player_id` column** on `rooms`: clearer, but a schema change and a circular reference between
+  `rooms` and `room_players`.
+- **Renaming `host_token_hash`:** the better name, but every existing database would need a migration.
+- **`localStorage`:** survives closing the tab, but then every tab of one browser is the same player.
+- **Checking the login on the server before showing the create page:** with `cacheComponents` this needs a
+  Suspense boundary; the page asks `/api/accounts/me` instead, and the server checks again when creating.
+
+### Limits
+- If the browser blocks `sessionStorage`, the creator loses their seat on reload and cannot start the room.
+- Closing a tab does not leave the room: the nickname stays in the lobby. Leaving comes with "Away, kick and
+  leave" (#40).
+- One account can create any number of rooms (spec 002, still out of scope).

@@ -2,8 +2,12 @@
 import { parseAnswerInput } from "./answers";
 import { ANSWER_TIME_SECONDS } from "./scoring";
 
-// A room closes this long after it was created.
+// A room closes this long after it was created, whatever happens in it.
 export const ROOM_LIFETIME_HOURS = 3;
+// A room whose game has not started closes this long after it was created.
+export const LOBBY_LIFETIME_MINUTES = 30;
+// Start works only with at least this many players.
+export const MIN_PLAYERS_TO_START = 2;
 export const NICKNAME_MAX_LENGTH = 20;
 
 // A room code is 6 digits and never starts with 0 (the database has the same rule).
@@ -30,9 +34,12 @@ export function readBearerToken(header: string | null): string | null {
   return match ? match[1] : null;
 }
 
-// A room expires 3 hours after it was created – worked out from created_at, no extra column.
-export function isRoomExpired(createdAt: Date, now: Date): boolean {
-  return now.getTime() - createdAt.getTime() >= ROOM_LIFETIME_HOURS * 60 * 60 * 1000;
+// A room closes 30 minutes after it was created if its game has not started, and 3 hours after it was
+// created in any case. Worked out from created_at on every request – no extra column, no background job.
+export function isRoomClosed(room: { createdAt: Date; status: "lobby" | "playing" | "finished" }, now: Date): boolean {
+  const age = now.getTime() - room.createdAt.getTime();
+  if (room.status === "lobby" && age >= LOBBY_LIFETIME_MINUTES * 60 * 1000) return true;
+  return age >= ROOM_LIFETIME_HOURS * 60 * 60 * 1000;
 }
 
 // Is the answer time of a round over? Exactly 15 seconds still counts, the same as in scoring.ts.

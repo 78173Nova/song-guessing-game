@@ -3,7 +3,7 @@ import AccountButtons from "@/components/AccountButtons";
 import RoomCodeForm from "@/components/RoomCodeForm";
 import styles from "@/components/Landing.module.css";
 
-// The front page: what the game is, and every way in (solo, room code, account).
+// The front page: what the game is, and every way in (solo, create a room, join a room, room code, account).
 export default function Home() {
   return (
     <div className={styles.page}>
@@ -23,13 +23,22 @@ export default function Home() {
           </li>
         </ul>
 
-        <AccountButtons />
+        <nav className={styles.mainButtons} aria-label="Ways to play">
+          <Link href="/solo" className={`${styles.primary} ${styles.big}`}>
+            Play solo
+          </Link>
+          {/* A guest is sent to log in first and comes back to /create afterwards (app/create/page.tsx). */}
+          <Link href="/create" className={`${styles.primary} ${styles.big}`}>
+            Create a room
+          </Link>
+          <Link href="/join" className={`${styles.secondary} ${styles.big}`}>
+            Join a room
+          </Link>
+        </nav>
 
         <RoomCodeForm />
 
-        <Link href="/solo" className={styles.textLink}>
-          Play solo →
-        </Link>
+        <AccountButtons />
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-// POST /api/rooms/[code]/next – the host opens the next round. The steps live in lib/api/rooms.ts.
+// POST /api/rooms/[code]/next – the room creator opens the next round. The steps live in lib/api/rooms.ts.
 import { safely } from "@/lib/api/games";
 import { openNextRound } from "@/lib/api/rooms";
 import { getDb } from "@/lib/db/client";
