@@ -1,8 +1,8 @@
 # 014 – Accounts
 
 Date: 16 Nov 2026 · Status: started (sign-up built, issue #24; email verification, issue #26; login, sessions and
-log out, issue #27; password reset, issue #29). Email delivery through Brevo and resending the link are added here
-as updates by their issues (#25, #28).
+log out, issue #27; resending the link, issue #28; password reset, issue #29). Email delivery through Brevo is added
+here as an update by its issue (#25).
 
 Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname): `GLOSSARY.md`.
 
@@ -48,7 +48,16 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   verification link), used or expired (410), with messages that point to the forgot-password page.
 - **One email per minute:** each account has `last_email_sent_at`. `claimEmailSlot` sets it to now in one
   query, only when it is empty or at least 60 seconds old (`EMAIL_THROTTLE_MS`); otherwise the request gets
-  429 "Please wait a minute before asking for another email". Sign-up fills it, so the sign-up email counts too.
+  429 "Please wait a minute before asking for another email". **Every** email to an address goes through it:
+  sign-up, "you already have an account", "Send the email again" and forgot password. Sign-up never answers 429
+  (that would reveal the email): when the slot is taken it gives the normal reply and sends nothing. A pending
+  account that is replaced passes its `last_email_sent_at` on to the new one, so signing up again does not
+  get around the limit.
+- **Send the email again:** after "Verify your email first", the login page offers **"Send the email again"**
+  (with an email box when the person logged in with a username). `POST /api/accounts/resend-verification`
+  takes an email; an unverified account gets a new 24-hour link, and a verified account or an unknown address
+  gets the same reply ("If that address has an account that is not verified yet, we sent it a new link") and
+  no email.
 - **Emails go through `lib/email/`.** The accounts API receives the email sender as a parameter. Until the
   Brevo issue (#25) is built, every email is printed to the server terminal.
 
@@ -76,8 +85,9 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **Reset ends every session:** someone who changes a password because it leaked must be able to throw out
   whoever logged in with it. Opening the reset link proves the person reads the inbox, so the email counts
   as verified too. One hour is short, because a reset link can take over the account.
-- **One email per minute:** without it, the forgot-password form could flood a stranger's inbox. One query
-  takes the slot, so two requests at the same moment cannot both send.
+- **One email per minute:** without it, the forgot-password, resend and sign-up forms could flood a stranger's
+  inbox and use up the daily email quota. One query takes the slot, so two requests at the same moment cannot
+  both send. One limit for all emails, so switching forms does not get around it.
 - **Rules in the database:** they hold even if the code has a mistake, and they handle requests at the same moment.
 
 ## Alternatives
@@ -93,19 +103,23 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - Sign-up still says "This username is taken" when the username is taken, even if the email also belongs to
   that account; usernames are public, so this reveals nothing about the email.
 - Two sign-ups with the same new email at the same moment: the loser gets the normal reply but no email.
-- An expired link can only be replaced by signing up again until "Send the email again" (#28) exists.
+- A new verification link does not cancel older ones; each still works once until its 24 hours are up.
+- **The limit is per address, not per sender:** it does not stop someone from asking for emails to many
+  different addresses, one each per minute. A limit per IP address would need shared storage; not built.
 - **No lockout after wrong passwords** and no rate limit on log in (decided on 15 Nov 2026): someone can keep
   guessing a password. scrypt makes each guess slow, and a lockout would let anyone lock a stranger out.
 - Sessions are not renewed while in use: after 30 days the person logs in again. Expired sessions stay in the
   table (no clean-up job); they no longer work.
 - **The 429 reveals a little:** forgot password answers an unknown email always with 200, but a known email
   asked again within 60 seconds with 429. Someone who asks twice for the same address can tell it has an
-  account. Accepted: the spec asks for the "please wait" message, and it costs a minute per guess.
+  account. Accepted: the spec asks for the "please wait" message, and it costs a minute per guess. "Send the email
+  again" works the same way for unverified accounts (the login form already says "Verify your email first" to
+  whoever knows the password).
 - Asking for a new reset link does not cancel older ones; each still works once until its hour is up.
 - Changing the password while logged in (without the email) is not built; use "Forgot password?".
 - "Looks like an email" does not prove the address exists; only opening the link does.
 - Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
 
 ## How it could change
-- Brevo delivery (#25) and resend (#28) extend `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
+- Brevo delivery (#25) extends `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
 - A login provider could later be linked to the same `users` table.
