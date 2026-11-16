@@ -107,6 +107,60 @@ When a line below can be read two ways, choose the simpler option that keeps the
       polling stops when the room is finished
 - [ ] No test calls the real iTunes API or the real Neon database
 
+## Routes (agreed 15 Nov 2026, built in `feature/room-api`)
+Every request except "create" and "join" sends the header `Authorization: Bearer <token>` (host token or
+player token, 64 hex characters). The game ID is never sent to any page.
+
+| Method and path | Who | Body | Success |
+|---|---|---|---|
+| `POST /api/rooms` | anyone | – | 201 `{ code, hostToken }` |
+| `POST /api/rooms/[code]/join` | anyone | `{ "nickname": "Anna" }` | 201 `{ playerToken, nickname }` |
+| `GET /api/rooms/[code]` | host or player | – | 200 room state (below) |
+| `POST /api/rooms/[code]/start` | host | – | 200 `{ totalRounds, previewUrls }` |
+| `POST /api/rooms/[code]/next` | host | – | 200 `{ round, totalRounds, previewUrl, options, secondsLeft }` |
+| `POST /api/rooms/[code]/answer` | player | `{ "round": 1, "answer": 0–3 }` | 200 `{ round, answer }` – no right/wrong yet |
+| `POST /api/rooms/[code]/replace` | host | `{ "round": 3 }` | 200 `{ round, previewUrl }` – only rounds not opened yet |
+
+Room state:
+```
+{
+  code: "482913",
+  status: "lobby" | "playing" | "finished",
+  role: "host" | "player",
+  players: ["Anna", "Ben"],          // nicknames in join order
+  totalRounds: 5,
+  round: null | {                    // the latest round that was opened – the same for every viewer
+    number: 2,
+    status: "open" | "closed",
+    options: ["…", "…", "…", "…"],
+    secondsLeft: 9.4,                // from server time, 0 once closed
+    answeredCount: 7,
+    correctOption: 2,                                // only once closed
+    song: { title, artist, artworkUrl, storeUrl }    // only once closed
+  },
+  // host only:
+  previewUrls: [5 clip addresses] | null,            // null in the lobby
+  scoreboard: [{ rank, nickname, score }],           // closed rounds only
+  // player only:
+  me: { nickname, score, rank,                       // closed rounds only
+        answer: 0–3 | null,                          // this phone's choice in `round`
+        correct: true | false | null,                // null while the round is open
+        points: number | null }                      // null while the round is open
+}
+```
+After round 5 closes, `status` is `finished`; `round` still shows round 5 and the scoreboard is final.
+
+Errors are `{ error, message }`:
+
+| Status | `error` |
+|---|---|
+| 400 | `malformed`, `invalid-nickname`, `invalid-option`, `round-out-of-range` |
+| 403 | `wrong-token` (missing, wrong shape, unknown, from another room, or the wrong role) |
+| 404 | `room-not-found` (unknown code, or not 6 digits) |
+| 409 | `room-closed` (3 hours over), `room-started`, `room-full`, `nickname-taken`, `no-players`, `not-started`, `round-still-open`, `game-finished`, `round-not-open`, `too-late`, `already-answered`, `round-already-started` |
+| 503 | `not-enough-songs` |
+| 500 | `server-error` |
+
 ## Out of scope
 - QR code, big-screen design, leaderboard animations (presentation mode)
 - Music on the phones, synchronised start (online duel)

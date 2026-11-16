@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { answerRound, replaceRoundSong, safely, sendNextRound, startGame } from "@/lib/api/games";
-import type { Db } from "@/lib/db/client";
+import { createNewRoom, joinRoom, startRoomGame } from "@/lib/api/rooms";
+import type { Db, TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { setCatalogue } from "@/lib/db/songs";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
@@ -307,6 +308,51 @@ describe("POST /api/games/[id]/replace", () => {
       status: 503,
       body: { error: "not-enough-songs", message: MUSIC_UNAVAILABLE_MESSAGE },
     });
+    expect(await getGameRounds(db, gameId)).toEqual(before);
+  });
+});
+
+// Room games are closed to the solo routes (spec 002): they only ask for a game ID and no token.
+describe("solo routes on a room game", () => {
+  // A started room with one player. Returns the ID of its game (read from the database).
+  async function startedRoomGame(): Promise<string> {
+    const roomDb = db as TransactionDb; // the test database can always run transactions
+    await addTestSongs(db, 8);
+    const room = (await createNewRoom(roomDb, deps)).body as { code: string; hostToken: string };
+    await joinRoom(roomDb, room.code, JSON.stringify({ nickname: "Anna" }), deps);
+    const started = await startRoomGame(roomDb, room.code, `Bearer ${room.hostToken}`, deps);
+    expect(started.status).toBe(200);
+    const rows = await db.query<{ game_id: string }>("SELECT game_id FROM rooms WHERE code = $1", [room.code]);
+    return rows[0].game_id;
+  }
+
+  const notFound = { status: 404, body: { error: "game-not-found", message: "This game does not exist." } };
+
+  it("next returns 404 and opens no round", async () => {
+    const gameId = await startedRoomGame();
+
+    expect(await sendNextRound(db, gameId, deps)).toEqual(notFound);
+    expect((await getGameRounds(db, gameId))!.every((round) => round.status === "waiting")).toBe(true);
+  });
+
+  it("answer returns 404 and stores nothing, even while the room's round is open", async () => {
+    const gameId = await startedRoomGame();
+    await db.query("UPDATE rounds SET status = 'open', started_at = $2 WHERE game_id = $1 AND round_number = 1", [
+      gameId,
+      clock.toISOString(),
+    ]);
+    const before = await getGameRounds(db, gameId);
+
+    expect(await answer(gameId, { round: 1, answer: 0 })).toEqual(notFound);
+    expect(await answer(gameId, { round: 1, answer: "skip" })).toEqual(notFound);
+    expect(await getGameRounds(db, gameId)).toEqual(before);
+  });
+
+  it("replace returns 404 and keeps the round's song", async () => {
+    const gameId = await startedRoomGame();
+    const before = await getGameRounds(db, gameId);
+
+    expect(await replaceRoundSong(db, gameId, JSON.stringify({ round: 3 }))).toEqual(notFound);
     expect(await getGameRounds(db, gameId)).toEqual(before);
   });
 });

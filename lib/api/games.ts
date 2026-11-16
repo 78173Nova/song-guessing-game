@@ -11,7 +11,9 @@ import {
   markRoundSent,
   replaceRound,
   saveAnswer,
+  type StoredRound,
 } from "../db/games";
+import { isRoomGame } from "../db/rooms";
 import { listSongsWithPreview } from "../db/songs";
 import { filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
@@ -24,8 +26,8 @@ export type ApiResult = { status: number; body: Record<string, unknown> };
 
 type Deps = { now?: () => Date };
 
-// Reads a small JSON body; null if it is too long or not JSON.
-function readJson(rawBody: string): { ok: true; body: unknown } | { ok: false } {
+// Reads a small JSON body; not ok if it is too long or not JSON. Also used by lib/api/rooms.ts.
+export function readJson(rawBody: string): { ok: true; body: unknown } | { ok: false } {
   if (rawBody.length > MAX_BODY_LENGTH) return { ok: false };
   try {
     return { ok: true, body: JSON.parse(rawBody) };
@@ -69,6 +71,14 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
     console.error("Game API error:", error);
     return fail("server-error");
   }
+}
+
+// The rounds of a solo game. null = there is no such game – or the game belongs to a room.
+// Room games are closed to the solo routes (spec 002): these routes only ask for a game ID, so otherwise
+// anyone who learned the ID could open rounds, answer or swap songs for the whole room.
+async function getSoloGameRounds(db: Db, gameId: string): Promise<StoredRound[] | null> {
+  if (await isRoomGame(db, gameId)) return null;
+  return getGameRounds(db, gameId);
 }
 
 // POST /api/games – checks the chosen mode and filters, picks the matching songs (avoiding those of the
@@ -121,7 +131,7 @@ export async function sendNextRound(db: Db, gameId: string, deps: Deps = {}): Pr
   const now = deps.now ?? (() => new Date());
   if (!isValidGameId(gameId)) return fail("game-not-found");
 
-  const rounds = await getGameRounds(db, gameId);
+  const rounds = await getSoloGameRounds(db, gameId);
   if (rounds === null) return fail("game-not-found");
 
   const next = nextRoundNumber(rounds);
@@ -161,7 +171,7 @@ export async function answerRound(
   const input = parseAnswerInput(json.body);
   if (!input.ok) return fail(input.error);
 
-  const rounds = await getGameRounds(db, gameId);
+  const rounds = await getSoloGameRounds(db, gameId);
   if (rounds === null) return fail("game-not-found");
   if (input.round > rounds.length) return fail("round-out-of-range");
 
@@ -218,7 +228,7 @@ export async function replaceRoundSong(
   const input = parseRoundInput(json.body);
   if (!input.ok) return fail(input.error);
 
-  const rounds = await getGameRounds(db, gameId);
+  const rounds = await getSoloGameRounds(db, gameId);
   if (rounds === null) return fail("game-not-found");
   if (input.round > rounds.length) return fail("round-out-of-range");
   if (rounds[input.round - 1].status !== "waiting") return fail("round-already-started");
