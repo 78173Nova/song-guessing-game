@@ -1,7 +1,8 @@
 # 014 – Accounts
 
-Date: 16 Nov 2026 · Status: started (sign-up built, issue #24; email verification, issue #26). Login and sessions,
-email delivery through Brevo and password reset are added here as updates by their issues (#25, #27–#29).
+Date: 16 Nov 2026 · Status: started (sign-up built, issue #24; email verification, issue #26; login, sessions and
+log out, issue #27). Email delivery through Brevo, resending the link and password reset are added here as updates
+by their issues (#25, #28, #29).
 
 Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname): `GLOSSARY.md`.
 
@@ -28,6 +29,15 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **The database decides who wins:** a unique index on `lower(username)` and a unique `email`. Sign-up
   runs one transaction (delete the unverified account with that email, insert with `ON CONFLICT DO
   NOTHING`, then read why nothing was inserted), so of two sign-ups at the same moment exactly one wins.
+- **Log in:** one box "Username or email" and a password. A value with `@` is an email, otherwise a username;
+  both ignore case. A wrong password, an unknown username and an unknown email all get 401 "Wrong username/email
+  or password". With no account, a fixed dummy hash is checked, so the reply takes the same time. The right
+  password for an account that is not verified yet gets 403 "Verify your email first".
+- **Sessions:** logging in creates a session: 32 random bytes in a cookie called `session` (`HttpOnly`,
+  `Secure`, `SameSite=Lax`, `Path=/`, 30 days). Only its SHA-256 hash is stored in `sessions`, with an end
+  time; deleting an account deletes its sessions. `GET /api/accounts/me` returns the username, or `null` for a
+  missing, unknown or expired session. **Log out** deletes this browser's session and clears the cookie; other
+  browsers of the same account stay logged in.
 - **Emails go through `lib/email/`.** The accounts API receives the email sender as a parameter. Until the
   Brevo issue (#25) is built, every email is printed to the server terminal.
 
@@ -44,12 +54,22 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - **Token out of the address bar:** a token left in the URL can end up in the browser history, a shared
   screenshot or a copied link. One query uses the token and verifies the account, so of two clicks at the
   same moment exactly one wins.
+- **Same reply for wrong password and unknown account, same time:** otherwise the login form could be used to
+  find out which usernames and emails have an account. The dummy hash removes the timing difference (scrypt
+  takes long, so skipping it would be easy to measure).
+- **Cookie settings:** `HttpOnly` keeps the token away from page JavaScript (and from an injected script),
+  `Secure` keeps it off plain HTTP, `SameSite=Lax` stops other sites from sending it with their forms. Hashed
+  like every other token, so a leaked database cannot log anyone in.
+- **The landing page asks `/me`:** page JavaScript cannot read an `HttpOnly` cookie, and the landing page can
+  stay a fast static page.
 - **Rules in the database:** they hold even if the code has a mistake, and they handle requests at the same moment.
 
 ## Alternatives
 - **Login with Google/GitHub:** less to build securely, but more setup and an outside dependency (out of scope).
 - **bcrypt or argon2:** good as well, but need a package; scrypt is built in.
 - **Telling the user "this email is taken":** clearer, but reveals who has an account.
+- **A signed token (JWT) instead of a sessions table:** no database read per request, but it cannot be ended
+  on the server before it runs out, so log out and "end every session after a password reset" would not really work.
 
 ## Limits
 - Usernames held by accounts that are never verified stay taken until someone signs up again with that
@@ -58,10 +78,14 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   that account; usernames are public, so this reveals nothing about the email.
 - Two sign-ups with the same new email at the same moment: the loser gets the normal reply but no email.
 - An expired link can only be replaced by signing up again until "Send the email again" (#28) exists.
+- **No lockout after wrong passwords** and no rate limit on log in (decided on 15 Nov 2026): someone can keep
+  guessing a password. scrypt makes each guess slow, and a lockout would let anyone lock a stranger out.
+- Sessions are not renewed while in use: after 30 days the person logs in again. Expired sessions stay in the
+  table (no clean-up job); they no longer work.
 - "Looks like an email" does not prove the address exists; only opening the link does.
 - Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
 
 ## How it could change
-- Brevo delivery (#25), login and sessions (#27), resend (#28) and password reset (#29)
+- Brevo delivery (#25), resend (#28) and password reset (#29)
   extend `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
 - A login provider could later be linked to the same `users` table.
