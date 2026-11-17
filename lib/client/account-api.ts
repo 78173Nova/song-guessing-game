@@ -53,3 +53,26 @@ export function apiForgotPassword(email: string, fetchFn: FetchFn = fetch) {
 export function apiResetPassword(token: string, password: string, fetchFn: FetchFn = fetch) {
   return post<{ message: string }>("/api/accounts/reset-password", { token, password }, fetchFn);
 }
+
+// The saved avatar and usual nickname of the logged-in account (issue #44); null until chosen.
+export type AccountSettings = { username: string; avatar: string | null; nickname: string | null };
+
+// The logged-in account's settings, or null for a guest (401), a server error or no connection – the nickname
+// screen then treats the person as a guest.
+export async function apiAccountSettings(fetchFn: FetchFn = fetch): Promise<AccountSettings | null> {
+  try {
+    const response = await fetchFn("/api/accounts/settings", { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = (await response.json()) as Partial<AccountSettings>;
+    return typeof data.username === "string"
+      ? { username: data.username, avatar: data.avatar ?? null, nickname: data.nickname ?? null }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// Saves the avatar and usual nickname ("" removes the usual nickname). The server checks both again.
+export function apiSaveAccountSettings(form: { avatar: string; nickname: string }, fetchFn: FetchFn = fetch) {
+  return post<AccountSettings>("/api/accounts/settings", form, fetchFn);
+}

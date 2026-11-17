@@ -4,11 +4,13 @@
 // gets a tick once they have answered, never what they answered. Which side shows what: lib/client/room-duel.ts.
 import { ROUND_SECONDS } from "@/lib/client/countdown";
 import { duelSides } from "@/lib/client/room-duel";
+import { avatarEmoji } from "@/lib/game/avatars";
 import styles from "./RoomDuel.module.css";
 
 export default function RoomDuel({
   players,
   away,
+  avatars,
   me,
   standings,
   answered,
@@ -19,6 +21,7 @@ export default function RoomDuel({
 }: {
   players: string[];
   away: string[]; // players whose device has not asked for 5 s (issue #40)
+  avatars: Record<string, string>; // each player's avatar id by nickname (issue #44)
   me: string;
   standings: { nickname: string; score: number }[]; // closed rounds only, so the scores change after each round
   answered: string[]; // who has answered the round on screen
@@ -47,6 +50,7 @@ export default function RoomDuel({
                   ⏳{" "}
                 </span>
               )}
+              <span aria-hidden="true">{avatarEmoji(avatars[sides.opponent.nickname])} </span>
               <span className={styles.nickname} title={sides.opponent.nickname}>
                 {sides.opponent.nickname}
               </span>
@@ -84,6 +88,7 @@ export default function RoomDuel({
       <div className={styles.me}>
         <p className={styles.name}>
           {iAnswered && <span aria-label="you have answered">✓ </span>}
+          <span aria-hidden="true">{avatarEmoji(avatars[sides.me.nickname])} </span>
           <span className={styles.nickname}>{sides.me.nickname}</span>
         </p>
         <p className={styles.score} aria-label="Your score">

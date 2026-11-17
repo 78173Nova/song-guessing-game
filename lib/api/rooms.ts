@@ -65,7 +65,8 @@ import { buildReplacementRound, buildRounds } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 import { looksLikeToken } from "../accounts/rules";
-import { findSessionUsername } from "../db/accounts";
+import { findSessionAccount, saveFirstAvatar, type SessionAccount } from "../db/accounts";
+import { DEFAULT_AVATAR, isAvatar } from "../game/avatars";
 import { readJson, type ApiResult } from "./games";
 
 // The tests pass their own clock, song shuffle and room codes. The app uses the real ones.
@@ -77,6 +78,7 @@ const MAX_CODE_DRAWS = 10;
 const ERRORS = {
   malformed: { status: 400, message: "The request is not valid." },
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
+  "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
   "invalid-settings": { status: 400, message: "Please choose valid room settings." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
   "round-out-of-range": { status: 400, message: "This round does not exist in this game." },
@@ -165,30 +167,51 @@ async function findRoomAsPlayer(
   return { ok: true, room: found.room, player };
 }
 
-// Reads { nickname } from a request body: the nickname without the spaces around it, or the error to send.
-function readNickname(rawBody: string): Found<{ nickname: string }> {
+// Reads { nickname, avatar } from a request body: the nickname without the spaces around it and the avatar
+// (undefined when the body names none), or the error to send. An avatar must be one of the fixed set (issue #44).
+function readJoinInput(rawBody: string): Found<{ nickname: string; avatar: string | undefined }> {
   const json = readJson(rawBody);
   if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
     return { ok: false, result: fail("malformed") };
   }
   const nickname = parseNickname((json.body as Record<string, unknown>).nickname);
   if (nickname === null) return { ok: false, result: fail("invalid-nickname") };
-  return { ok: true, nickname };
+  const { avatar } = json.body as Record<string, unknown>;
+  if (avatar !== undefined && !isAvatar(avatar)) return { ok: false, result: fail("invalid-avatar") };
+  return { ok: true, nickname, avatar };
 }
 
-// Reads { nickname, settings? } from the body of "create a room". Only these two fields are allowed. Without
+// The account of a session cookie, or null for a guest (no, an unknown or an expired session).
+async function accountOf(db: TransactionDb, sessionToken: string | undefined, now: Date): Promise<SessionAccount | null> {
+  return looksLikeToken(sessionToken) ? findSessionAccount(db, sessionToken, now) : null;
+}
+
+// The avatar a player shows in the room: the one picked on the nickname screen, else the account's saved one,
+// else the music note.
+const avatarFor = (picked: string | undefined, account: SessionAccount | null) =>
+  picked ?? account?.avatar ?? DEFAULT_AVATAR;
+
+// An account holder's first room saves the avatar they picked to the account, once (issue #44). Later rooms and
+// guests change nothing; Account settings changes it.
+async function rememberFirstAvatar(db: TransactionDb, account: SessionAccount | null, picked: string | undefined) {
+  if (account !== null && account.avatar === null && picked !== undefined) await saveFirstAvatar(db, account.id, picked);
+}
+
+// Reads { nickname, avatar?, settings? } from the body of "create a room". Only these fields are allowed. Without
 // settings the room gets the default ones (DEFAULT_ROOM_SETTINGS).
-function readCreateInput(rawBody: string): Found<{ nickname: string; settings?: RoomSettings }> {
-  const input = readNickname(rawBody);
+function readCreateInput(
+  rawBody: string,
+): Found<{ nickname: string; avatar: string | undefined; settings?: RoomSettings }> {
+  const input = readJoinInput(rawBody);
   if (!input.ok) return input;
   const { body } = readJson(rawBody) as { ok: true; body: Record<string, unknown> };
-  if (Object.keys(body).some((field) => field !== "nickname" && field !== "settings")) {
+  if (Object.keys(body).some((field) => field !== "nickname" && field !== "avatar" && field !== "settings")) {
     return { ok: false, result: fail("malformed") };
   }
-  if (!("settings" in body)) return { ok: true, nickname: input.nickname };
+  if (!("settings" in body)) return { ok: true, nickname: input.nickname, avatar: input.avatar };
   const settings = parseRoomSettings(body.settings);
   if (settings === null) return { ok: false, result: fail("invalid-settings") };
-  return { ok: true, nickname: input.nickname, settings };
+  return { ok: true, nickname: input.nickname, avatar: input.avatar, settings };
 }
 
 // 422 with the number of matching songs: the room creator can fix it by choosing other settings.
@@ -206,7 +229,7 @@ function buildRoomRounds(songs: Song[], settings: RoomSettings, now: Date, rando
   return buildRounds(songs, random, { mode: settings.mode, currentYear: now.getFullYear(), rounds: totalRoundsOf(settings) });
 }
 
-// POST /api/rooms – an account holder creates a room with { nickname, settings } and becomes its room creator: the first
+// POST /api/rooms – an account holder creates a room with { nickname, avatar?, settings? } and becomes its room creator: the first
 // player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
 // creator's player token and the nickname as it was stored. The token is returned only this once: the database
 // keeps just its hash (decision 012). It is also the room's creator key for Start.
@@ -220,9 +243,8 @@ export async function createNewRoom(
   const now = deps.now ?? (() => new Date());
   const newCode = deps.newCode ?? randomRoomCode;
 
-  if (!looksLikeToken(sessionToken) || (await findSessionUsername(db, sessionToken, now())) === null) {
-    return fail("log-in-needed");
-  }
+  const account = await accountOf(db, sessionToken, now());
+  if (account === null) return fail("log-in-needed");
   const input = readCreateInput(rawBody);
   if (!input.ok) return input.result;
   if (input.settings !== undefined) {
@@ -236,6 +258,7 @@ export async function createNewRoom(
       );
     }
   }
+  const avatar = avatarFor(input.avatar, account);
 
   const playerToken = randomToken();
   // Codes are never reused, so a drawn code can be taken. Then we draw again.
@@ -244,10 +267,12 @@ export async function createNewRoom(
       code: newCode(),
       creatorToken: playerToken,
       nickname: input.nickname,
+      avatar,
       now: now(),
       settings: input.settings,
     });
     if (created !== null) {
+      await rememberFirstAvatar(db, account, input.avatar);
       return { status: 201, body: { code: created.room.code, playerToken, nickname: created.creator.nickname } };
     }
   }
@@ -263,42 +288,58 @@ export async function countMatchingSongs(db: Db, params: URLSearchParams): Promi
   return { status: 200, body: { count: matchingSongs(await listSongsWithPreview(db), choice).length } };
 }
 
+// What the join request says about who is joining: the Authorization header (the tab's old player token, issue #40)
+// and the session cookie (issue #44). Both are optional.
+export type JoinFrom = { authorization?: string | null; sessionToken?: string };
+
 // POST /api/rooms/[code]/join – adds a player to a room that is still in the lobby. Returns the player
 // token (only this once) and the nickname as it was stored. The player who fills the last seat (2 in a Duel room,
 // 25 in a Multiplayer room) starts the game: a full room starts by itself (issue #34).
-// A tab that was kicked from this room still has its old token and sends it along (issue #40): then the join is
-// refused, so a kicked player cannot simply come back under another nickname from the same tab.
+// `from.authorization`: a tab that was kicked from this room still has its old token and sends it along (issue #40):
+// then the join is refused, so a kicked player cannot simply come back under another nickname from the same tab.
+// `from.sessionToken`: guests and account holders can join; the session cookie (if any) only decides the avatar: an
+// account holder's saved one when none is picked, and a first pick is saved to the account (issue #44).
 export async function joinRoom(
   db: TransactionDb,
   code: string,
   rawBody: string,
   deps: Deps = {},
-  authorization: string | null = null,
+  from: JoinFrom = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
 
-  const input = readNickname(rawBody);
+  const input = readJoinInput(rawBody);
   if (!input.ok) return input.result;
   const { nickname } = input;
 
   const found = await findOpenRoom(db, code, now());
   if (!found.ok) return found.result;
 
-  const oldToken = readBearerToken(authorization);
+  const oldToken = readBearerToken(from.authorization ?? null);
   const before = oldToken === null ? null : await findPlayerByToken(db, found.room.id, oldToken);
   if (before?.removed === "kicked") return fail("kicked");
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
   const maxPlayers = MAX_PLAYERS_BY_TYPE[found.room.settings.type];
-  const added = await addPlayer(db, { roomId: found.room.id, nickname, token: playerToken, now: now(), maxPlayers });
+  const account = await accountOf(db, from.sessionToken, now());
+  const avatar = avatarFor(input.avatar, account);
+  const added = await addPlayer(db, {
+    roomId: found.room.id,
+    nickname,
+    avatar,
+    token: playerToken,
+    now: now(),
+    maxPlayers,
+  });
   if (!added.ok) {
     if (added.reason === "room_not_found") return fail("room-not-found");
     if (added.reason === "not_in_lobby") return fail("room-started");
     if (added.reason === "nickname_taken") return fail("nickname-taken");
     return fail("room-full");
   }
+  await rememberFirstAvatar(db, account, input.avatar);
   if ((await listPlayers(db, found.room.id)).length >= maxPlayers) {
     const started = await startGameNow(db, found.room, now(), deps.random);
     // The join itself worked. If the game cannot start, the room creator sees why on "Start now".
@@ -492,6 +533,7 @@ export async function answerRoomRound(
 // correct answer, the song or any points (decision 004).
 //
 // For the game the reply has:
+//   avatars     – each player's avatar id, by nickname
 //   serverNow   – the server's clock, so a device can work out how far its own clock is off
 //   startingPlayers – how many players the game started with (null in the lobby), for the duel layout (#39)
 //   answered    – the nicknames of the players who have answered the round on screen (not what they chose)
@@ -553,6 +595,8 @@ export async function getRoomState(
     status: game.status,
     role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
+    // Each player's avatar id by nickname (issue #44), for the lobby, the game board and the standings.
+    avatars: Object.fromEntries(game.players.map((player) => [player.nickname, player.avatar])),
     settings: room.settings,
     // How many players the game started with (null in the lobby). With 2 the page shows the duel layout
     // (issue #39), also after one of them has left.
@@ -710,7 +754,7 @@ export async function kickRoomPlayer(
   const { room, player: me } = found;
   if ((await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) === null) return fail("not-creator");
 
-  const input = readNickname(rawBody);
+  const input = readJoinInput(rawBody); // the body is { nickname } of the player to kick
   if (!input.ok) return input.result;
   const target = (await listPlayers(db, room.id)).find(
     (player) => player.nickname.toLowerCase() === input.nickname.toLowerCase() && player.id !== me.id,

@@ -26,6 +26,7 @@ export type RoomState = {
   status: "lobby" | "playing" | "finished";
   role: "creator" | "player";
   players: string[];
+  avatars?: Record<string, string>; // each player's avatar id by nickname (issue #44); missing = music note
   settings?: RoomSettings; // fixed when the room was created (issue #34)
   startingPlayers?: number | null; // how many players the game started with; null in the lobby (issue #39)
   answered: string[]; // who has answered the round in `round` (not what they chose)
@@ -70,10 +71,13 @@ export type StateResult =
 
 const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+// What a player picks on the nickname screen (issue #44).
+export type NicknameChoice = { nickname: string; avatar: string };
+
 // Creating needs the session cookie, which the browser sends by itself. Without settings the server uses the
 // default ones.
-export function apiCreateRoom(nickname: string, fetchFn: FetchFn = fetch, settings?: RoomSettings) {
-  return post<JoinedRoom>("/api/rooms", settings === undefined ? { nickname } : { nickname, settings }, fetchFn);
+export function apiCreateRoom(choice: NicknameChoice, fetchFn: FetchFn = fetch, settings?: RoomSettings) {
+  return post<JoinedRoom>("/api/rooms", settings === undefined ? choice : { ...choice, settings }, fetchFn);
 }
 
 // How many songs match these genres and decades, for the create form. null = the server could not say.
@@ -93,12 +97,18 @@ export async function apiMatchingSongs(
   }
 }
 
+// The browser also sends the session cookie of an account holder, so the server can save a first avatar (issue #44).
 // `oldToken`: the token this tab had in the room before, if any. The server refuses the join when that token was
 // kicked (issue #40).
-export async function apiJoinRoom(code: string, nickname: string, fetchFn: FetchFn = fetch, oldToken: string | null = null) {
+export async function apiJoinRoom(
+  code: string,
+  choice: NicknameChoice,
+  fetchFn: FetchFn = fetch,
+  oldToken: string | null = null,
+) {
   const result = await post<{ playerToken: string; nickname: string }>(
     `/api/rooms/${encodeURIComponent(code)}/join`,
-    { nickname },
+    choice,
     oldToken === null ? fetchFn : withToken(oldToken, fetchFn),
   );
   return result.ok ? { ok: true as const, data: { code, ...result.data } } : result;

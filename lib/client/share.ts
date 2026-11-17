@@ -1,10 +1,18 @@
 // The share pop-up of a room (issue #35): the join link, opening the pop-up once after creating a room,
 // and copying the link. The address of the site comes from the server's settings (appUrl in lib/email/messages.ts),
 // never from the request's Host header, which an attacker can fake.
+import QRCode from "qrcode";
 
 // The link friends open to join, e.g. https://…/join/482913
 export function roomJoinLink(baseUrl: string, code: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/join/${encodeURIComponent(code)}`;
+}
+
+// The QR code of the join link (issue #42), drawn on the device by the qrcode package (no outside service).
+// It comes back as an SVG image in a data: address, so the pop-up shows it with a plain <img>.
+export async function roomJoinQrCode(baseUrl: string, code: string): Promise<string> {
+  const svg = await QRCode.toString(roomJoinLink(baseUrl, code), { type: "svg", margin: 2 });
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 // The part of the browser's sessionStorage used here, so tests can pass a stand-in.

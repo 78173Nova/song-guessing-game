@@ -7,6 +7,7 @@ import {
   replaceRoomSong,
   startRoomGame,
 } from "@/lib/api/rooms";
+import { getAccountSettings } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { hashToken, listRoomAnswers } from "@/lib/db/rooms";
@@ -720,6 +721,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         status: "lobby",
         role: "creator",
         players: ["Anna", "Ben"],
+        avatars: { Anna: "note", Ben: "note" },
         settings: DEFAULT_ROOM_SETTINGS,
         startingPlayers: null, // issue #39: set once the game starts
         answered: [],
@@ -750,6 +752,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         status: "lobby",
         role: "player",
         players: ["Anna", "Ben"],
+        avatars: { Anna: "note", Ben: "note" },
         settings: DEFAULT_ROOM_SETTINGS,
         startingPlayers: null, // issue #39: set once the game starts
         answered: [],
@@ -1235,5 +1238,99 @@ describe("every error", () => {
       status: 404,
       body: { error: "room-not-found", message: "There is no room with this code." },
     });
+  });
+});
+
+describe("Avatars (issue #44)", () => {
+  const joinWith = (code: string, body: unknown, sessionToken?: string) =>
+    joinRoom(db, code, json(body), deps, { sessionToken });
+  const avatarsOf = async (code: string, token: string) => (await state(code, token)).body.avatars;
+  const savedAvatar = async (sessionToken: string) => (await getAccountSettings(db, sessionToken, deps)).body.avatar;
+
+  it("shows every player's avatar in the state; two players may have the same one", async () => {
+    const room = await newRoom("Anna");
+    await db.query("UPDATE users SET avatar = 'fox'"); // Anna's account already has an avatar
+    const ben = await joinWith(room.code, { nickname: "Ben", avatar: "owl" });
+    const cleo = await joinWith(room.code, { nickname: "Cleo", avatar: "owl" });
+
+    expect(ben.status).toBe(201);
+    expect(cleo.status).toBe(201);
+    const benToken = (ben.body as { playerToken: string }).playerToken;
+    expect(await avatarsOf(room.code, benToken)).toEqual({ Anna: "note", Ben: "owl", Cleo: "owl" });
+  });
+
+  it.each([
+    ["an unknown name", "dragon"],
+    ["an emoji", "🦊"],
+    ["a number", 5],
+    ["null", null],
+  ])("refuses joining with an avatar that is %s, and nobody is added", async (_, avatar) => {
+    const room = await newRoom("Anna");
+
+    expect(await joinWith(room.code, { nickname: "Ben", avatar })).toEqual({
+      status: 400,
+      body: { error: "invalid-avatar", message: expect.any(String) },
+    });
+    expect(await playersOf(room.code, room.creatorToken)).toEqual(["Anna"]);
+  });
+
+  it("refuses creating a room with an unknown avatar, and creates nothing", async () => {
+    expect(await create(session, { nickname: "Anna", avatar: "dragon" })).toMatchObject({
+      status: 400,
+      body: { error: "invalid-avatar" },
+    });
+    expect(await db.query("SELECT id FROM rooms")).toHaveLength(0);
+    expect(await savedAvatar(session)).toBeNull();
+  });
+
+  it("saves an account holder's avatar with their first room, and a later room does not change it", async () => {
+    const first = await create(session, { nickname: "Anna", avatar: "fox" }, { newCode: () => "482913" });
+    expect(first.status).toBe(201);
+    expect(await savedAvatar(session)).toBe("fox");
+
+    // Picked differently in another room: shown there, but the saved one stays.
+    const second = await create(session, { nickname: "Annie", avatar: "cat" }, { newCode: () => "482914" });
+    const token = (second.body as { playerToken: string }).playerToken;
+    expect(await avatarsOf("482914", token)).toEqual({ Annie: "cat" });
+    expect(await savedAvatar(session)).toBe("fox");
+  });
+
+  it("an account holder who joins (does not create) also saves the avatar once", async () => {
+    const room = await newRoom("Zoe");
+    const ben = await loggedInSession(db, START, "Ben_1");
+
+    expect((await joinWith(room.code, { nickname: "Ben", avatar: "owl" }, ben)).status).toBe(201);
+    expect(await savedAvatar(ben)).toBe("owl");
+  });
+
+  it("uses the account's saved avatar when the request names none; a guest without one gets the music note", async () => {
+    await db.query("UPDATE users SET avatar = 'panda'");
+    const room = await newRoom("Anna");
+    const ben = await loggedInSession(db, START, "Ben_1");
+    await db.query("UPDATE users SET avatar = 'lion' WHERE username = 'Ben_1'");
+
+    await joinWith(room.code, { nickname: "Ben" }, ben);
+    await joinWith(room.code, { nickname: "Cleo" });
+    expect(await avatarsOf(room.code, room.creatorToken)).toEqual({ Anna: "panda", Ben: "lion", Cleo: "note" });
+  });
+
+  it("a guest with an unknown or expired session joins as a guest, and no account changes", async () => {
+    const room = await newRoom("Anna");
+
+    expect((await joinWith(room.code, { nickname: "Ben", avatar: "owl" }, "z".repeat(64))).status).toBe(201);
+    expect(await db.query("SELECT avatar FROM users")).toEqual([{ avatar: null }]);
+  });
+
+  it("does not save the avatar when the join is refused", async () => {
+    const room = await newRoom("Anna");
+    const ben = await loggedInSession(db, START, "Ben_1");
+
+    expect((await joinWith(room.code, { nickname: "anna", avatar: "owl" }, ben)).status).toBe(409);
+    expect(await savedAvatar(ben)).toBeNull();
+  });
+
+  it("shows the avatars after Start too", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    expect(await avatarsOf(room.code, room.tokens[1])).toEqual({ Anna: "note", Ben: "note" });
   });
 });
