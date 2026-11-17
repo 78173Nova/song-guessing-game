@@ -38,7 +38,17 @@ export function getEmailSender(
   if (!apiKey) {
     return env.VERCEL ? failingSender("BREVO_API_KEY is not set on this deployment.") : printEmail;
   }
-  const from = env.EMAIL_FROM;
-  if (!from) return failingSender("EMAIL_FROM is not set (the sender address verified in Brevo).");
-  return (email) => sendWithBrevo(email, { apiKey, from, fetchFn });
+  const fromText = env.EMAIL_FROM?.trim();
+  if (!fromText) return failingSender("EMAIL_FROM is not set (the sender address verified in Brevo).");
+  const from = parseFrom(fromText);
+  if (!from) return failingSender('EMAIL_FROM must be an address or "Name <address>".');
+  return (email) => sendWithBrevo(email, { apiKey, from: from.address, fromName: from.name, fetchFn });
+}
+
+// EMAIL_FROM is either an address ("team@example.com") or a name with an address ("SongSnap <team@example.com>").
+// Anything else is null, so a typo shows up as a clear error in the log instead of a refusal from Brevo.
+function parseFrom(text: string): { address: string; name?: string } | null {
+  const match = /^([^<>]*?)\s*<([^<>\s]+@[^<>\s]+)>$/.exec(text) ?? /^()([^<>\s]+@[^<>\s]+)$/.exec(text);
+  if (!match) return null;
+  return { address: match[2], name: match[1].trim() || undefined };
 }

@@ -86,6 +86,57 @@ describe("getEmailSender", () => {
     expect(print).not.toHaveBeenCalled();
   });
 
+  it("accepts EMAIL_FROM as 'Name <address>' and sends the name and address separately", async () => {
+    const fetchFn = vi.fn<FetchFn>(async () => new Response("{}", { status: 201 }));
+
+    const send = getEmailSender({ BREVO_API_KEY: "test-key", EMAIL_FROM: "SongSnap <team@example.com>" }, fetchFn);
+
+    expect(await send(email)).toEqual({ ok: true });
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).sender).toEqual({ email: "team@example.com", name: "SongSnap" });
+  });
+
+  it("accepts 'Name<address>' without a space", async () => {
+    const fetchFn = vi.fn<FetchFn>(async () => new Response("{}", { status: 201 }));
+
+    const send = getEmailSender({ BREVO_API_KEY: "test-key", EMAIL_FROM: "SongSnap<team@example.com>" }, fetchFn);
+
+    await send(email);
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).sender).toEqual({ email: "team@example.com", name: "SongSnap" });
+  });
+
+  it("keeps the default sender name when EMAIL_FROM is only an address", async () => {
+    const fetchFn = vi.fn<FetchFn>(async () => new Response("{}", { status: 201 }));
+
+    const send = getEmailSender({ BREVO_API_KEY: "test-key", EMAIL_FROM: " team@example.com " }, fetchFn);
+
+    await send(email);
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).sender).toEqual({
+      email: "team@example.com",
+      name: "Song Guessing Game",
+    });
+  });
+
+  it("keeps the default sender name for '<address>' with an empty name", async () => {
+    const fetchFn = vi.fn<FetchFn>(async () => new Response("{}", { status: 201 }));
+
+    const send = getEmailSender({ BREVO_API_KEY: "test-key", EMAIL_FROM: "<team@example.com>" }, fetchFn);
+
+    await send(email);
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).sender.name).toBe("Song Guessing Game");
+  });
+
+  it("fails with an error in the log, and never calls Brevo, when EMAIL_FROM is malformed", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const from of ["SongSnap <team@example.com", "SongSnap <>", "SongSnap", "team@example.com>"]) {
+      const fetchFn = vi.fn(async () => new Response("{}", { status: 201 }));
+      const send = getEmailSender({ BREVO_API_KEY: "test-key", EMAIL_FROM: from }, fetchFn);
+
+      expect(await send(email), from).toEqual({ ok: false });
+      expect(fetchFn, from).not.toHaveBeenCalled();
+      expect(String(error.mock.lastCall?.[0]), from).toContain("EMAIL_FROM");
+    }
+  });
+
   it("prints the email to the terminal without a key in local development", async () => {
     const fetchFn = vi.fn(async () => new Response("{}", { status: 201 }));
     const print = vi.spyOn(console, "log").mockImplementation(() => {});

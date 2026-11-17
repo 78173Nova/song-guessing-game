@@ -11,6 +11,7 @@ type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 export type BrevoSettings = {
   apiKey: string;
   from: string; // the sender address verified in Brevo
+  fromName?: string; // the name shown as the sender; "Song Guessing Game" when not given
   fetchFn?: FetchFn; // tests pass a fake; the app uses the real fetch
   timeoutMs?: number;
 };
@@ -23,7 +24,7 @@ export async function sendWithBrevo(email: Email, settings: BrevoSettings): Prom
       method: "POST",
       headers: { "api-key": settings.apiKey, "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
-        sender: { email: settings.from, name: SENDER_NAME },
+        sender: { email: settings.from, name: settings.fromName ?? SENDER_NAME },
         to: [{ email: email.to }],
         subject: email.subject,
         textContent: email.text,

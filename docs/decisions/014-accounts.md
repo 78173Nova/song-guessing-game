@@ -237,7 +237,9 @@ password guesses would cover log in and these routes together.
 - **Which sender:** `getEmailSender` in `lib/email/sender.ts` uses Brevo when `BREVO_API_KEY` and `EMAIL_FROM` are
   set. Without a key, local development prints each email to the terminal (as before). On Vercel (which sets
   `VERCEL`) a missing key, or a key without `EMAIL_FROM`, is an error in the log and the email fails – never a
-  silent print.
+  silent print. `EMAIL_FROM` is an address (`team@example.com`) or a name with an address
+  (`SongSnap <team@example.com>`); without a name the sender is shown as "Song Guessing Game". Any other value is an
+  error in the log, so a typo is noticed before Brevo refuses the email.
 - **A failed email gets its own reply:** sign-up, "Send the email again", "Forgot password?" and changing the email
   reply 503 `email-failed`, "We couldn't send the email right now. Please try again in a minute." The pages show
   that message. A sign-up whose email failed keeps the account (not verified); "Send the email again" works a
