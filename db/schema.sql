@@ -121,6 +121,19 @@ ALTER TABLE room_players ADD COLUMN IF NOT EXISTS removed text CHECK (removed IN
 -- (the 30-minute and 3-hour limits are worked out from created_at).
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS closed_reason text CHECK (closed_reason IN ('creator-left', 'everyone-left'));
 
+-- Play again (issue #43, decision 012): a room hosts up to 5 games, one after another.
+-- earlier_games: the room's finished games, oldest first; game_id is the current one (empty again in the lobby
+-- between two games). lobby_since: when the room last went back to the lobby; the 30-minute lobby limit counts
+-- from it (empty = from created_at). 'no-account-holder': nobody who chose "Play again" has an account, so nobody
+-- can be the room creator.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS earlier_games uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS lobby_since timestamptz;
+ALTER TABLE rooms DROP CONSTRAINT IF EXISTS rooms_closed_reason_check;
+ALTER TABLE rooms ADD CONSTRAINT rooms_closed_reason_check
+  CHECK (closed_reason IN ('creator-left', 'everyone-left', 'no-account-holder'));
+-- play_again: the player chose "Play again" after the current game (reset when the room goes back to the lobby).
+ALTER TABLE room_players ADD COLUMN IF NOT EXISTS play_again boolean NOT NULL DEFAULT false;
+
 -- Room games only: true once a device reported that it could not load this round's clip and the server gave the
 -- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting
 -- failures again and again. Solo games leave it false.
@@ -164,6 +177,10 @@ ALTER TABLE users DROP COLUMN IF EXISTS last_email_sent_at;
 
 -- A username may only exist once, ignoring upper/lower case ("Jasper" = "jasper").
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (lower(username));
+
+-- Play again (issue #43): the account of a room player who was logged in when joining (the room creator always
+-- is); empty for a guest. Only account holders can take over the room creator role. Added here, after users exists.
+ALTER TABLE room_players ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES users (id) ON DELETE SET NULL;
 
 -- Links sent by email: purpose verify (24 hours) or reset (1 hour). Each works once (used_at).
 -- Deleting an account deletes its links.

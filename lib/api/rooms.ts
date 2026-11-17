@@ -9,8 +9,11 @@ import type { Db, TransactionDb } from "../db/client";
 import { createGame, getGameRounds, getQuestionTypes, markRoundSent, type StoredRound } from "../db/games";
 import {
   addPlayer,
+  choosePlayAgain,
   closeRoomRound,
   createRoom,
+  creatorPlayerId,
+  endPlayAgainVote,
   findPlayerByToken,
   findRoomByCreatorToken,
   finishRoom,
@@ -21,6 +24,7 @@ import {
   listRoomAnswers,
   markPlayerSeen,
   saveRoomAnswer,
+  songsPlayedEarlier,
   startRoom,
   swapRoomRound,
   wasRoundSwapped,
@@ -51,8 +55,12 @@ import {
   isTimeUp,
   isValidRoomCode,
   isAway,
+  isPlayAgainVoteOver,
   kickableIfSeenBefore,
+  MAX_GAMES_PER_ROOM,
   nextRoundStartsAt,
+  pickNewCreator,
+  playAgainEndsAt,
   parseNickname,
   parseRoomAnswerInput,
   rankByScore,
@@ -65,7 +73,7 @@ import { buildReplacementRound, buildRounds } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 import { looksLikeToken } from "../accounts/rules";
-import { findSessionUsername } from "../db/accounts";
+import { findSessionUserId } from "../db/accounts";
 import { readJson, type ApiResult } from "./games";
 
 // The tests pass their own clock, song shuffle and room codes. The app uses the real ones.
@@ -84,6 +92,10 @@ const ERRORS = {
   "room-not-found": { status: 404, message: "There is no room with this code." },
   "room-closed": { status: 409, message: "This room has closed." },
   "room-closed-by-creator": { status: 409, message: "The room creator closed the room." },
+  "no-account-holder": { status: 409, message: "No account holder is left to run the room." },
+  "not-finished": { status: 409, message: "The game has not finished yet." },
+  "no-more-games": { status: 409, message: `A room hosts at most ${MAX_GAMES_PER_ROOM} games.` },
+  "vote-over": { status: 409, message: "The time to choose is over." },
   kicked: { status: 403, message: "The room creator removed you from this room." },
   left: { status: 403, message: "You have left this room." },
   "not-creator": { status: 403, message: "Only the room creator can do this." },
@@ -129,6 +141,7 @@ async function findOpenRoom(db: Db, code: string, now: Date): Promise<Found<{ ro
   const room = await getRoomByCode(db, code);
   if (room === null) return { ok: false, result: fail("room-not-found") };
   if (room.closedReason === "creator-left") return { ok: false, result: fail("room-closed-by-creator") };
+  if (room.closedReason === "no-account-holder") return { ok: false, result: fail("no-account-holder") };
   if (room.closedReason !== null || isRoomClosed(room, now)) return { ok: false, result: fail("room-closed") };
   return { ok: true, room };
 }
@@ -202,8 +215,14 @@ async function songsFor(db: Db, settings: RoomSettings): Promise<Song[]> {
 }
 
 // Builds the rounds of a game with these settings: sets × songs per set different songs in the room's mode.
-function buildRoomRounds(songs: Song[], settings: RoomSettings, now: Date, random?: () => number) {
-  return buildRounds(songs, random, { mode: settings.mode, currentYear: now.getFullYear(), rounds: totalRoundsOf(settings) });
+// `avoid`: songs of the room's earlier games, left out while enough others match (issue #43).
+function buildRoomRounds(songs: Song[], settings: RoomSettings, now: Date, random?: () => number, avoid: number[] = []) {
+  return buildRounds(songs, random, {
+    mode: settings.mode,
+    currentYear: now.getFullYear(),
+    rounds: totalRoundsOf(settings),
+    avoid,
+  });
 }
 
 // POST /api/rooms – an account holder creates a room with { nickname, settings } and becomes its room creator: the first
@@ -220,9 +239,8 @@ export async function createNewRoom(
   const now = deps.now ?? (() => new Date());
   const newCode = deps.newCode ?? randomRoomCode;
 
-  if (!looksLikeToken(sessionToken) || (await findSessionUsername(db, sessionToken, now())) === null) {
-    return fail("log-in-needed");
-  }
+  const accountId = looksLikeToken(sessionToken) ? await findSessionUserId(db, sessionToken, now()) : null;
+  if (accountId === null) return fail("log-in-needed");
   const input = readCreateInput(rawBody);
   if (!input.ok) return input.result;
   if (input.settings !== undefined) {
@@ -246,6 +264,7 @@ export async function createNewRoom(
       nickname: input.nickname,
       now: now(),
       settings: input.settings,
+      accountId,
     });
     if (created !== null) {
       return { status: 201, body: { code: created.room.code, playerToken, nickname: created.creator.nickname } };
@@ -274,6 +293,7 @@ export async function joinRoom(
   rawBody: string,
   deps: Deps = {},
   authorization: string | null = null,
+  sessionToken?: string,
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
@@ -292,7 +312,16 @@ export async function joinRoom(
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
   const maxPlayers = MAX_PLAYERS_BY_TYPE[found.room.settings.type];
-  const added = await addPlayer(db, { roomId: found.room.id, nickname, token: playerToken, now: now(), maxPlayers });
+  // A logged-in player is an account holder: they can take over the room creator role after a game (issue #43).
+  const accountId = looksLikeToken(sessionToken) ? await findSessionUserId(db, sessionToken, now()) : null;
+  const added = await addPlayer(db, {
+    roomId: found.room.id,
+    nickname,
+    token: playerToken,
+    now: now(),
+    maxPlayers,
+    accountId,
+  });
   if (!added.ok) {
     if (added.reason === "room_not_found") return fail("room-not-found");
     if (added.reason === "not_in_lobby") return fail("room-started");
@@ -328,9 +357,11 @@ export async function startRoomGame(
 }
 
 // Starts a room's game with its settings: "Start now", or the join that fills the room.
+// A room's next game avoids the songs of its earlier games (issue #43) as long as enough songs match its settings;
+// otherwise it picks from all of them.
 async function startGameNow(db: Db, room: Room, now: Date, random?: () => number): Promise<ApiResult> {
   const songs = await songsFor(db, room.settings);
-  const built = buildRoomRounds(songs, room.settings, now, random);
+  const built = buildRoomRounds(songs, room.settings, now, random, await songsPlayedEarlier(db, room));
   if (!built.ok) return fail("not-enough-songs");
 
   const gameId = await createGame(db, built.rounds, room.settings.mode);
@@ -500,7 +531,7 @@ export async function answerRoomRound(
 //                 clip at that time
 //   standings   – every player's rank and score, counting closed rounds only
 export async function getRoomState(
-  db: Db,
+  db: TransactionDb,
   code: string,
   authorization: string | null,
   deps: Deps = {},
@@ -526,6 +557,14 @@ export async function getRoomState(
     room.status === "lobby"
       ? { status: "lobby", rounds: [], questionTypes: [], players: await listPlayers(db, room.id), answers: [] }
       : await bringUpToDate(db, room, await loadRoomGame(db, room), at);
+
+  // After the game: the vote on "Play again" (issue #43). Once it is over, the room goes back to the lobby (or
+  // closes), and this request answers with the room as it is now – or with "You have left" for a non-voter.
+  const vote = game.status === "finished" ? playAgainVote(room, game, at) : null;
+  if (vote !== null && isPlayAgainVoteOver(vote, at)) {
+    await endVote(db, room, game, at, deps.random ?? Math.random);
+    return getRoomState(db, code, authorization, deps);
+  }
 
   // The round on screen: the latest one that has started. null before round 1's start time.
   const current = game.rounds.findLast((round) => hasStarted(round, at)) ?? null;
@@ -564,6 +603,17 @@ export async function getRoomState(
       ? game.players.filter((player) => player.lastSeenAt < kickableIfSeenBefore(at)).map((player) => player.nickname)
       : [],
     totalRounds: game.rounds.length || totalRoundsOf(room.settings),
+    // Which of the room's games this is (issue #43): the one being played, or the next one in the lobby.
+    gameNumber: gameNumberOf(room),
+    // After a game: when the vote on "Play again" ends and who has chosen it. null during a game, in the lobby
+    // and after the last game a room may host.
+    playAgain:
+      vote === null
+        ? null
+        : {
+            endsAt: vote.endsAt.toISOString(),
+            chosen: game.players.filter((player) => player.playAgain).map((player) => player.nickname),
+          },
     // Read again just before replying: the database calls above take time, and the device compares this with
     // the moment the reply arrives.
     serverNow: now().toISOString(),
@@ -672,12 +722,14 @@ export async function replaceRoomSong(
   if (hasStarted(rounds[input.round - 1], at)) return fail("round-already-started");
 
   // The new song matches the room's genres and decades and keeps the round's question type (issue #34).
+  // Like Start, it avoids songs of the room's earlier games while it can (issue #43).
   const songs = await songsFor(db, room.settings);
   const questionType = ((await getQuestionTypes(db, gameId)) ?? [])[input.round - 1];
-  const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, deps.random, {
-    questionType,
-    currentYear: at.getFullYear(),
-  });
+  const inGame = rounds.map((r) => r.songId);
+  const options = { questionType, currentYear: at.getFullYear() };
+  const played = await songsPlayedEarlier(db, room);
+  const avoiding = buildReplacementRound(songs, [...inGame, ...played], input.round, deps.random, options);
+  const built = avoiding.ok ? avoiding : buildReplacementRound(songs, inGame, input.round, deps.random, options);
   if (!built.ok) return fail("not-enough-songs");
 
   // Only succeeds if the round has not started and has not been swapped – even with two reports at once.
@@ -738,4 +790,92 @@ export async function playerLeavesRoom(
   const result = await leaveRoom(db, { roomId: room.id, playerId: player.id, isCreator });
   if (result === "not-in-room") return fail("wrong-token"); // left at the same moment from another tab
   return { status: 200, body: { left: true, roomClosed: result === "room-closed" } };
+}
+
+// Play again (issue #43). A room hosts up to 5 games, one after another. Which game is this: the one being played,
+// or in the lobby the one that comes next.
+const gameNumberOf = (room: Room) => room.earlierGames.length + 1;
+
+// The vote after a finished game: when it ends, how many of the players still in the room have chosen "Play again",
+// and how many players there are. null after the last game a room may host: then "Play again" is not offered.
+// With `now`: also null once the time is over and nobody chose "Play again" – then nothing changes, and the room
+// stays finished with its final standings, as it did before rooms hosted several games.
+function playAgainVote(
+  room: Room,
+  game: RoomGame,
+  now?: Date,
+): { endsAt: Date; chosen: number; players: number } | null {
+  if (gameNumberOf(room) >= MAX_GAMES_PER_ROOM) return null;
+  const lastClose = game.rounds.at(-1)?.answeredAt;
+  if (!lastClose) return null;
+  const vote = {
+    endsAt: playAgainEndsAt(lastClose),
+    chosen: game.players.filter((player) => player.playAgain).length,
+    players: game.players.length,
+  };
+  if (now !== undefined && vote.chosen === 0 && now.getTime() > vote.endsAt.getTime()) return null;
+  return vote;
+}
+
+// Ends the vote: players who did not choose "Play again" are removed, and the room goes back to the lobby with the
+// same settings. If the room creator did not choose it, the role passes at random to an account holder who did,
+// preferring one who is not away. Without such an account holder the room closes for everyone. A lobby that is
+// already full (a Duel where both chose "Play again") starts its next game at once, as a full room always does.
+async function endVote(db: TransactionDb, room: Room, game: RoomGame, now: Date, random: () => number) {
+  const voters = game.players.filter((player) => player.playAgain);
+  const creatorId = await creatorPlayerId(db, room.id);
+  const creatorStays = voters.some((player) => player.id === creatorId);
+  const newCreator = creatorStays
+    ? null
+    : pickNewCreator(
+        voters.map((player) => ({ ...player, away: isAway(player.lastSeenAt, now) })),
+        random,
+      );
+  const closeReason =
+    voters.length === 0 ? "everyone-left" : !creatorStays && newCreator === null ? "no-account-holder" : null;
+
+  const ended = await endPlayAgainVote(db, {
+    roomId: room.id,
+    gameId: room.gameId!,
+    now,
+    newCreatorId: newCreator?.id ?? null,
+    closeReason,
+  });
+  if (!ended || closeReason !== null) return;
+  if (voters.length >= MAX_PLAYERS_BY_TYPE[room.settings.type]) {
+    const lobby = await getRoomByCode(db, room.code);
+    if (lobby !== null) await startGameNow(db, lobby, now, random);
+  }
+}
+
+// POST /api/rooms/[code]/play-again – a player chooses "Play again" after a game (issue #43). Choosing "Leave" is
+// the leave route. Refused during a game ("not-finished"), after the last game a room may host ("no-more-games")
+// and once the 60 s to choose are over ("vote-over"). The vote ends on the next state request once everyone has
+// chosen or the time is up.
+export async function playAgainInRoom(
+  db: TransactionDb,
+  code: string,
+  authorization: string | null,
+  deps: Deps = {},
+): Promise<ApiResult> {
+  const now = deps.now ?? (() => new Date());
+  const at = now();
+  const found = await findRoomAsPlayer(db, code, authorization, at);
+  if (!found.ok) return found.result;
+  const { room, player } = found;
+
+  if (room.status !== "finished") return fail("not-finished");
+  const vote = playAgainVote(room, await loadRoomGame(db, room));
+  if (vote === null) return fail("no-more-games");
+  if (isPlayAgainVoteOver({ ...vote, chosen: 0 }, at)) return fail("vote-over");
+
+  // false = the vote ended at this same moment.
+  if (!(await choosePlayAgain(db, { roomId: room.id, gameId: room.gameId!, playerId: player.id }))) {
+    return fail("vote-over");
+  }
+  // The last choice ends the vote at once, so the room is back in the lobby (and in the room list) right away.
+  const game = await loadRoomGame(db, room);
+  const after = playAgainVote(room, game);
+  if (after !== null && isPlayAgainVoteOver(after, at)) await endVote(db, room, game, at, deps.random ?? Math.random);
+  return { status: 200, body: { playAgain: true } };
 }

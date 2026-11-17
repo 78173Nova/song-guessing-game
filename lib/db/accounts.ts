@@ -129,6 +129,15 @@ export async function findSessionUsername(db: TransactionDb, token: string, now:
   return rows.length === 1 ? rows[0].username : null;
 }
 
+// The account id of a session that has not expired, or null (issue #43: room players remember who has an account).
+export async function findSessionUserId(db: TransactionDb, token: string, now: Date): Promise<string | null> {
+  const rows = await db.query<{ user_id: string }>(
+    "SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > $2",
+    [hashToken(token), now.toISOString()],
+  );
+  return rows.length === 1 ? rows[0].user_id : null;
+}
+
 // Ends one session (log out). Nothing happens if it does not exist.
 export async function deleteSession(db: TransactionDb, token: string): Promise<void> {
   await db.query("DELETE FROM sessions WHERE token_hash = $1", [hashToken(token)]);

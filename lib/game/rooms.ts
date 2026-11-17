@@ -36,9 +36,14 @@ export function readBearerToken(header: string | null): string | null {
 
 // A room closes 30 minutes after it was created if its game has not started, and 3 hours after it was
 // created in any case. Worked out from created_at on every request – no extra column, no background job.
-export function isRoomClosed(room: { createdAt: Date; status: "lobby" | "playing" | "finished" }, now: Date): boolean {
+// A room that went back to the lobby after a game (issue #43) counts its 30 minutes from `lobbySince`.
+export function isRoomClosed(
+  room: { createdAt: Date; status: "lobby" | "playing" | "finished"; lobbySince?: Date | null },
+  now: Date,
+): boolean {
   const age = now.getTime() - room.createdAt.getTime();
-  if (room.status === "lobby" && age >= LOBBY_LIFETIME_MINUTES * 60 * 1000) return true;
+  const inLobby = now.getTime() - (room.lobbySince ?? room.createdAt).getTime();
+  if (room.status === "lobby" && inLobby >= LOBBY_LIFETIME_MINUTES * 60 * 1000) return true;
   return age >= ROOM_LIFETIME_HOURS * 60 * 60 * 1000;
 }
 
@@ -135,4 +140,35 @@ export function isAway(lastSeenAt: Date, now: Date): boolean {
 // The latest last-seen time a player may have and still be kicked at `now`: more than 60 s away.
 export function kickableIfSeenBefore(now: Date): Date {
   return new Date(now.getTime() - (AWAY_SECONDS + KICK_AFTER_AWAY_SECONDS) * 1000);
+}
+
+// Play again (issue #43). A room hosts at most MAX_GAMES_PER_ROOM games. After a game, each player has
+// PLAY_AGAIN_SECONDS to choose "Play again" or "Leave", counted from the end screen (the result of the last round,
+// then the final standings). Exactly at the end still counts.
+export const MAX_GAMES_PER_ROOM = 5;
+export const PLAY_AGAIN_SECONDS = 60;
+
+// When the vote after a game ends, from the moment its last round closed.
+export function playAgainEndsAt(lastRoundClosedAt: Date): Date {
+  const seconds = RESULT_SECONDS + FINAL_STANDINGS_SECONDS + PLAY_AGAIN_SECONDS;
+  return new Date(lastRoundClosedAt.getTime() + seconds * 1000);
+}
+
+// The vote is over once every player still in the room has chosen, or its time has passed.
+export function isPlayAgainVoteOver(vote: { endsAt: Date; chosen: number; players: number }, now: Date): boolean {
+  return vote.chosen >= vote.players || now.getTime() > vote.endsAt.getTime();
+}
+
+// Who becomes the room creator when the room creator did not choose "Play again": one of the account holders who
+// chose it, at random, preferring those who are not away (lib/game/rooms.ts isAway) at that moment.
+// null = no account holder chose it, so nobody can run the room.
+export function pickNewCreator<Player extends { hasAccount: boolean; away: boolean }>(
+  voters: Player[],
+  random: () => number,
+): Player | null {
+  const accountHolders = voters.filter((player) => player.hasAccount);
+  const present = accountHolders.filter((player) => !player.away);
+  const pool = present.length > 0 ? present : accountHolders;
+  if (pool.length === 0) return null;
+  return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
 }

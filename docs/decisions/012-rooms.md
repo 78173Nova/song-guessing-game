@@ -235,3 +235,45 @@ for Start and Replace. Why, alternatives and limits: decision 015.
   new nickname. The rule stops the easy way back (same tab, same nickname).
 - A player whose device stops asking still counts for "everyone has answered", so a round with an away player
   runs its full 15 seconds.
+
+## Update 17 Nov 2026: several games per room and the creator handover (issue #43)
+
+### Decision
+- **Up to 5 games per room.** After a game, every player sees "Play again" and "Leave" on the end screen. The vote
+  ends **60 s** after the end screen (last round's close + 5 s result + 5 s final standings + 60 s; exactly at the end
+  still counts) or as soon as every player still in the room has chosen. "Play again" is
+  `POST /api/rooms/[code]/play-again` (`room_players.play_again`); "Leave" is the leave route of #40. After the 5th
+  game neither is offered and the route answers 409 "no-more-games".
+- **Ending the vote** (`endPlayAgainVote`, one transaction with the room's row locked, worked out on the next state
+  request or on the last choice, still no background job): players who did not choose "Play again" are marked
+  `removed = 'left'`; the room goes back to the lobby with the same settings. The finished game moves to
+  `rooms.earlier_games` and `game_id` is empty again. The 30-minute lobby limit counts from `rooms.lobby_since`
+  (the return to the lobby); the 3-hour limit still counts from `created_at`.
+- **Creator handover.** If the room creator did not choose "Play again", the role passes at random (the `random`
+  the tests control) to an **account holder** who did, preferring one who is not away at that moment. The new
+  creator's token hash is copied into `rooms.host_token_hash` (as planned in the update of 16 Nov). A player is an
+  account holder if they were logged in when joining (`room_players.account_id`; the creator always is). If no
+  account holder chose "Play again", the room closes for everyone (`closed_reason = 'no-account-holder'`, "No
+  account holder is left to run the room").
+- **Back in the lobby** everything works as before: new players can join up to the limit, "Start now" needs 2
+  players (with 1 player left the lobby waits for a second), and a full lobby starts by itself – also a Duel where
+  both players chose "Play again". If nobody chose "Play again", nothing changes: the room stays finished with its
+  final standings, as before. The room has status `lobby` again, so a public room list that shows lobbies
+  shows it again.
+
+### Why
+- **Account holders only:** the creator role is the reason creating a room needs an account (decision 014); a
+  guest who inherits it would get around that rule.
+- **Not away first:** a creator who is gone cannot press "Start now" or kick; preferring someone whose device is
+  still asking keeps the room usable. We only store the latest request time, so "not away" means "at the moment
+  the vote ends", not a history of the last round.
+- **5 games:** keeps one room inside its 3-hour lifetime and bounds what one room stores.
+
+### Alternatives
+- **A new room for each game:** no schema change, but everyone would have to join a new code.
+- **Creator chosen by vote or by score:** more fair in theory, more screens and rules to explain.
+
+### Limits
+- When the 60 s run out, the vote ends on the next request; until then the room stays "finished" (devices ask every
+  second, so this is at most a second late).
+- A guest who joined while logged out is not an account holder, even if they log in later in the same tab.

@@ -110,3 +110,12 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
   everyone. A report in the last 5 s before a round delays it for everyone. The clip loading in
   `components/Room.tsx` has no automated tests (it needs a real browser); `couldNotPlay` and `clipsToLoad` in
   `lib/client/room-game.ts` are tested.
+## Update 17 Nov 2026: several games per room (issue #43)
+- **Decision:** a room plays up to 5 games one after another (vote and handover: decision 012). Each game is its own
+  `games` row with its own rounds and answers, so the standings and the summary start at 0. A new game avoids the
+  songs of the room's earlier games while enough songs match the settings (`avoid` in `buildRounds`; they can
+  still appear as wrong options), otherwise it picks from all matching songs. A swap avoids them too.
+- **On the device:** the full summary shows "Play again" with the seconds left; polling goes on while the vote runs.
+  When the state shows the lobby with a higher `gameNumber`, `roomReducer` accepts it (a started game otherwise
+  never goes back to the lobby) and forgets the last game's taps and skips.
+- **Limits:** with few matching songs the 4th or 5th game repeats songs from earlier games.
