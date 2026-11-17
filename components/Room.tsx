@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { canPlayPreviews, prepareClip, UNSUPPORTED_BROWSER_MESSAGE } from "@/lib/client/clip-loader";
-import { ROUND_SECONDS } from "@/lib/client/countdown";
+import { answeredInRound } from "@/lib/client/room-board";
 import {
   apiAnswerRoom,
   apiJoinRoom,
@@ -16,6 +16,7 @@ import {
   forgetRoomToken,
   loadRoomToken,
   saveRoomToken,
+  type RoomState,
 } from "@/lib/client/room-api";
 import {
   clipsToLoad,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/client/room-game";
 import { takeShareOnArrival } from "@/lib/client/share";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
+import RoomBoard from "./RoomBoard";
 import SharePopup from "./SharePopup";
 import styles from "./Landing.module.css";
 import game from "./SoloGame.module.css";
@@ -270,6 +272,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     <div className={game.game}>
       <GameScreen
         screen={screen}
+        state={state}
         onAnswer={sendAnswer}
         onContinue={(round) => dispatch({ type: "continued", round })}
       />
@@ -298,10 +301,12 @@ function BackLink() {
 
 function GameScreen({
   screen,
+  state,
   onAnswer,
   onContinue,
 }: {
   screen: Exclude<RoomScreen, { kind: "loading" | "lobby" }>;
+  state: RoomState; // the latest reply, for the game board during a round (#38)
   onAnswer: (round: number, option: number) => void;
   onContinue: (round: number) => void;
 }) {
@@ -319,15 +324,15 @@ function GameScreen({
       const over = screen.secondsLeft === 0;
       return (
         <section>
-          <div className={game.status}>
-            <span>
-              Round {screen.number} / {screen.totalRounds}
-            </span>
-          </div>
-          <div className={game.countdown} aria-label={`${screen.secondsLeft} seconds left`}>
-            <div className={game.bar} style={{ width: `${(screen.secondsLeft / ROUND_SECONDS) * 100}%` }} />
-            <span>{screen.secondsLeft} s</span>
-          </div>
+          <RoomBoard
+            players={state.players}
+            me={state.me.nickname}
+            answered={answeredInRound(state, screen.number)}
+            iAnswered={answered}
+            number={screen.number}
+            totalRounds={screen.totalRounds}
+            secondsLeft={screen.secondsLeft}
+          />
           <div className={game.options}>
             {screen.options.map((title, index) => (
               <button

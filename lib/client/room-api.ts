@@ -14,6 +14,7 @@ export type RoomState = {
   status: "lobby" | "playing" | "finished";
   role: "creator" | "player";
   players: string[];
+  answered: string[]; // who has answered the round in `round` (not what they chose)
   totalRounds: number;
   serverNow: string;
   previewUrls: string[] | null;

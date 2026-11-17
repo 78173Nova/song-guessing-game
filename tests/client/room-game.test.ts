@@ -23,6 +23,7 @@ const base: RoomState = {
   status: "lobby",
   role: "player",
   players: ["Anna", "Ben"],
+  answered: [],
   totalRounds: 5,
   serverNow: iso(T0),
   previewUrls: null,
