@@ -1,4 +1,4 @@
-// POST /api/rooms – an account holder creates a room with { nickname }. The steps live in lib/api/rooms.ts.
+// POST /api/rooms – an account holder creates a room with { nickname, avatar? }. The steps live in lib/api/rooms.ts.
 // The session cookie says who is logged in; only an account holder can create a room.
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/api/accounts";

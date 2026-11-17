@@ -24,10 +24,14 @@ import {
   createSession,
   deleteSession,
   findAccountForLogin,
+  findSessionAccount,
   findSessionUsername,
   findUnverifiedUserId,
   redeemEmailToken,
+  saveAccountSettings as storeAccountSettings,
 } from "../db/accounts";
+import { isAvatar } from "../game/avatars";
+import { parseNickname } from "../game/rooms";
 import {
   alreadyHaveAccountMessage,
   appUrl,
@@ -81,6 +85,9 @@ const ERRORS = {
     status: 400,
     message: 'This link has expired. Please log in and choose "Send the email again" to get a new one.',
   },
+  "log-in-needed": { status: 401, message: "Please log in first." },
+  "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
+  "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
   "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
@@ -360,4 +367,52 @@ export async function resetPassword(
     return fail(error, RESET_LINK_MESSAGES[error]);
   }
   return { status: 200, body: { message: PASSWORD_CHANGED_MESSAGE } };
+}
+
+// The account settings as the page sees them (issue #44). The account id never leaves the server.
+function settingsReply(account: { username: string; avatar: string | null; nickname: string | null }): ApiResult {
+  return { status: 200, body: { username: account.username, avatar: account.avatar, nickname: account.nickname } };
+}
+
+// The account of a session cookie, or null for a missing, unknown or expired session.
+async function sessionAccount(db: TransactionDb, sessionToken: string | undefined, now: Date) {
+  return looksLikeToken(sessionToken) ? findSessionAccount(db, sessionToken, now) : null;
+}
+
+// GET /api/accounts/settings – the logged-in account's avatar and usual nickname (null until chosen), for the
+// Account settings page and the nickname screen of a room. Without a working session: 401.
+export async function getAccountSettings(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now } = resolveDeps(deps);
+  const account = await sessionAccount(db, sessionToken, now);
+  return account === null ? fail("log-in-needed") : settingsReply(account);
+}
+
+// POST /api/accounts/settings – { avatar, nickname } → saves the logged-in account's avatar (one of the fixed set)
+// and usual nickname (same rules as a nickname in a room; "" or null removes it). Only ever changes the account
+// of the session cookie. Nothing is saved when one value is refused.
+export async function saveAccountSettings(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  rawBody: string | null,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now } = resolveDeps(deps);
+  const account = await sessionAccount(db, sessionToken, now);
+  if (account === null) return fail("log-in-needed");
+
+  const json = readJson(rawBody);
+  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
+    return fail("malformed");
+  }
+  const body = json.body as Record<string, unknown>;
+  if (!isAvatar(body.avatar)) return fail("invalid-avatar");
+  const nickname = body.nickname === null || body.nickname === "" ? null : parseNickname(body.nickname);
+  if (nickname === null && body.nickname !== null && body.nickname !== "") return fail("invalid-nickname");
+
+  await storeAccountSettings(db, account.id, { avatar: body.avatar, nickname });
+  return settingsReply({ username: account.username, avatar: body.avatar, nickname });
 }
