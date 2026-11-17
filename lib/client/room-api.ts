@@ -1,6 +1,6 @@
 // The browser's calls to the room routes, and where a browser tab keeps its room token. Like game-api.ts,
 // each call returns the data or a readable message – it never throws.
-import type { QuestionType } from "../game/modes";
+import type { Mode, QuestionType } from "../game/modes";
 import type { RoomSettings } from "../game/room-settings";
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE, post, type FetchFn } from "./game-api";
 
@@ -75,9 +75,49 @@ const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 export type NicknameChoice = { nickname: string; avatar: string };
 
 // Creating needs the session cookie, which the browser sends by itself. Without settings the server uses the
-// default ones.
-export function apiCreateRoom(choice: NicknameChoice, fetchFn: FetchFn = fetch, settings?: RoomSettings) {
-  return post<JoinedRoom>("/api/rooms", settings === undefined ? choice : { ...choice, settings }, fetchFn);
+// default ones. A room is public unless `isPrivate` (issue #36).
+export function apiCreateRoom(
+  choice: NicknameChoice,
+  fetchFn: FetchFn = fetch,
+  settings?: RoomSettings,
+  isPrivate = false,
+) {
+  const body = { ...choice, ...(settings === undefined ? {} : { settings }), ...(isPrivate ? { private: true } : {}) };
+  return post<JoinedRoom>("/api/rooms", body, fetchFn);
+}
+
+// One room in the "Join a room" list (issue #36): its code, the room creator's nickname, its settings and how many
+// players are in it.
+export type ListedRoom = RoomSettings & { code: string; creator: string; players: number; maxPlayers: number };
+
+// The list's filters: the Duel/Multiplayer toggle, mode, genre tiles and decade tiles ("any" = no filter).
+export type RoomListFilter = Pick<RoomSettings, "type" | "genres" | "decades"> & { mode: "any" | Mode };
+
+// The public rooms that fit the filters. Never throws: an error comes back as a readable message.
+export async function apiListRooms(
+  filter: RoomListFilter,
+  fetchFn: FetchFn = fetch,
+): Promise<{ ok: true; rooms: ListedRoom[] } | { ok: false; message: string }> {
+  const list = (value: "any" | (string | number)[]) => (value === "any" ? "any" : value.join(","));
+  const query = new URLSearchParams({
+    type: filter.type,
+    mode: filter.mode,
+    genres: list(filter.genres),
+    decades: list(filter.decades),
+  });
+  let response: Response;
+  try {
+    response = await fetchFn(`/api/rooms?${query}`, { cache: "no-store" });
+  } catch {
+    return { ok: false, message: NETWORK_ERROR_MESSAGE };
+  }
+  try {
+    const data = (await response.json()) as { rooms?: unknown; message?: unknown };
+    if (response.ok && Array.isArray(data.rooms)) return { ok: true, rooms: data.rooms as ListedRoom[] };
+    return { ok: false, message: typeof data.message === "string" ? data.message : GENERIC_ERROR_MESSAGE };
+  } catch {
+    return { ok: false, message: GENERIC_ERROR_MESSAGE };
+  }
 }
 
 // How many songs match these genres and decades, for the create form. null = the server could not say.

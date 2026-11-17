@@ -9,6 +9,7 @@ import { isTileSelected, toggleTile, type TileChoice } from "@/lib/client/room-s
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, type Mode } from "@/lib/game/modes";
+import { MODE_LABELS } from "@/lib/client/room-list";
 import {
   DEFAULT_ROOM_SETTINGS,
   SET_CHOICES,
@@ -23,7 +24,6 @@ import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
 import styles from "./Landing.module.css";
 
-const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
 // "Create a room": an account holder picks a nickname and the room settings (issue #34) and becomes the room
 // creator, a player like everyone else. The settings cannot be changed afterwards. A guest is sent to log in and
@@ -37,6 +37,7 @@ export default function CreateRoomForm() {
   const [avatar, setAvatar] = useState("");
   const [askAvatar, setAskAvatar] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
+  const [isPrivate, setIsPrivate] = useState(false);
   const [matching, setMatching] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -76,7 +77,7 @@ export default function CreateRoomForm() {
     event.preventDefault();
     setSending(true);
     setError("");
-    const result = await apiCreateRoom({ nickname, avatar }, fetch, settings);
+    const result = await apiCreateRoom({ nickname, avatar }, fetch, settings, isPrivate);
     if (result.ok) {
       saveRoomToken(result.data.code, result.data.playerToken);
       markShareOnArrival(result.data.code); // the lobby opens the share pop-up once
@@ -124,6 +125,15 @@ export default function CreateRoomForm() {
         ]}
         selected={(value) => settings.type === value}
         onTap={(value) => change({ type: value as RoomSettings["type"] })}
+      />
+      <Choice
+        legend="Who can find the room?"
+        options={[
+          { value: "public", label: "Public (in the room list)" },
+          { value: "private", label: "Private (code or link only)" },
+        ]}
+        selected={(value) => (value === "private") === isPrivate}
+        onTap={(value) => setIsPrivate(value === "private")}
       />
       <Choice
         legend="What do you guess?"
@@ -174,7 +184,7 @@ export default function CreateRoomForm() {
 }
 
 // A row of tiles: tapping one calls onTap; `selected` says which are on.
-function Choice({
+export function Choice({
   legend,
   options,
   selected,

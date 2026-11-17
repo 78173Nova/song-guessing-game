@@ -125,6 +125,12 @@ ALTER TABLE room_players ADD COLUMN IF NOT EXISTS removed text CHECK (removed IN
 -- (the 30-minute and 3-hour limits are worked out from created_at).
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS closed_reason text CHECK (closed_reason IN ('creator-left', 'everyone-left'));
 
+-- Public rooms (issue #36): a public room in the lobby with a free seat is shown in the "Join a room" list. A
+-- private room can only be joined by code, link or QR code. Chosen at creation, never changed. Older rooms are public.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_private boolean NOT NULL DEFAULT false;
+-- The list only looks at public rooms in the lobby.
+CREATE INDEX IF NOT EXISTS rooms_public_lobby ON rooms (created_at) WHERE status = 'lobby' AND NOT is_private;
+
 -- How many players the room's game started with (issue #39): a game that starts with exactly 2 players uses the
 -- duel layout, even if one of them leaves later. Empty until the game starts.
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starting_players integer CHECK (starting_players >= 1);

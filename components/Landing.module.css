@@ -314,3 +314,45 @@
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* The "Join a room" list of public rooms (issue #36). */
+.roomList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.roomEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--muted);
+  border-radius: 14px;
+  color: var(--foreground);
+  background: var(--background);
+  text-decoration: none;
+}
+
+.roomEntry:hover {
+  border-color: var(--accent);
+}
+
+.roomEntry:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.roomEntryTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.roomEntryDetails {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}

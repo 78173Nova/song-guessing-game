@@ -114,3 +114,39 @@ export function tooFewRoomSongsMessage(matching: number): string {
   if (matching === 1) return "Only 1 song matches. Choose fewer songs or more genres/decades.";
   return `Only ${matching} songs match. Choose fewer songs or more genres/decades.`;
 }
+
+// The filters of the "Join a room" list (issue #36): the Duel/Multiplayer toggle, and mode, genres and decades
+// ("any" = no filter).
+export type RoomListFilter = Pick<RoomSettings, "type" | "genres" | "decades"> & { mode: "any" | Mode };
+
+const FILTER_FIELDS = ["type", "mode", "genres", "decades"];
+
+// Reads the filters from a query string: ?type=duel&mode=any&genres=pop,rock&decades=any. Every field is required,
+// once; unknown fields and other values are refused. null = not allowed.
+export function parseRoomListFilter(params: URLSearchParams): RoomListFilter | null {
+  const fields = [...params.keys()];
+  if (fields.length !== FILTER_FIELDS.length || !FILTER_FIELDS.every((field) => fields.includes(field))) return null;
+  const type = params.get("type");
+  const mode = params.get("mode");
+  if (!(ROOM_TYPES as readonly unknown[]).includes(type)) return null;
+  if (mode !== "any" && !isMode(mode)) return null;
+  const choice = parseSongChoiceQuery(params);
+  if (choice === null) return null;
+  return { type: type as RoomType, mode, ...choice };
+}
+
+// Do two choices share at least one value? "any" shares every value.
+function overlaps<T>(a: "any" | T[], b: "any" | T[]): boolean {
+  return a === "any" || b === "any" || a.some((value) => b.includes(value));
+}
+
+// Does a room with these settings fit the filters? Same type, same mode (unless "any"), and at least one genre and
+// at least one decade in common. A room set to "Any" fits every genre or decade filter.
+export function fitsRoomListFilter(settings: RoomSettings, filter: RoomListFilter): boolean {
+  return (
+    settings.type === filter.type &&
+    (filter.mode === "any" || settings.mode === filter.mode) &&
+    overlaps<string>(settings.genres, filter.genres) &&
+    overlaps<number>(settings.decades, filter.decades)
+  );
+}
