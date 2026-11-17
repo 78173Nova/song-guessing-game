@@ -493,6 +493,7 @@ export async function answerRoomRound(
 //
 // For the game the reply has:
 //   serverNow   – the server's clock, so a device can work out how far its own clock is off
+//   startingPlayers – how many players the game started with (null in the lobby), for the duel layout (#39)
 //   answered    – the nicknames of the players who have answered the round on screen (not what they chose)
 //   previewUrls – the 5 clip addresses, for every player, so every device loads the clips in advance
 //   round       – the latest round that has started (open or closed), with the answer only once closed
@@ -553,6 +554,9 @@ export async function getRoomState(
     role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
     settings: room.settings,
+    // How many players the game started with (null in the lobby). With 2 the page shows the duel layout
+    // (issue #39), also after one of them has left.
+    startingPlayers: room.startingPlayers,
     // Who has answered the round on screen, for the ticks on the game board (issue #38). Never what they chose.
     answered: game.players
       .filter((player) => currentAnswers.some((a) => a.playerId === player.id))

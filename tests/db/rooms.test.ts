@@ -208,6 +208,7 @@ describe("createRoom and lookups", () => {
         createdAt: NOW,
         settings: DEFAULT_ROOM_SETTINGS,
         closedReason: null,
+        startingPlayers: null,
       },
       creator: {
         id: expect.any(String),
@@ -380,7 +381,8 @@ describe("startRoom / finishRoom / isRoomGame", () => {
 
     expect(await startRoom(db, room.id, gameA)).toBe(true);
     expect(await startRoom(db, room.id, gameB)).toBe(false);
-    expect(await getRoomByCode(db, room.code)).toEqual({ ...room, status: "playing", gameId: gameA });
+    // startingPlayers (issue #39): the room has only its creator here.
+    expect(await getRoomByCode(db, room.code)).toEqual({ ...room, status: "playing", gameId: gameA, startingPlayers: 1 });
   });
 
   it("lets only one of two starts at the same moment succeed", async () => {

@@ -110,3 +110,8 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
   everyone. A report in the last 5 s before a round delays it for everyone. The clip loading in
   `components/Room.tsx` has no automated tests (it needs a real browser); `couldNotPlay` and `clipsToLoad` in
   `lib/client/room-game.ts` are tested.
+
+Update 2026-11-17 (issue #39): a game with exactly two players uses the duel layout – every Duel room, and a
+Multiplayer room whose game *started* with 2 players. The server stores the player count at the start
+(`rooms.starting_players`, set by the same statement that starts the game) and sends it as `startingPlayers`, so
+the layout does not switch when a player leaves. The page picks the layout with `roomLayout` (lib/client/room-duel.ts).

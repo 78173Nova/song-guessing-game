@@ -1,0 +1,100 @@
+/* The duel layout of a room round (components/RoomDuel.tsx). It takes the place of the game board above the
+   answers, so it keeps to about the same height (never more than about half the screen) and the answer buttons
+   below stay where they are. Works from a narrow phone upwards. */
+.duel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-height: 62vh;
+  margin-bottom: 0.75rem;
+}
+
+.opponent,
+.me {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+
+.name {
+  margin: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 0.1em 0.6em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+
+.answered {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+/* Long nicknames end in "…"; the full nickname shows when hovering (title). */
+.nickname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Both scores large. */
+.score {
+  margin: 0;
+  font-size: clamp(2rem, 10vw, 3rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.song {
+  position: relative;
+  width: min(40vw, 22vh, 9rem);
+  aspect-ratio: 1;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.track,
+.progress {
+  fill: none;
+  stroke-width: 9;
+}
+
+.track {
+  stroke: var(--muted);
+}
+
+.progress {
+  stroke: var(--accent);
+  transition: stroke-dasharray 0.2s linear;
+}
+
+.songText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+}
+
+.seconds {
+  font-size: clamp(1.4rem, 7vw, 2rem);
+  font-weight: 700;
+}
+
+.round {
+  font-size: 0.8rem;
+}
