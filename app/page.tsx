@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AccountButtons from "@/components/AccountButtons";
 import RoomCodeForm from "@/components/RoomCodeForm";
 import styles from "@/components/Landing.module.css";
 
@@ -22,14 +23,7 @@ export default function Home() {
           </li>
         </ul>
 
-        <div className={styles.accountButtons}>
-          <Link href="/login" className={styles.secondary}>
-            Log in
-          </Link>
-          <Link href="/signup" className={styles.primary}>
-            Sign up
-          </Link>
-        </div>
+        <AccountButtons />
 
         <RoomCodeForm />
 

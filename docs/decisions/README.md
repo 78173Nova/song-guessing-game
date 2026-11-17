@@ -20,9 +20,10 @@ Rules:
 | 004 | [The server checks answers](004-server-checks-answers.md) | decided |
 | 005 | [Curated song list](005-curated-song-list.md) | decided |
 | 006 | [Behaviour when the API fails](006-api-failure.md) | decided |
-| 007 | [No accounts, nicknames only](007-no-accounts.md) | decided (for now) |
+| 007 | [No accounts, nicknames only](007-no-accounts.md) | decided, updated 15 Nov 2026 (accounts to create rooms) |
 | 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core |
 | 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
 | 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, database part built |
+| 014 | [Accounts](014-accounts.md) | started (sign-up, verification, login, resend and password reset built; Brevo email #25 open) |

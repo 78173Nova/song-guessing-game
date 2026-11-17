@@ -51,6 +51,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 - `components/` – reusable UI pieces (e.g. `SoloGame.tsx`, the solo game screens)
 - `lib/game/` – game logic with no database or network access (build rounds, check answers, score) – easy to test
 - `lib/music/` – everything about the iTunes API (call, cache, error handling) – the only place that calls iTunes
+- `lib/accounts/` – account rules with no database or network (username/email/password checks, scrypt hashing, tokens, link lifetimes)
+- `lib/email/` – everything about sending emails (texts, links, the sender) – the only place that sends emails
 - `lib/db/` – all database code – the only place with SQL
 - `lib/client/` – browser-side logic without UI: screen state (`gameReducer`), server calls, clip loading
   (retry/swap), countdown – tested with Vitest

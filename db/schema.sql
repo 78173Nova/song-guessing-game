@@ -87,3 +87,58 @@ CREATE TABLE IF NOT EXISTS room_answers (
   PRIMARY KEY (game_id, round_number, player_id),  -- one answer per player per round, even at the same moment
   FOREIGN KEY (game_id, round_number) REFERENCES rounds (game_id, round_number) ON DELETE CASCADE
 );
+
+-- ---------------------------------------------------------------------------------------------
+-- Accounts: sign-up, email verification, log in (spec 004, decision 014).
+-- An account is needed only to create a room. Passwords are stored only as scrypt hashes, email-link tokens
+-- only as SHA-256 hashes, so a leaked copy of the database cannot be used to log in or reset a password.
+-- ---------------------------------------------------------------------------------------------
+
+-- One row per account. email_verified_at stays empty until the link in the verification email is opened.
+CREATE TABLE IF NOT EXISTS users (
+  id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  username           text        NOT NULL CHECK (username ~ '^[A-Za-z0-9_]{3,20}$'),  -- shown as typed
+  email              text        NOT NULL UNIQUE
+                                 CHECK (email = lower(email) AND char_length(email) <= 254 AND email LIKE '%@%'),
+  password_hash      text        NOT NULL CHECK (password_hash LIKE 'scrypt$%'),
+  email_verified_at  timestamptz,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+-- The one-email-per-minute limit moved to email_throttle (below). Removes the old column from databases that
+-- already have it.
+ALTER TABLE users DROP COLUMN IF EXISTS last_email_sent_at;
+
+-- A username may only exist once, ignoring upper/lower case ("Jasper" = "jasper").
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (lower(username));
+
+-- Links sent by email: purpose verify (24 hours) or reset (1 hour). Each works once (used_at).
+-- Deleting an account deletes its links.
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash text        PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  purpose    text        NOT NULL CHECK (purpose IN ('verify', 'reset')),
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz
+);
+
+-- One row per logged-in browser. The cookie holds a long random token; only its SHA-256 hash is stored here,
+-- so a leaked copy of the database cannot be used to log in. A session lasts 30 days.
+-- Deleting an account deletes its sessions.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash text        PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL
+);
+
+-- Finds every session of one account quickly (log out everywhere after a password reset).
+CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions (user_id);
+
+-- When an email address last got an email from us, for the one-email-per-minute limit (decision 014).
+-- One row per address that was asked for, with or without an account. Only the SHA-256 hash of the lowercase
+-- address is stored, so this table holds no plain address of someone who has no account.
+CREATE TABLE IF NOT EXISTS email_throttle (
+  email_hash   text        PRIMARY KEY CHECK (email_hash ~ '^[0-9a-f]{64}$'),
+  last_sent_at timestamptz NOT NULL
+);
