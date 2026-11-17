@@ -6,6 +6,7 @@ import { apiAccountSettings, apiSaveAccountSettings } from "@/lib/client/account
 import { DEFAULT_AVATAR } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
+import LoginDetailsForms from "./LoginDetailsForms";
 import styles from "./Landing.module.css";
 
 // Changes the saved avatar and usual nickname of the logged-in account (issue #44). The nickname screen of every
@@ -50,35 +51,38 @@ export default function AccountSettingsForm() {
   if (username === null) return <p className={styles.hint} aria-busy="true">One moment…</p>;
 
   return (
-    <form className={styles.form} onSubmit={submit} noValidate>
-      <p className={styles.hint}>
-        Logged in as <strong>{username}</strong>
-      </p>
-      <AvatarPicker value={avatar} onChange={setAvatar} legend="Your avatar" />
-      <label htmlFor="usual-nickname" className={styles.codeLabel}>
-        Your usual nickname
-      </label>
-      <input
-        id="usual-nickname"
-        className={styles.textInput}
-        autoComplete="nickname"
-        maxLength={NICKNAME_MAX_LENGTH}
-        value={nickname}
-        onChange={(event) => setNickname(event.target.value)}
-        aria-describedby="usual-nickname-hint"
-      />
-      <p id="usual-nickname-hint" className={styles.hint}>
-        Filled in when you enter a room; leave it empty to use your username.
-      </p>
-      <p className={styles.error} role="alert">
-        {error}
-      </p>
-      <p className={styles.hint} role="status">
-        {saved}
-      </p>
-      <button type="submit" className={styles.primary} disabled={sending}>
-        {sending ? "Saving…" : "Save"}
-      </button>
-    </form>
+    <>
+      <form className={styles.form} onSubmit={submit} noValidate>
+        <p className={styles.hint}>
+          Logged in as <strong>{username}</strong>
+        </p>
+        <AvatarPicker value={avatar} onChange={setAvatar} legend="Your avatar" />
+        <label htmlFor="usual-nickname" className={styles.codeLabel}>
+          Your usual nickname
+        </label>
+        <input
+          id="usual-nickname"
+          className={styles.textInput}
+          autoComplete="nickname"
+          maxLength={NICKNAME_MAX_LENGTH}
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          aria-describedby="usual-nickname-hint"
+        />
+        <p id="usual-nickname-hint" className={styles.hint}>
+          Filled in when you enter a room; leave it empty to use your username.
+        </p>
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+        <p className={styles.hint} role="status">
+          {saved}
+        </p>
+        <button type="submit" className={styles.primary} disabled={sending}>
+          {sending ? "Saving…" : "Save"}
+        </button>
+      </form>
+      <LoginDetailsForms onRenamed={setUsername} />
+    </>
   );
 }

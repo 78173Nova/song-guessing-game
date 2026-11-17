@@ -131,7 +131,8 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
   account; if another email took it in between, the account is saved but no email is sent ("Send the email
   again" a minute later helps).
 - Asking for a new reset link does not cancel older ones; each still works once until its hour is up.
-- Changing the password while logged in (without the email) is not built; use "Forgot password?".
+- ~~Changing the password while logged in (without the email) is not built; use "Forgot password?".~~ Built in
+  issue #45 (see the update below).
 - "Looks like an email" does not prove the address exists; only opening the link does.
 - Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
 
@@ -172,3 +173,29 @@ the request the account's saved one is used, else the music note. Joining reads 
 guests join as before. The room state adds `avatars` (avatar id by nickname). Why emoji: they need no image files,
 look the same size everywhere and a screen reader can skip them (the nickname says who it is). Limit: the database
 checks only the form of an avatar id (lower-case letters); the exact list is checked in the code.
+
+Update 17 Nov 2026 (changing username, email and password, issue #45): the Account settings page also changes the
+login details, each only for the account of the session cookie (401 otherwise):
+- **Username** (`POST /api/accounts/username`, `{ username }`): same rule as at sign-up, unique ignoring case (409
+  "This username is taken", also for a sign-up that is not verified yet; an abandoned sign-up frees it as at sign-up).
+  The account's own username in another case is allowed. The old username is free straight away.
+- **Email** (`POST /api/accounts/email`, `{ email, password }`): needs the **current password** (403
+  `wrong-password`). The new address gets a link to `/confirm-email?token=…` (purpose `email` in `email_tokens`, which
+  now keeps the new address in `new_email`; 24 hours, works once). The **old** address gets "Your email is being
+  changed to …. If this wasn't you, reset your password." with the forgot-password link. The email changes only when
+  the link is opened (`POST /api/accounts/confirm-email`, replies like the verify link: 404 unknown, 400 `link-used` /
+  `link-expired`). Both emails go through the one-email-per-minute limit **together** (`claimEmailSlots`): if either
+  address got an email in the last minute, 429 and nothing is sent. **Never reveals an account:** when the new address
+  already belongs to a verified account, the reply is the same, no link is made, and that address gets a short "you
+  already have an account with this address, nothing was changed" email instead. Opening the link deletes an
+  unverified sign-up with the new address (like signing up again). The own email gives 400 `same-email`.
+- **Password** (`POST /api/accounts/password`, `{ currentPassword, newPassword }`): needs the current password (403
+  `wrong-password`), same rule as at sign-up (8–128 characters, no spaces), and in one query replaces the hash and
+  **ends every other session**; this browser stays logged in.
+Why: the current password stops someone at an unlocked computer from taking over the account; the email changes only
+after the link, so a typo cannot lock anyone out; the notice tells the real owner in time. Why 403 and not 401 for a
+wrong current password: 401 means "log in first", and the person is logged in.
+Limits: if a verified account takes the new address between the request and the click, the link answers 409
+`email-taken` (only the reader of that inbox sees it) and stays unused. Changing the password or email does not cancel
+links that were already sent (reset, email change); each still works once until it runs out. No limit on guessing the
+current password (same as log in). Deleting an account is still not built.
