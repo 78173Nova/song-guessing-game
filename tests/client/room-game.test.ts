@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { RoomState } from "@/lib/client/room-api";
-import { initialRoomView, roomReducer, roomScreen, type RoomAction, type RoomView } from "@/lib/client/room-game";
+import {
+  clipsToLoad,
+  couldNotPlay,
+  initialRoomView,
+  roomReducer,
+  roomScreen,
+  type RoomAction,
+  type RoomView,
+} from "@/lib/client/room-game";
 
 // The screens of a server-paced room game (issue #33), worked out from the polled state and the local clock.
 // No browser, no network: the "local clock" is a number we pass in.
@@ -214,5 +222,60 @@ describe("roomReducer – late replies", () => {
       { type: "answered", round: 1, option: 1 },
     );
     expect(roomScreen(view, T0 + 7000)).toMatchObject({ kind: "round", number: 1, answer: 3 });
+  });
+});
+
+describe("a clip that will not load (issue #41)", () => {
+  const NEW_URL = "https://audio.example.com/new.m4a";
+  const swapped = (state: RoomState, index: number, url = NEW_URL): RoomState => ({
+    ...state,
+    previewUrls: state.previewUrls!.map((u, i) => (i === index ? url : u)),
+  });
+
+  it("shows \"Couldn't play the clip\" for the round whose clip failed on this device, and only for that round", () => {
+    const view = run(polled(1, scheduled), { type: "clip-failed", round: 1, url: URLS[0] });
+
+    expect(couldNotPlay(view, 1)).toBe(true);
+    expect(couldNotPlay(view, 2)).toBe(false);
+    // The player can still answer: the round screen is the normal one.
+    expect(roomScreen(view, T0 + 5000)).toMatchObject({ kind: "round", number: 1, options: OPTIONS, answer: null });
+  });
+
+  it("forgets the failure once the round has a new clip (another device got the song swapped)", () => {
+    const view = run(
+      polled(1, scheduled),
+      { type: "clip-failed", round: 2, url: URLS[1] },
+      polled(2, swapped(scheduled, 1)),
+    );
+    expect(couldNotPlay(view, 2)).toBe(false);
+  });
+
+  it("keeps the failure when the new clip fails too", () => {
+    const view = run(
+      polled(1, swapped(scheduled, 1)),
+      { type: "clip-failed", round: 2, url: URLS[1] },
+      { type: "clip-failed", round: 2, url: NEW_URL },
+    );
+    expect(couldNotPlay(view, 2)).toBe(true);
+  });
+
+  it("nothing has failed before the game has clips", () => {
+    expect(couldNotPlay(initialRoomView, 1)).toBe(false);
+    expect(couldNotPlay(run(polled(1, base)), 1)).toBe(false);
+  });
+});
+
+describe("clipsToLoad – which clips this device still has to load", () => {
+  it("loads every clip when the clip list first arrives", () => {
+    expect(clipsToLoad([], URLS)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("after a swap, loads only the round whose clip changed – the clip that is playing is left alone", () => {
+    const after = URLS.map((u, i) => (i === 2 ? "https://audio.example.com/new.m4a" : u));
+    expect(clipsToLoad(URLS, after)).toEqual([2]);
+  });
+
+  it("loads nothing when the list is the same", () => {
+    expect(clipsToLoad(URLS, [...URLS])).toEqual([]);
   });
 });

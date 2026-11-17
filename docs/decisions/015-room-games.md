@@ -48,7 +48,8 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
 ## Limits
 - The clock offset ignores how long a reply takes to travel, so devices can be off by that much (usually well
   under a second).
-- A clip that will not load on one device stays silent there; swapping songs in rooms comes with #41.
+- A clip that will not load on one device stays silent there; swapping songs in rooms comes with #41
+  (see the update below).
 - A player whose device is closed still counts as "not answered", so each round waits the full 15 s for them.
   "Away" comes with #40.
 - A phone that reloads mid-game needs one tap before the music plays again (browsers block sound without a tap).
@@ -67,6 +68,27 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
   `NEXT_ROUND_DELAY_SECONDS`).
 - Sets and set summaries (#34) would add a pause with the standings after each set by giving the first round
   of the next set a later start time.
+
+## Update 17 Nov 2026: song swap in rooms (issue #41)
+- **Decision:** every device loads the clips in advance. If a clip will not load (load, try once more), the device
+  reports it with `POST /api/rooms/[code]/replace` `{ round }`. Any player of the room may report, but only before
+  the round starts. The server gives the round another song that matches the room's settings and is not in the
+  game yet (like the solo replace), and every device sees the new clip in `previewUrls` and loads only that one.
+  **At most one swap per round** (column `rounds.swapped`): a second report is refused with "already-swapped".
+  If the report comes less than 5 s (`SWAP_LOAD_SECONDS`) before the round's start, the round starts 5 s after
+  the report instead, so it moves back by at most 5 s. If the clip still fails, the round plays anyway; only that
+  device shows "Couldn't play the clip" and the player can still answer.
+- **Why one swap:** in a room one device's report changes the song for everyone. Without a limit a player could
+  report failures again and again to skip songs they do not know. One swap fixes the usual case (one dead clip),
+  and a dead replacement is rare. **Why 5 s:** like the 5 s before round 1, it gives every device a few polls to
+  see the new clip and start loading it.
+- **Alternatives:** only the creator may report (the rule before #41): but every device can fail, not only the
+  creator's. Up to 3 swaps like the solo game: too easy to skip songs. Each device plays a different song: the
+  round would not be the same quiz for everyone.
+- **Limits:** a device whose clip failed for a reason only it has (slow connection) still swaps the song for
+  everyone. A report in the last 5 s before a round delays it for everyone. The clip loading in
+  `components/Room.tsx` has no automated tests (it needs a real browser); `couldNotPlay` and `clipsToLoad` in
+  `lib/client/room-game.ts` are tested.
 
 ## Update 17 Nov 2026: QR code in the share pop-up (#42)
 - **Decision:** the share pop-up shows a QR code of the join link, drawn on the device with the `qrcode` package
