@@ -15,7 +15,8 @@ export const MAX_PLAYERS = 25;
 
 export type RoomStatus = "lobby" | "playing" | "finished";
 // Why a room closed before its time: the room creator left the lobby, or every player left (issue #40).
-export type ClosedReason = "creator-left" | "everyone-left";
+// "no-account-holder": nobody who chose "Play again" has an account (issue #43).
+export type ClosedReason = "creator-left" | "everyone-left" | "no-account-holder";
 // Why a player is no longer in the room: they left during or after the game, or the room creator kicked them.
 export type RemovedReason = "left" | "kicked";
 
@@ -28,6 +29,8 @@ export type Room = {
   createdAt: Date; // the room expires 3 hours after this (rule in lib/game/rooms.ts)
   settings: RoomSettings; // fixed when the room is created (issue #34)
   closedReason: ClosedReason | null; // set when the room closed early (issue #40)
+  earlierGames: string[]; // the room's finished games before the current one, oldest first (issue #43)
+  lobbySince: Date | null; // when the room last went back to the lobby; null = never (issue #43)
   startingPlayers: number | null; // how many players the game started with (issue #39); null in the lobby
   isPrivate: boolean; // private rooms are not listed and have no lobby countdown (issues #36, #37)
   // The lobby countdown (issue #37): when the lobby last reached 2 players (null = no countdown running) and how
@@ -44,6 +47,8 @@ export type RoomPlayer = {
   joinedAt: Date;
   lastSeenAt: Date; // the last state request from their device (or the join)
   removed: RemovedReason | null; // null = still in the room
+  playAgain: boolean; // chose "Play again" after the current game (issue #43)
+  hasAccount: boolean; // was logged in when joining; the room creator always is (issue #43)
 };
 
 export type RoomAnswer = {
@@ -67,6 +72,8 @@ type RoomRow = {
   songs_per_set: number;
   sets: number;
   closed_reason: ClosedReason | null;
+  earlier_games: string[];
+  lobby_since: Date | string | null;
   starting_players: number | null;
   is_private: boolean;
   countdown_from: Date | string | null;
@@ -81,12 +88,15 @@ type PlayerRow = {
   joined_at: Date | string;
   last_seen_at: Date | string;
   removed: RemovedReason | null;
+  play_again: boolean;
+  has_account: boolean;
 };
 
 const ROOM_COLUMNS =
   "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, starting_players, " +
-  "is_private, countdown_from, countdown_extensions";
-const PLAYER_COLUMNS = "id, room_id, nickname, avatar, joined_at, last_seen_at, removed";
+  "earlier_games, lobby_since, is_private, countdown_from, countdown_extensions";
+const PLAYER_COLUMNS =
+  "id, room_id, nickname, avatar, joined_at, last_seen_at, removed, play_again, account_id IS NOT NULL AS has_account";
 
 const toRoom = (row: RoomRow): Room => ({
   id: row.id,
@@ -104,6 +114,8 @@ const toRoom = (row: RoomRow): Room => ({
     sets: row.sets as RoomSettings["sets"],
   },
   closedReason: row.closed_reason,
+  earlierGames: row.earlier_games,
+  lobbySince: row.lobby_since === null ? null : new Date(row.lobby_since),
   startingPlayers: row.starting_players,
   isPrivate: row.is_private,
   countdownFrom: row.countdown_from === null ? null : new Date(row.countdown_from),
@@ -118,6 +130,8 @@ const toPlayer = (row: PlayerRow): RoomPlayer => ({
   joinedAt: new Date(row.joined_at),
   lastSeenAt: new Date(row.last_seen_at),
   removed: row.removed,
+  playAgain: row.play_again,
+  hasAccount: row.has_account,
 });
 
 // SHA-256 of a token as 64 hex characters. One-way: the token cannot be worked out from the hash.
@@ -140,6 +154,7 @@ export async function createRoom(
     avatar?: string;
     now: Date;
     settings?: RoomSettings;
+    accountId?: string;
     isPrivate?: boolean;
   },
 ): Promise<{ room: Room; creator: RoomPlayer } | null> {
@@ -147,12 +162,12 @@ export async function createRoom(
   const rows = await db.query<RoomRow & { player_id: string; nickname: string; avatar: string; joined_at: Date | string }>(
     `WITH new_room AS (
        INSERT INTO rooms (code, host_token_hash, created_at, room_type, mode, genres, decades, songs_per_set, sets, is_private)
-       VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10, $12)
+       VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10, $13)
        ON CONFLICT (code) DO NOTHING
        RETURNING ${ROOM_COLUMNS}
      ), creator AS (
-       INSERT INTO room_players (room_id, nickname, avatar, token_hash, joined_at, last_seen_at)
-       SELECT id, $4, $11, $2, $3, $3 FROM new_room
+       INSERT INTO room_players (room_id, nickname, avatar, token_hash, joined_at, last_seen_at, account_id)
+       SELECT id, $4, $11, $2, $3, $3, $12::uuid FROM new_room
        RETURNING id, nickname, avatar, joined_at
      )
      SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.avatar, creator.joined_at
@@ -169,6 +184,7 @@ export async function createRoom(
       settings.songsPerSet,
       settings.sets,
       room.avatar ?? DEFAULT_AVATAR,
+      room.accountId ?? null,
       room.isPrivate ?? false,
     ],
   );
@@ -185,6 +201,8 @@ export async function createRoom(
       joined_at: row.joined_at,
       last_seen_at: row.joined_at,
       removed: null,
+      play_again: false,
+      has_account: room.accountId !== undefined,
     }),
   };
 }
@@ -202,7 +220,7 @@ export async function listPublicLobbies(db: Db, createdAfter: Date): Promise<Lis
               WHERE p.room_id = r.id AND p.token_hash = r.host_token_hash AND p.removed IS NULL) AS creator,
             (SELECT count(*) FROM room_players p WHERE p.room_id = r.id AND p.removed IS NULL) AS players
      FROM rooms r
-     WHERE r.status = 'lobby' AND NOT r.is_private AND r.closed_reason IS NULL AND r.created_at > $1::timestamptz
+     WHERE r.status = 'lobby' AND NOT r.is_private AND r.closed_reason IS NULL AND COALESCE(r.lobby_since, r.created_at) > $1::timestamptz
      ORDER BY r.created_at, r.id`,
     [createdAfter.toISOString()],
   );
@@ -243,13 +261,21 @@ export type AddPlayerResult =
 // The lock has to be its own query: one query only sees the data as it was when it began.
 export async function addPlayer(
   db: TransactionDb,
-  join: { roomId: string; nickname: string; avatar?: string; token: string; now: Date; maxPlayers?: number },
+  join: {
+    roomId: string;
+    nickname: string;
+    avatar?: string;
+    token: string;
+    now: Date;
+    maxPlayers?: number;
+    accountId?: string | null;
+  },
 ): Promise<AddPlayerResult> {
   const [, inserted, check] = await db.transaction([
     { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [join.roomId] },
     {
-      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at, avatar)
-             SELECT r.id, $2::text, $3::text, $4::timestamptz, $4::timestamptz, $6::text
+      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at, avatar, account_id)
+             SELECT r.id, $2::text, $3::text, $4::timestamptz, $4::timestamptz, $6::text, $7::uuid
              FROM rooms r
              WHERE r.id = $1 AND r.status = 'lobby'
                AND (SELECT count(*) FROM room_players p WHERE p.room_id = r.id AND p.removed IS NULL) < $5::int
@@ -262,6 +288,7 @@ export async function addPlayer(
         join.now.toISOString(),
         join.maxPlayers ?? MAX_PLAYERS,
         join.avatar ?? DEFAULT_AVATAR,
+        join.accountId ?? null,
       ],
     },
     {
@@ -437,7 +464,8 @@ export async function finishRoom(db: Db, roomId: string): Promise<boolean> {
 
 // Does this game belong to a room? The solo routes use this to refuse room games (spec 002).
 export async function isRoomGame(db: Db, gameId: string): Promise<boolean> {
-  const rows = await db.query("SELECT 1 FROM rooms WHERE game_id = $1 LIMIT 1", [gameId]);
+  // Earlier games of a room count too (issue #43).
+  const rows = await db.query("SELECT 1 FROM rooms WHERE game_id = $1 OR $1 = ANY (earlier_games) LIMIT 1", [gameId]);
   return rows.length > 0;
 }
 
@@ -546,4 +574,84 @@ export async function wasRoundSwapped(db: Db, gameId: string, roundNumber: numbe
     [gameId, roundNumber],
   );
   return rows[0]?.swapped === true;
+}
+
+// Play again (issue #43). A player chooses "Play again" after the room's current game. Only counts while the room
+// is finished with this game and the player is still in it. Returns false if nothing changed.
+export async function choosePlayAgain(
+  db: Db,
+  choice: { roomId: string; gameId: string; playerId: string },
+): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE room_players p SET play_again = true FROM rooms r
+     WHERE p.id = $3 AND r.id = $1 AND p.room_id = r.id AND p.removed IS NULL
+       AND r.status = 'finished' AND r.game_id = $2 AND r.closed_reason IS NULL
+     RETURNING p.id`,
+    [choice.roomId, choice.gameId, choice.playerId],
+  );
+  return rows.length === 1;
+}
+
+// Ends the vote after the room's game `gameId` (issue #43), as one transaction with the room's row locked. Every
+// player still in the room who did not choose "Play again" is marked "left". Then either:
+//   - closeReason set: the room closes for everyone (nobody can run it);
+//   - otherwise the room goes back to the lobby with the same settings: the game moves to earlier_games, the
+//     30-minute lobby limit starts again at `now`, and `newCreatorId` (if given) becomes the room creator: their
+//     token hash is now the room's creator key. The choices are cleared for the next game.
+// Only does something while the room is still finished with this game, so two requests at the same moment end the
+// vote once. Returns false if another request ended it first.
+export async function endPlayAgainVote(
+  db: TransactionDb,
+  vote: { roomId: string; gameId: string; now: Date; newCreatorId: string | null; closeReason: ClosedReason | null },
+): Promise<boolean> {
+  const [, , ended] = await db.transaction([
+    { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [vote.roomId] },
+    {
+      text: `UPDATE room_players SET removed = 'left'
+             WHERE room_id = $1 AND removed IS NULL AND NOT play_again
+               AND EXISTS (SELECT 1 FROM rooms
+                           WHERE id = $1 AND status = 'finished' AND game_id = $2 AND closed_reason IS NULL)`,
+      params: [vote.roomId, vote.gameId],
+    },
+    {
+      text: `UPDATE rooms SET
+               closed_reason = $5::text,
+               status = CASE WHEN $5::text IS NULL THEN 'lobby' ELSE status END,
+               earlier_games = CASE WHEN $5::text IS NULL THEN earlier_games || game_id ELSE earlier_games END,
+               game_id = CASE WHEN $5::text IS NULL THEN NULL ELSE game_id END,
+               lobby_since = CASE WHEN $5::text IS NULL THEN $3::timestamptz ELSE lobby_since END,
+               starting_players = CASE WHEN $5::text IS NULL THEN NULL ELSE starting_players END,
+               host_token_hash = COALESCE(
+                 (SELECT token_hash FROM room_players WHERE id = $4::uuid AND room_id = $1 AND removed IS NULL),
+                 host_token_hash)
+             WHERE id = $1 AND status = 'finished' AND game_id = $2 AND closed_reason IS NULL
+             RETURNING id`,
+      params: [vote.roomId, vote.gameId, vote.now.toISOString(), vote.newCreatorId, vote.closeReason],
+    },
+    {
+      text: `UPDATE room_players SET play_again = false
+             WHERE room_id = $1 AND play_again AND EXISTS (SELECT 1 FROM rooms WHERE id = $1 AND status = 'lobby')`,
+      params: [vote.roomId],
+    },
+  ]);
+  return ended.length === 1;
+}
+
+// The songs of a room's earlier games, so the next game can avoid them (issue #43).
+export async function songsPlayedEarlier(db: Db, room: Room): Promise<number[]> {
+  if (room.earlierGames.length === 0) return [];
+  const rows = await db.query<{ song_id: number }>("SELECT song_id FROM rounds WHERE game_id = ANY ($1::uuid[])", [
+    room.earlierGames,
+  ]);
+  return rows.map((row) => Number(row.song_id));
+}
+
+// The id of the player who holds the room creator's key, if they are still in the room (issue #43).
+export async function creatorPlayerId(db: Db, roomId: string): Promise<string | null> {
+  const rows = await db.query<{ id: string }>(
+    `SELECT p.id FROM room_players p JOIN rooms r ON r.id = p.room_id
+     WHERE r.id = $1 AND p.token_hash = r.host_token_hash AND p.removed IS NULL`,
+    [roomId],
+  );
+  return rows[0]?.id ?? null;
 }

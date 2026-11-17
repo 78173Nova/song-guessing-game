@@ -36,6 +36,9 @@ export type RoomState = {
   // room creator and may tap "Extend +60 s" now.
   countdown?: { endsAt: string; extensions: number; canExtend: boolean } | null;
   totalRounds: number;
+  gameNumber?: number; // which of the room's games (1–5) this is, or the next one in the lobby (issue #43)
+  // After a game: when the vote on "Play again" ends and who has chosen it. null otherwise and after the 5th game.
+  playAgain?: { endsAt: string; chosen: string[] } | null;
   serverNow: string;
   previewUrls: string[] | null;
   round: {
@@ -170,6 +173,11 @@ export async function apiLeaveRoom(code: string, token: string, fetchFn: FetchFn
     undefined,
     withToken(token, fetchFn),
   );
+}
+
+// "Play again" after a game (issue #43). "Leave" is apiLeaveRoom.
+export async function apiPlayAgain(code: string, token: string, fetchFn: FetchFn = fetch) {
+  return post<{ playAgain: true }>(`/api/rooms/${encodeURIComponent(code)}/play-again`, undefined, withToken(token, fetchFn));
 }
 
 // The room creator kicks a player who has been away for more than 60 s (issue #40). The page asks first.

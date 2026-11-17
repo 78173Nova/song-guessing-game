@@ -20,7 +20,9 @@ export type BuildResult = { ok: true; rounds: NewRound[] } | { ok: false; reason
 
 // `currentYear` is passed in by the server (and fixed in tests), so wrong years never lie in the future.
 // `rounds`: how many rounds to build (rooms choose it, issue #34); missing = ROUNDS_PER_GAME.
-export type BuildSettings = { mode?: Mode; currentYear?: number; rounds?: number };
+// avoid: songs to leave out while enough others are left (a room's earlier games, issue #43). They can still
+// appear as wrong options.
+export type BuildSettings = { mode?: Mode; currentYear?: number; rounds?: number; avoid?: number[] };
 
 // Options that differ only in upper/lower case or spaces count as the same ("Queen" = "queen").
 function optionKey(text: string): string {
@@ -74,7 +76,9 @@ export function buildRounds(
     return { ok: false, reason: "not-enough-songs" };
   }
 
-  const chosen = shuffle(songs, random).slice(0, count);
+  const avoid = new Set(settings.avoid ?? []);
+  const fresh = songs.filter((song) => !avoid.has(song.id));
+  const chosen = shuffle(fresh.length >= count ? fresh : songs, random).slice(0, count);
   const rounds: NewRound[] = [];
   for (const [index, song] of chosen.entries()) {
     const types = typesFor(mode);

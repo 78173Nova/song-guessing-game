@@ -731,6 +731,8 @@ describe("GET /api/rooms/[code] – room state", () => {
         // issue #37: a public room with 2 players counts down 60 s from the second join
         countdown: { endsAt: new Date(clock.getTime() + 60_000).toISOString(), extensions: 0, canExtend: false },
         totalRounds: 5,
+        gameNumber: 1,
+        playAgain: null,
         serverNow: clock.toISOString(),
         round: null,
         nextRound: null,
@@ -764,6 +766,8 @@ describe("GET /api/rooms/[code] – room state", () => {
         // issue #37: a public room with 2 players counts down 60 s from the second join
         countdown: { endsAt: new Date(clock.getTime() + 60_000).toISOString(), extensions: 0, canExtend: false },
         totalRounds: 5,
+        gameNumber: 1,
+        playAgain: null,
         serverNow: clock.toISOString(),
         round: null,
         nextRound: null,

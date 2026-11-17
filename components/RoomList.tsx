@@ -20,6 +20,9 @@ export default function RoomList() {
   const [filter, setFilter] = useState<RoomListFilter>(ANY_FILTER);
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [error, setError] = useState("");
+  // This device's clock for the countdowns in the list (issue #37). Set when a list arrives, never while the page
+  // is rendered on the server.
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -28,6 +31,7 @@ export default function RoomList() {
       if (!current) return; // a late reply for older filters
       if (result.ok) {
         setRooms(result.rooms);
+        setNow(Date.now());
         setError("");
       } else {
         setError(result.message); // the last list stays until the next try works
@@ -41,8 +45,7 @@ export default function RoomList() {
     };
   }, [filter]);
 
-  // The countdowns in the list (issue #37) tick every second between two list requests.
-  const [now, setNow] = useState(() => Date.now());
+  // The countdowns in the list tick every second between two list requests.
   const counting = rooms?.some((room) => (room.countdownEndsAt ?? null) !== null) ?? false;
   useEffect(() => {
     if (!counting) return;

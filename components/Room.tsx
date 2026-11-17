@@ -15,6 +15,7 @@ import {
   apiJoinRoom,
   apiKickPlayer,
   apiLeaveRoom,
+  apiPlayAgain,
   apiReportClip,
   apiRoomState,
   apiStartRoom,
@@ -140,8 +141,8 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     };
   }, [joining]);
 
-  // Ask again every second until the game is over.
-  const finished = view.latest?.status === "finished";
+  // Ask again every second until the game is over – and after it while the vote on "Play again" runs (#43).
+  const finished = view.latest?.status === "finished" && !view.latest.playAgain;
   const polling = access.kind === "in" && token !== null && !finished;
   useEffect(() => {
     if (!polling) return;
@@ -241,6 +242,19 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
       kind: "gone",
       message: result.data.roomClosed ? "You closed the room." : "You have left the room.",
     });
+  }
+
+  // "Play again" after a game (issue #43). The room goes back to the lobby once everyone has chosen or the 60 s
+  // are over; the next poll shows it.
+  async function playAgain() {
+    if (token === null) return;
+    clips.unlock();
+    setSending(true);
+    const result = await apiPlayAgain(code, token);
+    setSending(false);
+    if (!result.ok) setError(result.message);
+    else setError("");
+    await refresh(token);
   }
 
   // Kick (issue #40): only the room creator, only a player away for more than 60 s, and only after a confirmation.
@@ -394,6 +408,8 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         state={state}
         onAnswer={sendAnswer}
         onContinue={(round, step) => dispatch({ type: "continued", round, step })}
+        onPlayAgain={playAgain}
+        sending={sending}
       />
       {screen.kind === "round" && couldNotPlay(view, screen.number) && (
         <p className={game.center} role="status">
@@ -467,11 +483,15 @@ function GameScreen({
   state,
   onAnswer,
   onContinue,
+  onPlayAgain,
+  sending,
 }: {
   screen: Exclude<RoomScreen, { kind: "loading" | "lobby" }>;
   state: RoomState; // the latest reply, for the game board during a round (#38)
   onAnswer: (round: number, option: number) => void;
   onContinue: (round: number, step?: SkipStep) => void;
+  onPlayAgain: () => void;
+  sending: boolean;
 }) {
   // The round whose result, summary or standings are on screen (what "Tap to continue" skips).
   const closedRound = state.round?.status === "closed" ? state.round.number : null;
@@ -625,6 +645,20 @@ function GameScreen({
           <h2>Your songs</h2>
           <SummaryList songs={screen.songs} />
           <p className={game.points}>Score {screen.score}</p>
+          {screen.playAgain && screen.playAgain.secondsLeft > 0 && (
+            <div role="status">
+              {screen.playAgain.chosen ? (
+                <p>Waiting for the others… {screen.playAgain.secondsLeft} s</p>
+              ) : (
+                <>
+                  <button type="button" className={game.secondary} onClick={onPlayAgain} disabled={sending}>
+                    Play again
+                  </button>
+                  <p>{screen.playAgain.secondsLeft} s to choose. Choose Play again or Leave below.</p>
+                </>
+              )}
+            </div>
+          )}
           <BackLink />
         </section>
       );
