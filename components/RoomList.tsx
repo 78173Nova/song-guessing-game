@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiListRooms, type ListedRoom, type RoomListFilter } from "@/lib/client/room-api";
-import { describeListedRoom, MODE_LABELS, ROOM_LIST_REFRESH_MS } from "@/lib/client/room-list";
+import { describeListedRoom, listedRoomCountdown, MODE_LABELS, ROOM_LIST_REFRESH_MS } from "@/lib/client/room-list";
 import { isTileSelected, toggleTile } from "@/lib/client/room-settings";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
@@ -40,6 +40,15 @@ export default function RoomList() {
       clearInterval(timer);
     };
   }, [filter]);
+
+  // The countdowns in the list (issue #37) tick every second between two list requests.
+  const [now, setNow] = useState(() => Date.now());
+  const counting = rooms?.some((room) => (room.countdownEndsAt ?? null) !== null) ?? false;
+  useEffect(() => {
+    if (!counting) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [counting]);
 
   const change = (part: Partial<RoomListFilter>) => setFilter((old) => ({ ...old, ...part }));
   const { genres, decades } = filter;
@@ -90,6 +99,7 @@ export default function RoomList() {
         <ul className={styles.roomList} aria-live="polite">
           {rooms.map((room) => {
             const text = describeListedRoom(room);
+            const countdown = listedRoomCountdown(room, now);
             return (
               <li key={room.code}>
                 <Link href={`/join/${room.code}`} className={styles.roomEntry}>
@@ -100,6 +110,7 @@ export default function RoomList() {
                   <span className={styles.roomEntryDetails}>
                     {text.mode} · {text.genres} · {text.decades} · {text.songs}
                   </span>
+                  {countdown !== null && <span className={styles.roomEntryDetails}>{countdown}</span>}
                 </Link>
               </li>
             );

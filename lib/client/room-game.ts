@@ -125,6 +125,28 @@ export function roomReducer(view: RoomView, action: RoomAction): RoomView {
 
 const secondsUntil = (time: number, now: number) => Math.max(0, Math.ceil((time - now) / 1000));
 
+// Milliseconds left as "m:ss", whole seconds rounded up (so 0:00 only shows at the end), e.g. "0:42".
+export function formatCountdown(msLeft: number): string {
+  const seconds = secondsUntil(msLeft, 0);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+// The lobby countdown (issue #37) as this device shows it: the time left on the server's clock and whether this
+// viewer sees "Extend +60 s". null when the room has none (private, fewer than 2 players, started).
+// `offsetMs` = server clock − this device's clock (RoomView.offsetMs); `localNow` is Date.now().
+export function lobbyCountdown(
+  state: RoomState,
+  offsetMs: number,
+  localNow: number,
+): { text: string; canExtend: boolean } | null {
+  const countdown = state.countdown;
+  if (state.status !== "lobby" || countdown === null || countdown === undefined) return null;
+  return {
+    text: formatCountdown(Date.parse(countdown.endsAt) - (localNow + offsetMs)),
+    canExtend: countdown.canExtend,
+  };
+}
+
 // `localNow` is this device's clock (Date.now()).
 export function roomScreen(view: RoomView, localNow: number): RoomScreen {
   const state = view.latest;

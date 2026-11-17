@@ -49,8 +49,9 @@ const leave = (code: string, token: string | null) => playerLeavesRoom(db, code,
 const rejoin = (code: string, nickname: string, oldToken: string) =>
   joinRoom(db, code, json({ nickname }), deps, { authorization: bearer(oldToken) });
 
-async function newRoom(creator = "Anna") {
-  const result = await createNewRoom(db, session, json({ nickname: creator }), { ...deps, newCode: () => String(nextCode++) });
+async function newRoom(creator = "Anna", isPrivate = false) {
+  const body = isPrivate ? { nickname: creator, private: true } : { nickname: creator };
+  const result = await createNewRoom(db, session, json(body), { ...deps, newCode: () => String(nextCode++) });
   if (result.status !== 201) throw new Error("Test setup: the room was not created");
   const { code, playerToken } = result.body as { code: string; playerToken: string };
   return { code, creatorToken: playerToken };
@@ -195,7 +196,9 @@ describe("kick", () => {
 
   // A full room starts by itself (#34), so a freed seat shows as one more join before the room is full.
   it("frees the seat in the lobby: the room fills up one player later", async () => {
-    const room = await lobby("Anna", "Ben");
+    // Private: a public lobby with 2+ players would start after 60 s (issue #37).
+    const room = await newRoom("Anna", true);
+    await joined(room.code, "Ben");
     for (let i = 3; i <= 24; i++) await joined(room.code, `P${i}`); // 24 of 25 seats taken
     wait(66);
     await state(room.code, room.creatorToken);

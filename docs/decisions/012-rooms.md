@@ -255,3 +255,25 @@ every filter). The page asks again every 5 s.
 
 ### Limits
 - A room can appear up to 5 s after it filled or started; joining it then gets the normal "full"/"started" message.
+
+## Update 2026-11-17: lobby countdown for public rooms (issue #37)
+
+### Decision
+- A public room starts by itself 60 s after its lobby reaches 2 players. In the last 15 s the room creator can tap
+  "Extend +60 s", at most 5 times. Private rooms have no countdown; "Start now" and a full room still start earlier.
+- Stored as two columns: `rooms.countdown_from` (when the lobby last reached 2 players; cleared below 2 and at the
+  start) and `rooms.countdown_extensions`. The end is worked out from them, like every other room time.
+- No timer on the server (decision 008): the first request after 0 (state, join, list, extend) starts the game.
+- An extension is one conditional `UPDATE` that checks the 15-s window and the limit, so two taps at once count once.
+
+### Why
+- Public rooms fill with strangers who do not know each other; without a countdown they could wait forever for a
+  creator who does not tap Start.
+
+### Alternatives
+- **Storing the end time:** simpler reads, but "from 45 s" and the 5-extension limit would need extra columns anyway.
+- **Starting at 0 from a background job:** exact to the millisecond, but Vercel has no long-running process.
+
+### Limits
+- The game starts on the first request after 0; with every lobby page asking each second, that is at most ~1 s late.
+- The list shows the countdown on the viewer's device clock, which may be a few seconds off.

@@ -122,6 +122,32 @@ export function rankByScore<Player extends { score: number }>(players: Player[])
   }));
 }
 
+// The lobby countdown of public rooms (issue #37). It runs from the moment the lobby has 2 players; at its end
+// the game starts by itself. In the last EXTEND_WINDOW_SECONDS the room creator may add EXTEND_SECONDS, at most
+// MAX_EXTENSIONS times. Exactly 15 s left already counts as the last 15 s.
+export const LOBBY_COUNTDOWN_SECONDS = 60;
+export const EXTEND_SECONDS = 60;
+export const EXTEND_WINDOW_SECONDS = 15;
+export const MAX_EXTENSIONS = 5;
+
+export function countdownEndsAt(from: Date, extensions: number): Date {
+  return new Date(from.getTime() + (LOBBY_COUNTDOWN_SECONDS + extensions * EXTEND_SECONDS) * 1000);
+}
+
+export function isCountdownOver(endsAt: Date, now: Date): boolean {
+  return now.getTime() >= endsAt.getTime();
+}
+
+// Why "Extend +60 s" does not work right now, or null if it does (the room creator check is the caller's).
+export function whyNoExtension(
+  countdown: { endsAt: Date; extensions: number },
+  now: Date,
+): "too-early-to-extend" | "no-more-extensions" | null {
+  if (countdown.extensions >= MAX_EXTENSIONS) return "no-more-extensions";
+  if (countdown.endsAt.getTime() - now.getTime() > EXTEND_WINDOW_SECONDS * 1000) return "too-early-to-extend";
+  return null;
+}
+
 // Away and kick (issue #40). Every device asks for the room state every 1–2 seconds, so a player whose device
 // has not asked for AWAY_SECONDS is away (closed the tab, lost the connection, phone locked). Exactly 5 s counts
 // as away. The room creator can kick a player who has been away for more than KICK_AFTER_AWAY_SECONDS.
