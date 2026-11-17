@@ -258,8 +258,8 @@ for Start and Replace. Why, alternatives and limits: decision 015.
 - **Back in the lobby** everything works as before: new players can join up to the limit, "Start now" needs 2
   players (with 1 player left the lobby waits for a second), and a full lobby starts by itself – also a Duel where
   both players chose "Play again". If nobody chose "Play again", nothing changes: the room stays finished with its
-  final standings, as before. The room has status `lobby` again, so a public room list that shows lobbies
-  shows it again.
+  final standings, as before. The room has status `lobby` again, so a public room is in the "Join a room" list again (#36); the list
+  counts its 30 minutes from `lobby_since` too.
 
 ### Why
 - **Account holders only:** the creator role is the reason creating a room needs an account (decision 014); a
@@ -277,3 +277,22 @@ for Start and Replace. Why, alternatives and limits: decision 015.
 - When the 60 s run out, the vote ends on the next request; until then the room stays "finished" (devices ask every
   second, so this is at most a second late).
 - A guest who joined while logged out is not an account holder, even if they log in later in the same tab.
+## Update 2026-11-17: public rooms and the "Join a room" list (issue #36)
+
+### Decision
+Rooms are public unless the creator chooses private at creation (`rooms.is_private`, never changed). `GET /api/rooms`
+lists public rooms in the lobby that are not full and not closed, filtered by type (required), mode and
+genres/decades ("any" or a list; a room shares at least one genre and one decade, and a room set to Any fits
+every filter). The page asks again every 5 s.
+
+### Why
+- Strangers can find a game without a code; private rooms keep the old "code, link or QR code" way only.
+- The server applies every listing rule and checks every filter value, so a changed request cannot show private,
+  started or full rooms.
+
+### Alternatives
+- **Live updates (WebSocket/SSE):** faster, but rooms already poll, and Vercel functions do not keep connections.
+- **Changing public/private later:** more states to explain; the issue fixes it at creation.
+
+### Limits
+- A room can appear up to 5 s after it filled or started; joining it then gets the normal "full"/"started" message.

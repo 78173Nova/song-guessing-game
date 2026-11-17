@@ -21,6 +21,7 @@ import {
   kickPlayer,
   leaveRoom,
   listPlayers,
+  listPublicLobbies,
   listRoomAnswers,
   markPlayerSeen,
   saveRoomAnswer,
@@ -36,8 +37,10 @@ import {
 import type { QuestionType } from "../game/modes";
 import {
   endsSet,
+  fitsRoomListFilter,
   MAX_PLAYERS_BY_TYPE,
   matchingSongs,
+  parseRoomListFilter,
   parseRoomSettings,
   parseSongChoiceQuery,
   setOfRound,
@@ -50,6 +53,7 @@ import { parseRoundInput } from "../game/answers";
 import {
   FIRST_ROUND_DELAY_SECONDS,
   isRoomClosed,
+  LOBBY_LIFETIME_MINUTES,
   MIN_PLAYERS_TO_START,
   isRoundClosed,
   isTimeUp,
@@ -88,6 +92,7 @@ const ERRORS = {
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
   "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
   "invalid-settings": { status: 400, message: "Please choose valid room settings." },
+  "invalid-filter": { status: 400, message: "Please choose valid filters." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
   "round-out-of-range": { status: 400, message: "This round does not exist in this game." },
   "wrong-token": { status: 403, message: "This device is not part of this room. Please join again." },
@@ -210,21 +215,23 @@ async function rememberFirstAvatar(db: TransactionDb, account: SessionAccount | 
   if (account !== null && account.avatar === null && picked !== undefined) await saveFirstAvatar(db, account.id, picked);
 }
 
-// Reads { nickname, avatar?, settings? } from the body of "create a room". Only these fields are allowed. Without
-// settings the room gets the default ones (DEFAULT_ROOM_SETTINGS).
+// Reads { nickname, avatar?, settings?, private? } from the body of "create a room". Only these fields are allowed.
+// Without settings the room gets the default ones (DEFAULT_ROOM_SETTINGS); without private it is public (issue #36).
 function readCreateInput(
   rawBody: string,
-): Found<{ nickname: string; avatar: string | undefined; settings?: RoomSettings }> {
+): Found<{ nickname: string; avatar: string | undefined; settings?: RoomSettings; isPrivate: boolean }> {
   const input = readJoinInput(rawBody);
   if (!input.ok) return input;
   const { body } = readJson(rawBody) as { ok: true; body: Record<string, unknown> };
-  if (Object.keys(body).some((field) => field !== "nickname" && field !== "avatar" && field !== "settings")) {
+  if (Object.keys(body).some((field) => !["nickname", "avatar", "settings", "private"].includes(field))) {
     return { ok: false, result: fail("malformed") };
   }
-  if (!("settings" in body)) return { ok: true, nickname: input.nickname, avatar: input.avatar };
+  if ("private" in body && typeof body.private !== "boolean") return { ok: false, result: fail("invalid-settings") };
+  const isPrivate = body.private === true;
+  if (!("settings" in body)) return { ok: true, nickname: input.nickname, avatar: input.avatar, isPrivate };
   const settings = parseRoomSettings(body.settings);
   if (settings === null) return { ok: false, result: fail("invalid-settings") };
-  return { ok: true, nickname: input.nickname, avatar: input.avatar, settings };
+  return { ok: true, nickname: input.nickname, avatar: input.avatar, settings, isPrivate };
 }
 
 // 422 with the number of matching songs: the room creator can fix it by choosing other settings.
@@ -290,6 +297,7 @@ export async function createNewRoom(
       now: now(),
       settings: input.settings,
       accountId: account.id,
+      isPrivate: input.isPrivate,
     });
     if (created !== null) {
       await rememberFirstAvatar(db, account, input.avatar);
@@ -298,6 +306,26 @@ export async function createNewRoom(
   }
   console.error(`Room API error: no free room code after ${MAX_CODE_DRAWS} draws`);
   return fail("server-error");
+}
+
+// GET /api/rooms?type=multiplayer&mode=any&genres=any&decades=any – the "Join a room" list (issue #36): the public
+// rooms that are in the lobby, not full and not closed, oldest first.
+export async function listPublicRooms(db: Db, params: URLSearchParams, deps: Deps = {}): Promise<ApiResult> {
+  const now = deps.now ?? (() => new Date());
+  const filter = parseRoomListFilter(params);
+  if (filter === null) return fail("invalid-filter");
+  const lobbies = await listPublicLobbies(db, new Date(now().getTime() - LOBBY_LIFETIME_MINUTES * 60 * 1000));
+  const rooms = lobbies
+    .filter(({ room, players }) => players < MAX_PLAYERS_BY_TYPE[room.settings.type])
+    .filter(({ room }) => fitsRoomListFilter(room.settings, filter))
+    .map(({ room, creator, players }) => ({
+      code: room.code,
+      creator,
+      ...room.settings,
+      players,
+      maxPlayers: MAX_PLAYERS_BY_TYPE[room.settings.type],
+    }));
+  return { status: 200, body: { rooms } };
 }
 
 // GET /api/rooms/matching-songs?genres=pop,rock&decades=1980 – how many playable songs match one of the genres

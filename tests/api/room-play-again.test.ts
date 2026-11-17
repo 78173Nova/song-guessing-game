@@ -4,6 +4,7 @@ import {
   createNewRoom,
   getRoomState,
   joinRoom,
+  listPublicRooms,
   playAgainInRoom,
   playerLeavesRoom,
   startRoomGame,
@@ -286,6 +287,26 @@ describe("room creator handover", () => {
 });
 
 describe("back in the lobby", () => {
+  const listed = async () => {
+    const params = new URLSearchParams({ type: "multiplayer", mode: "any", genres: "any", decades: "any" });
+    return ((await listPublicRooms(db, params, deps)).body as { rooms: { code: string; players: number }[] }).rooms;
+  };
+
+  it("lists a public room again with its players, also more than 30 minutes after it was created", async () => {
+    const room = await newRoom("Anna");
+    const ben = await joined(room.code, "Ben");
+    expect(await listed()).toEqual([expect.objectContaining({ code: room.code, players: 2 })]);
+    wait(29 * 60);
+    await start(room.code, room.creatorToken);
+    expect(await listed()).toEqual([]); // a started game is not listed
+    await playToTheEnd(room.code, [room.creatorToken, ben]);
+    expect(await listed()).toEqual([]); // nor a finished one
+
+    await playAgain(room.code, room.creatorToken);
+    await playAgain(room.code, ben); // the last choice ends the vote
+    expect(await listed()).toEqual([expect.objectContaining({ code: room.code, players: 2 })]);
+  });
+
   it("lets new players join up to the limit; the 30-minute lobby limit counts from the return to the lobby", async () => {
     const room = await newRoom("Anna");
     const ben = await joined(room.code, "Ben");
