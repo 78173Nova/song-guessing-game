@@ -5,6 +5,7 @@ import type { Db, TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { setCatalogue } from "@/lib/db/songs";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
+import { withDefaultSettings } from "../helpers/rooms";
 import { loggedInSession } from "../helpers/session";
 import { createTestDb } from "../helpers/test-db";
 import { addTestSongs } from "../helpers/songs";
@@ -320,7 +321,7 @@ describe("solo routes on a room game", () => {
     const roomDb = db as TransactionDb; // the test database can always run transactions
     await addTestSongs(db, 8);
     const session = await loggedInSession(roomDb, clock);
-    const created = await createNewRoom(roomDb, session, JSON.stringify({ nickname: "Anna" }), deps);
+    const created = await createNewRoom(roomDb, session, JSON.stringify(withDefaultSettings({ nickname: "Anna" })), deps);
     const room = created.body as { code: string; playerToken: string };
     await joinRoom(roomDb, room.code, JSON.stringify({ nickname: "Ben" }), deps);
     const started = await startRoomGame(roomDb, room.code, `Bearer ${room.playerToken}`, deps);

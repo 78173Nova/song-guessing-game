@@ -92,7 +92,7 @@ async function listedCodes(filter: Filter = {}): Promise<string[]> {
 }
 
 describe("GET /api/rooms – the list of public rooms", () => {
-  it("lists a public room in the lobby with its creator, settings and players", async () => {
+  it("lists a public room in the lobby with its creator, settings and players, and the server's clock", async () => {
     const { code } = await newRoom(
       { mode: "artist", genres: ["pop", "rock"], decades: [1980], songsPerSet: 5, sets: 2 },
       { creator: "Anna" },
@@ -117,6 +117,8 @@ describe("GET /api/rooms – the list of public rooms", () => {
             countdownEndsAt: new Date(clock.getTime() + 60_000).toISOString(), // issue #37: 60 s from Ben's join
           },
         ],
+        // The server's clock, so the list can show the countdown on it and not on the device's clock (issue #37).
+        serverNow: clock.toISOString(),
       },
     });
   });
@@ -142,10 +144,10 @@ describe("POST /api/rooms – public or private", () => {
     expect(await db.query("SELECT id FROM rooms")).toHaveLength(0);
   });
 
-  it("accepts private without settings (the room gets the default settings)", async () => {
+  it("refuses private without settings: the settings are required (issue #34)", async () => {
     const result = await create({ nickname: "Anna", private: true });
-    expect(result.status).toBe(201);
-    expect(await listedCodes()).toEqual([]);
+    expect(result).toMatchObject({ status: 400, body: { error: "invalid-settings" } });
+    expect(await db.query("SELECT id FROM rooms")).toHaveLength(0);
   });
 });
 
@@ -164,7 +166,7 @@ describe("GET /api/rooms – which rooms are listed", () => {
   it("drops a Duel room once its second player has joined (a full room starts by itself)", async () => {
     const { code } = await newRoom({ type: "duel" });
     const before = await list({ type: "duel" });
-    expect(before.body).toEqual({ rooms: [expect.objectContaining({ code, players: 1, maxPlayers: 2 })] });
+    expect(before.body).toMatchObject({ rooms: [expect.objectContaining({ code, players: 1, maxPlayers: 2 })] });
 
     await joined(code, "Ben");
     expect(await listedCodes({ type: "duel" })).toEqual([]);
@@ -199,7 +201,7 @@ describe("GET /api/rooms – which rooms are listed", () => {
     await joined(code, "Cleo");
     expect((await playerLeavesRoom(db, code, bearer(ben), deps)).status).toBe(200);
 
-    expect((await list()).body).toEqual({ rooms: [expect.objectContaining({ code, players: 2 })] });
+    expect((await list()).body).toMatchObject({ rooms: [expect.objectContaining({ code, players: 2 })] });
   });
 
   it("lists the rooms oldest first", async () => {

@@ -11,6 +11,7 @@ import {
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
+import { withDefaultSettings } from "../helpers/rooms";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -51,7 +52,7 @@ const rejoin = (code: string, nickname: string, oldToken: string) =>
 
 async function newRoom(creator = "Anna", isPrivate = false) {
   const body = isPrivate ? { nickname: creator, private: true } : { nickname: creator };
-  const result = await createNewRoom(db, session, json(body), { ...deps, newCode: () => String(nextCode++) });
+  const result = await createNewRoom(db, session, json(withDefaultSettings(body)), { ...deps, newCode: () => String(nextCode++) });
   if (result.status !== 201) throw new Error("Test setup: the room was not created");
   const { code, playerToken } = result.body as { code: string; playerToken: string };
   return { code, creatorToken: playerToken };
@@ -344,7 +345,7 @@ describe("leave", () => {
   it("also works after the game has finished: the player leaves the final standings", async () => {
     const room = await startedRoom("Anna", "Ben");
     const [anna, ben] = room.tokens;
-    wait(10 * 60);
+    wait(150); // the 5 rounds end after 112 s; the vote on "Play again" runs until 182 s (then the room closes, #43)
     expect((await state(room.code, anna)).body.status).toBe("finished");
     await leave(room.code, ben);
     expect((await state(room.code, anna)).body.standings).toEqual([{ rank: 1, nickname: "Anna", score: 0 }]);

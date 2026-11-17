@@ -86,10 +86,10 @@ import {
 import { buildReplacementRound, buildRounds } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
-import { looksLikeToken } from "../accounts/rules";
-import { findSessionAccount, saveFirstAvatar, type SessionAccount } from "../db/accounts";
-import { DEFAULT_AVATAR, isAvatar } from "../game/avatars";
+import { saveFirstAvatar, type SessionAccount } from "../db/accounts";
+import { DEFAULT_AVATAR, isAvatar, type AvatarId } from "../game/avatars";
 import { readJson, type ApiResult } from "./games";
+import { isJsonObject, PLAYER_INPUT_ERRORS, sessionAccount } from "./shared";
 
 // The tests pass their own clock, song shuffle and room codes. The app uses the real ones.
 type Deps = { now?: () => Date; random?: () => number; newCode?: () => string };
@@ -99,8 +99,7 @@ const MAX_CODE_DRAWS = 10;
 
 const ERRORS = {
   malformed: { status: 400, message: "The request is not valid." },
-  "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
-  "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
+  ...PLAYER_INPUT_ERRORS,
   "invalid-settings": { status: 400, message: "Please choose valid room settings." },
   "invalid-filter": { status: 400, message: "Please choose valid filters." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
@@ -175,11 +174,14 @@ async function findRoomAsCreator(
 ): Promise<Found<{ room: Room }>> {
   const found = await findOpenRoom(db, code, now);
   if (!found.ok) return found;
-  const token = readBearerToken(authorization);
-  if (token === null || (await findRoomByCreatorToken(db, code, token)) === null) {
-    return { ok: false, result: fail("wrong-token") };
-  }
+  if (!(await isCreatorRequest(db, code, authorization))) return { ok: false, result: fail("wrong-token") };
   return found;
+}
+
+// Does this request carry the room creator's token (`rooms.host_token_hash`)?
+async function isCreatorRequest(db: Db, code: string, authorization: string | null): Promise<boolean> {
+  const token = readBearerToken(authorization);
+  return token !== null && (await findRoomByCreatorToken(db, code, token)) !== null;
 }
 
 // The room and the player, but only for a request that carries the token of a player in this room.
@@ -198,53 +200,61 @@ async function findRoomAsPlayer(
   return { ok: true, room: found.room, player };
 }
 
-// Reads { nickname, avatar } from a request body: the nickname without the spaces around it and the avatar
-// (undefined when the body names none), or the error to send. An avatar must be one of the fixed set (issue #44).
-function readJoinInput(rawBody: string): Found<{ nickname: string; avatar: string | undefined }> {
+// Reads a request body that must be a JSON object, or the "malformed" error.
+function readBody(rawBody: string): Found<{ body: Record<string, unknown> }> {
   const json = readJson(rawBody);
-  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
-    return { ok: false, result: fail("malformed") };
-  }
-  const nickname = parseNickname((json.body as Record<string, unknown>).nickname);
-  if (nickname === null) return { ok: false, result: fail("invalid-nickname") };
-  const { avatar } = json.body as Record<string, unknown>;
-  if (avatar !== undefined && !isAvatar(avatar)) return { ok: false, result: fail("invalid-avatar") };
-  return { ok: true, nickname, avatar };
+  if (!json.ok || !isJsonObject(json.body)) return { ok: false, result: fail("malformed") };
+  return { ok: true, body: json.body };
 }
 
-// The account of a session cookie, or null for a guest (no, an unknown or an expired session).
-async function accountOf(db: TransactionDb, sessionToken: string | undefined, now: Date): Promise<SessionAccount | null> {
-  return looksLikeToken(sessionToken) ? findSessionAccount(db, sessionToken, now) : null;
+// Reads { nickname } from a request body: the nickname without the spaces around it, or the error to send.
+// Kick takes only this; join and create build on it.
+function readNicknameInput(rawBody: string): Found<{ nickname: string; body: Record<string, unknown> }> {
+  const read = readBody(rawBody);
+  if (!read.ok) return read;
+  const nickname = parseNickname(read.body.nickname);
+  if (nickname === null) return { ok: false, result: fail("invalid-nickname") };
+  return { ok: true, nickname, body: read.body };
+}
+
+// Reads { nickname, avatar } from a request body: the nickname and the avatar (undefined when the body names none),
+// or the error to send. An avatar must be one of the fixed set (issue #44).
+function readJoinInput(
+  rawBody: string,
+): Found<{ nickname: string; avatar: AvatarId | undefined; body: Record<string, unknown> }> {
+  const input = readNicknameInput(rawBody);
+  if (!input.ok) return input;
+  const { avatar } = input.body;
+  if (avatar !== undefined && !isAvatar(avatar)) return { ok: false, result: fail("invalid-avatar") };
+  return { ...input, avatar };
 }
 
 // The avatar a player shows in the room: the one picked on the nickname screen, else the account's saved one,
 // else the music note.
-const avatarFor = (picked: string | undefined, account: SessionAccount | null) =>
+const avatarFor = (picked: AvatarId | undefined, account: SessionAccount | null) =>
   picked ?? account?.avatar ?? DEFAULT_AVATAR;
 
 // An account holder's first room saves the avatar they picked to the account, once (issue #44). Later rooms and
 // guests change nothing; Account settings changes it.
-async function rememberFirstAvatar(db: TransactionDb, account: SessionAccount | null, picked: string | undefined) {
+async function rememberFirstAvatar(db: TransactionDb, account: SessionAccount | null, picked: AvatarId | undefined) {
   if (account !== null && account.avatar === null && picked !== undefined) await saveFirstAvatar(db, account.id, picked);
 }
 
-// Reads { nickname, avatar?, settings?, private? } from the body of "create a room". Only these fields are allowed.
-// Without settings the room gets the default ones (DEFAULT_ROOM_SETTINGS); without private it is public (issue #36).
+// Reads { nickname, avatar?, settings, private? } from the body of "create a room". Only these fields are allowed,
+// and the settings are required (issue #34). Without private the room is public (issue #36).
 function readCreateInput(
   rawBody: string,
-): Found<{ nickname: string; avatar: string | undefined; settings?: RoomSettings; isPrivate: boolean }> {
+): Found<{ nickname: string; avatar: AvatarId | undefined; settings: RoomSettings; isPrivate: boolean }> {
   const input = readJoinInput(rawBody);
   if (!input.ok) return input;
-  const { body } = readJson(rawBody) as { ok: true; body: Record<string, unknown> };
+  const { body } = input;
   if (Object.keys(body).some((field) => !["nickname", "avatar", "settings", "private"].includes(field))) {
     return { ok: false, result: fail("malformed") };
   }
   if ("private" in body && typeof body.private !== "boolean") return { ok: false, result: fail("invalid-settings") };
-  const isPrivate = body.private === true;
-  if (!("settings" in body)) return { ok: true, nickname: input.nickname, avatar: input.avatar, isPrivate };
   const settings = parseRoomSettings(body.settings);
   if (settings === null) return { ok: false, result: fail("invalid-settings") };
-  return { ok: true, nickname: input.nickname, avatar: input.avatar, settings, isPrivate };
+  return { ok: true, nickname: input.nickname, avatar: input.avatar, settings, isPrivate: body.private === true };
 }
 
 // 422 with the number of matching songs: the room creator can fix it by choosing other settings.
@@ -268,7 +278,7 @@ function buildRoomRounds(songs: Song[], settings: RoomSettings, now: Date, rando
   });
 }
 
-// POST /api/rooms – an account holder creates a room with { nickname, avatar?, settings? } and becomes its room creator: the first
+// POST /api/rooms – an account holder creates a room with { nickname, avatar?, settings, private? } and becomes its room creator: the first
 // player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
 // creator's player token and the nickname as it was stored. The token is returned only this once: the database
 // keeps just its hash (decision 012). It is also the room's creator key for Start.
@@ -282,20 +292,18 @@ export async function createNewRoom(
   const now = deps.now ?? (() => new Date());
   const newCode = deps.newCode ?? randomRoomCode;
 
-  const account = await accountOf(db, sessionToken, now());
+  const account = await sessionAccount(db, sessionToken, now());
   if (account === null) return fail("log-in-needed");
   const input = readCreateInput(rawBody);
   if (!input.ok) return input.result;
-  if (input.settings !== undefined) {
-    const songs = await songsFor(db, input.settings);
-    if (songs.length < totalRoundsOf(input.settings)) return tooFewSongs(songs.length);
-    // Enough songs, but e.g. not 4 different artists for artist mode: the game could not be built.
-    if (!buildRoomRounds(songs, input.settings, now()).ok) {
-      return tooFewSongs(
-        songs.length,
-        "These songs have too few different titles or artists for this mode. Choose more genres/decades or another mode.",
-      );
-    }
+  const songs = await songsFor(db, input.settings);
+  if (songs.length < totalRoundsOf(input.settings)) return tooFewSongs(songs.length);
+  // Enough songs, but e.g. not 4 different artists for artist mode: the game could not be built.
+  if (!buildRoomRounds(songs, input.settings, now()).ok) {
+    return tooFewSongs(
+      songs.length,
+      "These songs have too few different titles or artists for this mode. Choose more genres/decades or another mode.",
+    );
   }
   const avatar = avatarFor(input.avatar, account);
 
@@ -345,7 +353,8 @@ export async function listPublicRooms(db: Db, params: URLSearchParams, deps: Dep
       // When the lobby countdown ends (issue #37); null while it does not run (fewer than 2 players).
       countdownEndsAt: lobbyCountdownEnd(room)?.toISOString() ?? null,
     }));
-  return { status: 200, body: { rooms } };
+  // The server's clock, so the list shows the countdowns on it and not on the device's clock (issue #37).
+  return { status: 200, body: { rooms, serverNow: now().toISOString() } };
 }
 
 // GET /api/rooms/matching-songs?genres=pop,rock&decades=1980 – how many playable songs match one of the genres
@@ -392,7 +401,7 @@ export async function joinRoom(
   if (before?.removed === "kicked") return fail("kicked");
   // An account holder is also recognised by their account, from any tab or browser. A guest who comes back
   // without the old token cannot be recognised (decision 012).
-  const account = await accountOf(db, from.sessionToken, now());
+  const account = await sessionAccount(db, from.sessionToken, now());
   if (account !== null && (await wasAccountKicked(db, found.room.id, account.id))) return fail("kicked");
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
@@ -659,7 +668,7 @@ export async function getRoomState(
   // does not offer a nickname form that can only be refused.
   if (token === null || me === null) return fail(room.status === "lobby" ? "wrong-token" : "room-started");
   if (me.removed !== null) return fail(me.removed);
-  const isCreator = (await findRoomByCreatorToken(db, code, token)) !== null;
+  const isCreator = await isCreatorRequest(db, code, authorization);
   // This request shows that the player's device is here (issue #40: away after 5 s without one).
   await markPlayerSeen(db, me.id, at);
 
@@ -829,7 +838,7 @@ export async function extendRoomCountdown(
   const at = now();
   const found = await findRoomAsPlayer(db, code, authorization, at);
   if (!found.ok) return found.result;
-  if ((await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) === null) return fail("not-creator");
+  if (!(await isCreatorRequest(db, code, authorization))) return fail("not-creator");
 
   // Why an extension is refused, worked out from the room as it is stored.
   const whyNot = (room: Room): ApiResult => {
@@ -926,9 +935,9 @@ export async function kickRoomPlayer(
   const found = await findRoomAsPlayer(db, code, authorization, at);
   if (!found.ok) return found.result;
   const { room, player: me } = found;
-  if ((await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) === null) return fail("not-creator");
+  if (!(await isCreatorRequest(db, code, authorization))) return fail("not-creator");
 
-  const input = readJoinInput(rawBody); // the body is { nickname } of the player to kick
+  const input = readNicknameInput(rawBody); // the body is { nickname } of the player to kick
   if (!input.ok) return input.result;
   const target = (await listPlayers(db, room.id)).find(
     (player) => player.nickname.toLowerCase() === input.nickname.toLowerCase() && player.id !== me.id,
@@ -956,7 +965,7 @@ export async function playerLeavesRoom(
   const found = await findRoomAsPlayer(db, code, authorization, now());
   if (!found.ok) return found.result;
   const { room, player } = found;
-  const isCreator = (await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) !== null;
+  const isCreator = await isCreatorRequest(db, code, authorization);
 
   const result = await leaveRoom(db, { roomId: room.id, playerId: player.id, isCreator });
   if (result === "not-in-room") return fail("wrong-token"); // left at the same moment from another tab

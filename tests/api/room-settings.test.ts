@@ -134,11 +134,10 @@ describe("POST /api/rooms – room settings", () => {
     }
   });
 
-  it("uses the default settings when none are sent: Multiplayer, title, any genre and decade, 1 set of 5", async () => {
-    const result = await create({ nickname: "Anna" });
-    expect(result.status).toBe(201);
-    const { code, playerToken } = result.body as { code: string; playerToken: string };
-    expect((await state(code, playerToken)).body).toMatchObject({ settings: DEFAULTS, totalRounds: 5 });
+  it("refuses a create request without settings with 400, and creates no room", async () => {
+    expect(await create({ nickname: "Anna" })).toMatchObject({ status: 400, body: { error: "invalid-settings" } });
+    expect(await create({ nickname: "Anna", private: true })).toMatchObject({ status: 400, body: { error: "invalid-settings" } });
+    expect(await db.query("SELECT id FROM rooms")).toEqual([]);
   });
 
   it("refuses unknown values, wrong types, missing and extra fields with 400, and creates no room", async () => {
@@ -346,7 +345,8 @@ describe("set summary in the room state", () => {
     const room = await newRoom({ songsPerSet: 3, sets: 2 });
     const ben = await joined(room.code, "Ben");
     await startRoomGame(db, room.code, bearer(room.creatorToken), deps);
-    wait(3 * 60 * 60 - 1); // nobody answers; the game catches up on the next request
+    wait(3 * 60); // nobody answers; the game catches up on the next request (its 6 rounds end after 150 s, the vote on
+    // "Play again" runs until 220 s, then the room closes because nobody chose it, issue #43)
 
     const final = await state(room.code, ben);
     expect(final.body.status).toBe("finished");
