@@ -80,15 +80,15 @@ const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 // What a player picks on the nickname screen (issue #44).
 export type NicknameChoice = { nickname: string; avatar: string };
 
-// Creating needs the session cookie, which the browser sends by itself. Without settings the server uses the
-// default ones. A room is public unless `isPrivate` (issue #36).
+// Creating needs the session cookie, which the browser sends by itself, and the room's settings (issue #34). A room
+// is public unless `isPrivate` (issue #36).
 export function apiCreateRoom(
   choice: NicknameChoice,
+  settings: RoomSettings,
   fetchFn: FetchFn = fetch,
-  settings?: RoomSettings,
   isPrivate = false,
 ) {
-  const body = { ...choice, ...(settings === undefined ? {} : { settings }), ...(isPrivate ? { private: true } : {}) };
+  const body = { ...choice, settings, ...(isPrivate ? { private: true } : {}) };
   return post<JoinedRoom>("/api/rooms", body, fetchFn);
 }
 
@@ -105,11 +105,12 @@ export type ListedRoom = RoomSettings & {
 // The list's filters: the Duel/Multiplayer toggle, mode, genre tiles and decade tiles ("any" = no filter).
 export type RoomListFilter = Pick<RoomSettings, "type" | "genres" | "decades"> & { mode: "any" | Mode };
 
-// The public rooms that fit the filters. Never throws: an error comes back as a readable message.
+// The public rooms that fit the filters, with the server's clock for their countdowns (issue #37). Never throws: an
+// error comes back as a readable message.
 export async function apiListRooms(
   filter: RoomListFilter,
   fetchFn: FetchFn = fetch,
-): Promise<{ ok: true; rooms: ListedRoom[] } | { ok: false; message: string }> {
+): Promise<{ ok: true; rooms: ListedRoom[]; serverNow: string } | { ok: false; message: string }> {
   const list = (value: "any" | (string | number)[]) => (value === "any" ? "any" : value.join(","));
   const query = new URLSearchParams({
     type: filter.type,
@@ -124,8 +125,10 @@ export async function apiListRooms(
     return { ok: false, message: NETWORK_ERROR_MESSAGE };
   }
   try {
-    const data = (await response.json()) as { rooms?: unknown; message?: unknown };
-    if (response.ok && Array.isArray(data.rooms)) return { ok: true, rooms: data.rooms as ListedRoom[] };
+    const data = (await response.json()) as { rooms?: unknown; serverNow?: unknown; message?: unknown };
+    if (response.ok && Array.isArray(data.rooms) && typeof data.serverNow === "string") {
+      return { ok: true, rooms: data.rooms as ListedRoom[], serverNow: data.serverNow };
+    }
     return { ok: false, message: typeof data.message === "string" ? data.message : GENERIC_ERROR_MESSAGE };
   } catch {
     return { ok: false, message: GENERIC_ERROR_MESSAGE };

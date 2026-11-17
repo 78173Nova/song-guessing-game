@@ -28,9 +28,9 @@ const ROOM: ListedRoom = {
 describe("creating a public or private room", () => {
   it("sends private: true only when private is chosen", async () => {
     const fetchFn = reply(201, { code: "482913", playerToken: "ab".repeat(32), nickname: "Anna" });
-    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS, true);
-    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS, false);
-    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, SETTINGS, fetchFn, true);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, SETTINGS, fetchFn, false);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, SETTINGS, fetchFn);
 
     const bodies = fetchFn.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
     expect(bodies).toEqual([
@@ -43,21 +43,22 @@ describe("creating a public or private room", () => {
 
 describe("apiListRooms", () => {
   it("asks for the list with every filter in the query, and never from the cache", async () => {
-    const fetchFn = reply(200, { rooms: [ROOM] });
+    const fetchFn = reply(200, { rooms: [ROOM], serverNow: "2026-11-17T12:00:00.000Z" });
 
     expect(
       await apiListRooms({ type: "duel", mode: "any", genres: ["pop", "r&b"], decades: [1980, 2010] }, fetchFn),
-    ).toEqual({ ok: true, rooms: [ROOM] });
+    ).toEqual({ ok: true, rooms: [ROOM], serverNow: "2026-11-17T12:00:00.000Z" });
     const [url, init] = fetchFn.mock.calls[0];
     expect(url).toBe("/api/rooms?type=duel&mode=any&genres=pop%2Cr%26b&decades=1980%2C2010");
     expect(init?.cache).toBe("no-store");
   });
 
   it("sends 'any' for genres and decades left on Any", async () => {
-    const fetchFn = reply(200, { rooms: [] });
+    const fetchFn = reply(200, { rooms: [], serverNow: "2026-11-17T12:00:00.000Z" });
     expect(await apiListRooms({ type: "multiplayer", mode: "title", genres: "any", decades: "any" }, fetchFn)).toEqual({
       ok: true,
       rooms: [],
+      serverNow: "2026-11-17T12:00:00.000Z",
     });
     expect(fetchFn.mock.calls[0][0]).toBe("/api/rooms?type=multiplayer&mode=title&genres=any&decades=any");
   });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { serverClockOffset } from "@/lib/client/countdown";
 import { apiListRooms, type ListedRoom, type RoomListFilter } from "@/lib/client/room-api";
 import { describeListedRoom, listedRoomCountdown, MODE_LABELS, ROOM_LIST_REFRESH_MS } from "@/lib/client/room-list";
 import { isTileSelected, toggleTile } from "@/lib/client/room-settings";
@@ -21,8 +22,9 @@ export default function RoomList() {
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [error, setError] = useState("");
   // This device's clock for the countdowns in the list (issue #37). Set when a list arrives, never while the page
-  // is rendered on the server.
+  // is rendered on the server. The countdowns run on the server's clock: `offset` is how far it is ahead.
   const [now, setNow] = useState(0);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -30,8 +32,10 @@ export default function RoomList() {
       const result = await apiListRooms(filter);
       if (!current) return; // a late reply for older filters
       if (result.ok) {
+        const receivedAt = Date.now();
         setRooms(result.rooms);
-        setNow(Date.now());
+        setOffset(serverClockOffset(result.serverNow, receivedAt));
+        setNow(receivedAt);
         setError("");
       } else {
         setError(result.message); // the last list stays until the next try works
@@ -102,7 +106,7 @@ export default function RoomList() {
         <ul className={styles.roomList} aria-live="polite">
           {rooms.map((room) => {
             const text = describeListedRoom(room);
-            const countdown = listedRoomCountdown(room, now);
+            const countdown = listedRoomCountdown(room, offset, now);
             return (
               <li key={room.code}>
                 <Link href={`/join/${room.code}`} className={styles.roomEntry}>

@@ -77,7 +77,7 @@ export default function CreateRoomForm() {
     event.preventDefault();
     setSending(true);
     setError("");
-    const result = await apiCreateRoom({ nickname, avatar }, fetch, settings, isPrivate);
+    const result = await apiCreateRoom({ nickname, avatar }, settings, fetch, isPrivate);
     if (result.ok) {
       saveRoomToken(result.data.code, result.data.playerToken);
       markShareOnArrival(result.data.code); // the lobby opens the share pop-up once
