@@ -10,6 +10,8 @@ import { answeredInRound } from "@/lib/client/room-board";
 import {
   apiAnswerRoom,
   apiJoinRoom,
+  apiKickPlayer,
+  apiLeaveRoom,
   apiReportClip,
   apiRoomState,
   apiStartRoom,
@@ -88,6 +90,9 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         return;
       }
       if (result.reason === "gone") setAccess({ kind: "gone", message: result.message });
+      // Left the game or kicked (issue #40): no way back in. The token stays saved, so a join from this tab
+      // sends it along and a kicked player is refused.
+      else if (result.reason === "removed") setAccess({ kind: "gone", message: result.message });
       else if (result.reason === "not-in") {
         // No seat in this room (or the room does not know this token): offer to join.
         if (currentToken !== null) forgetRoomToken(code);
@@ -151,7 +156,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     clips.unlock(); // still inside the tap
     setSending(true);
     setError("");
-    const result = await apiJoinRoom(code, nickname);
+    const result = await apiJoinRoom(code, nickname, fetch, loadRoomToken(code));
     setSending(false);
     if (!result.ok) {
       setError(result.message);
@@ -170,6 +175,41 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     const result = await apiStartRoom(code, token);
     setSending(false);
     if (!result.ok) setError(result.message);
+    await refresh(token);
+  }
+
+  // Leave (issue #40): anyone, at any time. The room creator leaving the lobby closes the room for everyone.
+  async function leave() {
+    if (token === null) return;
+    const isCreatorInLobby = view.latest?.status === "lobby" && view.latest.role === "creator";
+    const question = isCreatorInLobby
+      ? "Leave and close the room for everyone?"
+      : view.latest?.status === "playing"
+        ? "Leave the game? You cannot come back and your points disappear from the standings."
+        : "Leave the room?";
+    if (!window.confirm(question)) return;
+    setSending(true);
+    const result = await apiLeaveRoom(code, token);
+    setSending(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    forgetRoomToken(code);
+    clips.stopAll();
+    setAccess({
+      kind: "gone",
+      message: result.data.roomClosed ? "You closed the room." : "You have left the room.",
+    });
+  }
+
+  // Kick (issue #40): only the room creator, only a player away for more than 60 s, and only after a confirmation.
+  async function kick(player: string) {
+    if (token === null) return;
+    if (!window.confirm(`Are you sure you want to kick ${player}?`)) return;
+    const result = await apiKickPlayer(code, token, player);
+    if (!result.ok) setError(result.message);
+    else setError("");
     await refresh(token);
   }
 
@@ -264,6 +304,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         <ul className={styles.playerList} aria-live="polite">
           {state.players.map((player) => (
             <li key={player} className={player === state.me.nickname ? styles.self : undefined}>
+              {state.away?.includes(player) && <AwaySymbol />}
               {player}
               {player === state.me.nickname ? " (you)" : ""}
             </li>
@@ -277,6 +318,8 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
             {!enoughPlayers && <p className={styles.hint}>At least {MIN_PLAYERS_TO_START} players are needed to start.</p>}
           </>
         )}
+        <KickButtons kickable={state.kickable ?? []} onKick={kick} />
+        <LeaveButton onLeave={leave} disabled={sending} />
         {message}
       </>
     );
@@ -300,8 +343,43 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
           ▶ Tap to hear the music
         </button>
       )}
+      <KickButtons kickable={state.kickable ?? []} onKick={kick} />
+      <LeaveButton onLeave={leave} disabled={sending} />
       {message}
     </div>
+  );
+}
+
+// The loading symbol on the nickname of a player whose device has not asked for the room for 5 s (issue #40).
+function AwaySymbol() {
+  return (
+    <span role="img" aria-label="away" title="Away – not connected">
+      ⏳{" "}
+    </span>
+  );
+}
+
+// For the room creator: one button per player who has been away for more than 60 s (the server lists them).
+function KickButtons({ kickable, onKick }: { kickable: string[]; onKick: (player: string) => void }) {
+  if (kickable.length === 0) return null;
+  return (
+    <ul className={styles.playerList} aria-label="Players you can kick">
+      {kickable.map((player) => (
+        <li key={player}>
+          <button type="button" className={styles.secondary} onClick={() => onKick(player)}>
+            Kick {player}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LeaveButton({ onLeave, disabled }: { onLeave: () => void; disabled: boolean }) {
+  return (
+    <button type="button" className={styles.textLink} onClick={onLeave} disabled={disabled}>
+      Leave
+    </button>
   );
 }
 
@@ -345,6 +423,7 @@ function GameScreen({
         <section>
           <RoomBoard
             players={state.players}
+            away={state.away ?? []}
             me={state.me.nickname}
             answered={answeredInRound(state, screen.number)}
             iAnswered={answered}

@@ -28,6 +28,8 @@ export type RoomState = {
   players: string[];
   settings?: RoomSettings; // fixed when the room was created (issue #34)
   answered: string[]; // who has answered the round in `round` (not what they chose)
+  away?: string[]; // players whose device has not asked for 5 s (issue #40)
+  kickable?: string[]; // players the room creator may kick now; always empty for other players
   totalRounds: number;
   serverNow: string;
   previewUrls: string[] | null;
@@ -59,10 +61,11 @@ export type RoomState = {
 // What a state request can lead to: the state, or why there is none.
 //   gone      – no room with this code, or it has closed (the message says which)
 //   not-in    – this tab has no seat in the room (no token, or a token the room does not know)
+//   removed   – this tab left the game or was kicked (issue #40): no nickname form, just the message
 //   error     – the server could not be reached; the lobby keeps the last state and asks again
 export type StateResult =
   | { ok: true; state: RoomState }
-  | { ok: false; reason: "gone" | "not-in" | "error"; message: string };
+  | { ok: false; reason: "gone" | "not-in" | "removed" | "error"; message: string };
 
 const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -89,13 +92,33 @@ export async function apiMatchingSongs(
   }
 }
 
-export async function apiJoinRoom(code: string, nickname: string, fetchFn: FetchFn = fetch) {
+// `oldToken`: the token this tab had in the room before, if any. The server refuses the join when that token was
+// kicked (issue #40).
+export async function apiJoinRoom(code: string, nickname: string, fetchFn: FetchFn = fetch, oldToken: string | null = null) {
   const result = await post<{ playerToken: string; nickname: string }>(
     `/api/rooms/${encodeURIComponent(code)}/join`,
     { nickname },
-    fetchFn,
+    oldToken === null ? fetchFn : withToken(oldToken, fetchFn),
   );
   return result.ok ? { ok: true as const, data: { code, ...result.data } } : result;
+}
+
+// Leave the room (issue #40). roomClosed = the room creator left the lobby, so the room closed for everyone.
+export async function apiLeaveRoom(code: string, token: string, fetchFn: FetchFn = fetch) {
+  return post<{ left: true; roomClosed: boolean }>(
+    `/api/rooms/${encodeURIComponent(code)}/leave`,
+    undefined,
+    withToken(token, fetchFn),
+  );
+}
+
+// The room creator kicks a player who has been away for more than 60 s (issue #40). The page asks first.
+export async function apiKickPlayer(code: string, token: string, nickname: string, fetchFn: FetchFn = fetch) {
+  return post<{ nickname: string }>(
+    `/api/rooms/${encodeURIComponent(code)}/kick`,
+    { nickname },
+    withToken(token, fetchFn),
+  );
 }
 
 // `post` with the token added to the headers it sets.
@@ -138,7 +161,7 @@ export async function apiRoomState(code: string, token: string | null, fetchFn: 
   } catch {
     return { ok: false, reason: "error", message: NETWORK_ERROR_MESSAGE };
   }
-  let data: { message?: unknown } & Partial<RoomState>;
+  let data: { message?: unknown; error?: unknown } & Partial<RoomState>;
   try {
     data = await response.json();
   } catch {
@@ -147,7 +170,10 @@ export async function apiRoomState(code: string, token: string | null, fetchFn: 
   if (response.ok) return { ok: true, state: data as RoomState };
   const message = typeof data.message === "string" ? data.message : GENERIC_ERROR_MESSAGE;
   if (response.status === 404 || response.status === 409) return { ok: false, reason: "gone", message };
-  if (response.status === 403) return { ok: false, reason: "not-in", message };
+  if (response.status === 403) {
+    const removed = data.error === "kicked" || data.error === "left";
+    return { ok: false, reason: removed ? "removed" : "not-in", message };
+  }
   return { ok: false, reason: "error", message };
 }
 

@@ -12,6 +12,7 @@ const down = (units: number) => `${(units / BOARD.height) * 100}%`;
 
 export default function RoomBoard({
   players,
+  away,
   me,
   answered,
   iAnswered,
@@ -20,6 +21,7 @@ export default function RoomBoard({
   secondsLeft,
 }: {
   players: string[];
+  away: string[]; // players whose device has not asked for 5 s: a loading symbol on their nickname (issue #40)
   me: string;
   answered: string[]; // who has answered the round on screen
   iAnswered: boolean; // the viewer's own tap counts at once, before the next reply
@@ -42,6 +44,11 @@ export default function RoomBoard({
               title={seat.nickname}
             >
               {seat.answered && <span aria-label="has answered">✓ </span>}
+              {away.includes(seat.nickname) && (
+                <span role="img" aria-label="away" title="Away – not connected">
+                  ⏳{" "}
+                </span>
+              )}
               <span className={styles.name}>{seat.nickname}</span>
             </li>
           ))}

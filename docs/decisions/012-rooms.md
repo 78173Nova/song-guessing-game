@@ -195,3 +195,43 @@ any more: Start schedules round 1, and every state request closes due rounds and
 the stored times. `POST /api/rooms/[code]/next` is removed. Every player now gets `previewUrls`, `serverNow`,
 `nextRound` and the `standings` (the glossary term, instead of "scoreboard"). The creator's token is still needed
 for Start and Replace. Why, alternatives and limits: decision 015.
+
+## Update 17 Nov 2026: away, kick and leave (issue #40)
+
+### Decision
+- **Away:** every state request stores the time on the player's row (`room_players.last_seen_at`, also set at the
+  join). A player whose device has not asked for **5 s** is away: the state lists them in `away` and every device
+  shows a loading symbol on their nickname. They simply get no answer (0 points) for rounds they miss. The next
+  request from their device (also after a reload, the token is in `sessionStorage`) clears it.
+- **Kick:** once a player has been away for **more than 60 s** (more than 65 s without a request), the room
+  creator can kick them with `POST /api/rooms/[code]/kick { nickname }`, in the lobby or during the game, after
+  "Are you sure you want to kick <nickname>?". The state lists them in `kickable`, for the creator only. The row
+  stays, marked `removed = 'kicked'`: the token is refused ("The room creator removed you from this room"), the
+  nickname stays taken, and a join that sends the kicked token along is refused. Their points leave the standings.
+- **Leave:** `POST /api/rooms/[code]/leave`, for anyone at any time. In the lobby the row is deleted, so the seat
+  and nickname are free again; if it is the room creator, the room closes for everyone instead
+  (`rooms.closed_reason = 'creator-left'`, "The room creator closed the room"). Once the game has started, the row
+  is marked `removed = 'left'`: gone for good, out of the standings, and the rounds no longer wait for them. The
+  game goes on without the creator, and then nobody can kick.
+- **Everyone left:** when the last player leaves a started room, it closes (`closed_reason = 'everyone-left'`).
+- A Duel room (two players) needs no extra rule: the lobby waits for a new second player, and in the game the one
+  who stays plays on alone.
+
+### Why
+- Polling already happens every second (decision 008), so "away" costs one small UPDATE per request and no
+  background job.
+- Keeping kicked and left rows (instead of deleting them) is what lets the server say *why* a token stopped
+  working and keeps a kicked nickname out; deleting the row in the lobby is what frees the seat.
+- 60 s before a kick gives a player with a short network problem or a locked phone time to come back.
+
+### Alternatives
+- **Heartbeat route** separate from the state: one more request per second for the same information.
+- **Kick any time:** the creator could remove players who are simply slow; the away rule keeps it fair.
+- **Ending the game when the creator leaves:** everyone else would lose their game; the server paces rounds
+  anyway, so nothing needs the creator.
+
+### Limits
+- Players have no accounts, so a kicked player in a new tab or another browser can join a lobby again under a
+  new nickname. The rule stops the easy way back (same tab, same nickname).
+- A player whose device stops asking still counts for "everyone has answered", so a round with an away player
+  runs its full 15 seconds.

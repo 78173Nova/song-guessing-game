@@ -4,6 +4,8 @@ import {
   apiAnswerRoom,
   apiCreateRoom,
   apiJoinRoom,
+  apiKickPlayer,
+  apiLeaveRoom,
   apiReportClip,
   apiRoomState,
   apiStartRoom,
@@ -148,5 +150,49 @@ describe("room API calls from the browser", () => {
       ok: false,
       message: "This round's song has already been swapped once.",
     });
+  });
+
+  it("leaves the room with the token (issue #40)", async () => {
+    const fetchFn = reply(200, { left: true, roomClosed: false });
+
+    expect(await apiLeaveRoom("482913", TOKEN, fetchFn)).toEqual({ ok: true, data: { left: true, roomClosed: false } });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("/api/rooms/482913/leave");
+    expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("kicks a player by nickname with the creator's token, and passes on a refusal", async () => {
+    const fetchFn = reply(200, { nickname: "Ben" });
+
+    expect(await apiKickPlayer("482913", TOKEN, "Ben", fetchFn)).toEqual({ ok: true, data: { nickname: "Ben" } });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("/api/rooms/482913/kick");
+    expect(JSON.parse(String(init?.body))).toEqual({ nickname: "Ben" });
+    expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+
+    const early = reply(409, { error: "not-away-long-enough", message: "Not yet." });
+    expect(await apiKickPlayer("482913", TOKEN, "Ben", early)).toEqual({ ok: false, message: "Not yet." });
+  });
+
+  it("sends the tab's old token along when joining again, so a kicked player is refused", async () => {
+    const fetchFn = reply(403, { error: "kicked", message: "The room creator removed you from this room." });
+
+    expect(await apiJoinRoom("482913", "Benny", fetchFn, TOKEN)).toEqual({
+      ok: false,
+      message: "The room creator removed you from this room.",
+    });
+    expect(new Headers(fetchFn.mock.calls[0][1]?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("says 'removed' when this tab left the game or was kicked, so the page shows no nickname form", async () => {
+    const kicked = reply(403, { error: "kicked", message: "The room creator removed you from this room." });
+    expect(await apiRoomState("482913", TOKEN, kicked)).toEqual({
+      ok: false,
+      reason: "removed",
+      message: "The room creator removed you from this room.",
+    });
+    const left = reply(403, { error: "left", message: "You have left this room." });
+    expect(await apiRoomState("482913", TOKEN, left)).toMatchObject({ ok: false, reason: "removed" });
   });
 });

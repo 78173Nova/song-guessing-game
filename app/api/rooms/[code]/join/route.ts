@@ -5,6 +5,9 @@ import { getDb } from "@/lib/db/client";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/rooms/[code]/join">) {
   const { code } = await ctx.params;
-  const result = await safely(async () => joinRoom(getDb(), code, await request.text()));
+  // The Authorization header carries the token this tab had before, if any (a kicked player is refused).
+  const result = await safely(async () =>
+    joinRoom(getDb(), code, await request.text(), {}, request.headers.get("authorization")),
+  );
   return Response.json(result.body, { status: result.status });
 }

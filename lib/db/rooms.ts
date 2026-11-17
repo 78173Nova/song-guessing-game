@@ -13,6 +13,10 @@ import type { Db, TransactionDb } from "./client";
 export const MAX_PLAYERS = 25;
 
 export type RoomStatus = "lobby" | "playing" | "finished";
+// Why a room closed before its time: the room creator left the lobby, or every player left (issue #40).
+export type ClosedReason = "creator-left" | "everyone-left";
+// Why a player is no longer in the room: they left during or after the game, or the room creator kicked them.
+export type RemovedReason = "left" | "kicked";
 
 // What the rest of the app may know about a room. The room creator's token hash never leaves this file.
 export type Room = {
@@ -22,6 +26,7 @@ export type Room = {
   gameId: string | null; // empty until the room creator starts the game
   createdAt: Date; // the room expires 3 hours after this (rule in lib/game/rooms.ts)
   settings: RoomSettings; // fixed when the room is created (issue #34)
+  closedReason: ClosedReason | null; // set when the room closed early (issue #40)
 };
 
 export type RoomPlayer = {
@@ -29,6 +34,8 @@ export type RoomPlayer = {
   roomId: string;
   nickname: string;
   joinedAt: Date;
+  lastSeenAt: Date; // the last state request from their device (or the join)
+  removed: RemovedReason | null; // null = still in the room
 };
 
 export type RoomAnswer = {
@@ -51,6 +58,7 @@ type RoomRow = {
   decades: Decade[];
   songs_per_set: number;
   sets: number;
+  closed_reason: ClosedReason | null;
 };
 
 type PlayerRow = {
@@ -58,10 +66,13 @@ type PlayerRow = {
   room_id: string;
   nickname: string;
   joined_at: Date | string;
+  last_seen_at: Date | string;
+  removed: RemovedReason | null;
 };
 
-const ROOM_COLUMNS = "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets";
-const PLAYER_COLUMNS = "id, room_id, nickname, joined_at";
+const ROOM_COLUMNS =
+  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason";
+const PLAYER_COLUMNS = "id, room_id, nickname, joined_at, last_seen_at, removed";
 
 const toRoom = (row: RoomRow): Room => ({
   id: row.id,
@@ -78,6 +89,7 @@ const toRoom = (row: RoomRow): Room => ({
     songsPerSet: row.songs_per_set as RoomSettings["songsPerSet"],
     sets: row.sets as RoomSettings["sets"],
   },
+  closedReason: row.closed_reason,
 });
 
 const toPlayer = (row: PlayerRow): RoomPlayer => ({
@@ -85,6 +97,8 @@ const toPlayer = (row: PlayerRow): RoomPlayer => ({
   roomId: row.room_id,
   nickname: row.nickname,
   joinedAt: new Date(row.joined_at),
+  lastSeenAt: new Date(row.last_seen_at),
+  removed: row.removed,
 });
 
 // SHA-256 of a token as 64 hex characters. One-way: the token cannot be worked out from the hash.
@@ -110,8 +124,8 @@ export async function createRoom(
        ON CONFLICT (code) DO NOTHING
        RETURNING ${ROOM_COLUMNS}
      ), creator AS (
-       INSERT INTO room_players (room_id, nickname, token_hash, joined_at)
-       SELECT id, $4, $2, $3 FROM new_room
+       INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at)
+       SELECT id, $4, $2, $3, $3 FROM new_room
        RETURNING id, nickname, joined_at
      )
      SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.joined_at
@@ -134,7 +148,14 @@ export async function createRoom(
   const created = toRoom(row);
   return {
     room: created,
-    creator: toPlayer({ id: row.player_id, room_id: created.id, nickname: row.nickname, joined_at: row.joined_at }),
+    creator: toPlayer({
+      id: row.player_id,
+      room_id: created.id,
+      nickname: row.nickname,
+      joined_at: row.joined_at,
+      last_seen_at: row.joined_at,
+      removed: null,
+    }),
   };
 }
 
@@ -175,11 +196,11 @@ export async function addPlayer(
   const [, inserted, check] = await db.transaction([
     { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [join.roomId] },
     {
-      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at)
-             SELECT r.id, $2::text, $3::text, $4::timestamptz
+      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at)
+             SELECT r.id, $2::text, $3::text, $4::timestamptz, $4::timestamptz
              FROM rooms r
              WHERE r.id = $1 AND r.status = 'lobby'
-               AND (SELECT count(*) FROM room_players p WHERE p.room_id = r.id) < $5::int
+               AND (SELECT count(*) FROM room_players p WHERE p.room_id = r.id AND p.removed IS NULL) < $5::int
              ON CONFLICT (room_id, lower(nickname)) DO NOTHING
              RETURNING ${PLAYER_COLUMNS}`,
       params: [join.roomId, join.nickname, hashToken(join.token), join.now.toISOString(), join.maxPlayers ?? MAX_PLAYERS],
@@ -202,7 +223,8 @@ export async function addPlayer(
   return { ok: false, reason: "room_full" };
 }
 
-// The player in this room who owns this token. null = wrong token, or a token from another room.
+// The player in this room who owns this token – also one who has left or was kicked (see `removed`), so the
+// caller can say why the token no longer works. null = wrong token, or a token from another room.
 export async function findPlayerByToken(db: Db, roomId: string, token: string): Promise<RoomPlayer | null> {
   const rows = await db.query<PlayerRow>(
     `SELECT ${PLAYER_COLUMNS} FROM room_players WHERE room_id = $1 AND token_hash = $2`,
@@ -211,13 +233,86 @@ export async function findPlayerByToken(db: Db, roomId: string, token: string): 
   return rows.length === 1 ? toPlayer(rows[0]) : null;
 }
 
-// All players of a room in the order they joined.
+// All players still in a room (not left, not kicked) in the order they joined.
 export async function listPlayers(db: Db, roomId: string): Promise<RoomPlayer[]> {
   const rows = await db.query<PlayerRow>(
-    `SELECT ${PLAYER_COLUMNS} FROM room_players WHERE room_id = $1 ORDER BY joined_at, id`,
+    `SELECT ${PLAYER_COLUMNS} FROM room_players WHERE room_id = $1 AND removed IS NULL ORDER BY joined_at, id`,
     [roomId],
   );
   return rows.map(toPlayer);
+}
+
+// Notes that this player's device asked for the room state at `now` (issue #40: away after 5 s without).
+// Never moves the time back, in case two requests arrive out of order.
+export async function markPlayerSeen(db: Db, playerId: string, now: Date): Promise<void> {
+  await db.query("UPDATE room_players SET last_seen_at = GREATEST(last_seen_at, $2::timestamptz) WHERE id = $1", [
+    playerId,
+    now.toISOString(),
+  ]);
+}
+
+export type LeaveResult = "room-closed" | "left-lobby" | "left-game" | "not-in-room";
+
+// A player taps Leave (issue #40). One transaction, with the room's row locked, so Start or another Leave at the
+// same moment waits. Exactly one of these happens:
+//   - the room creator in the lobby: the room closes for everyone ("creator-left");
+//   - another player in the lobby: their row is deleted, so the seat and the nickname are free again;
+//   - anyone once the game has started: they are marked "left" – gone for good, not in the standings.
+//     If nobody is left after that, the room closes ("everyone-left").
+export async function leaveRoom(
+  db: TransactionDb,
+  leave: { roomId: string; playerId: string; isCreator: boolean },
+): Promise<LeaveResult> {
+  const params = [leave.roomId, leave.playerId, leave.isCreator];
+  const [, closed, deleted, left] = await db.transaction([
+    { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [leave.roomId] },
+    {
+      text: `UPDATE rooms SET closed_reason = 'creator-left'
+             WHERE id = $1 AND $3::boolean AND status = 'lobby' AND closed_reason IS NULL AND $2::uuid IS NOT NULL
+             RETURNING id`,
+      params,
+    },
+    {
+      text: `DELETE FROM room_players p USING rooms r
+             WHERE p.id = $2 AND r.id = $1 AND p.room_id = r.id AND r.status = 'lobby' AND NOT $3::boolean
+             RETURNING p.id`,
+      params,
+    },
+    {
+      text: `UPDATE room_players p SET removed = 'left' FROM rooms r
+             WHERE p.id = $2 AND r.id = $1 AND p.room_id = r.id AND r.status <> 'lobby' AND p.removed IS NULL
+               AND $3::boolean IS NOT NULL
+             RETURNING p.id`,
+      params,
+    },
+    {
+      text: `UPDATE rooms SET closed_reason = 'everyone-left'
+             WHERE id = $1 AND status <> 'lobby' AND closed_reason IS NULL
+               AND NOT EXISTS (SELECT 1 FROM room_players WHERE room_id = $1 AND removed IS NULL)
+             RETURNING id`,
+      params: [leave.roomId],
+    },
+  ]);
+  if (closed.length === 1) return "room-closed";
+  if (deleted.length === 1) return "left-lobby";
+  if (left.length === 1) return "left-game";
+  return "not-in-room";
+}
+
+// The room creator kicks a player (issue #40): only a player still in the room whose device has not asked for the
+// room state since before `seenBefore`. The row stays, marked "kicked", so the nickname cannot join again and the
+// token gets "You were removed from this room". Returns false if nothing changed.
+export async function kickPlayer(
+  db: Db,
+  kick: { roomId: string; playerId: string; seenBefore: Date },
+): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE room_players SET removed = 'kicked'
+     WHERE id = $2 AND room_id = $1 AND removed IS NULL AND last_seen_at < $3::timestamptz
+     RETURNING id`,
+    [kick.roomId, kick.playerId, kick.seenBefore.toISOString()],
+  );
+  return rows.length === 1;
 }
 
 // Starts the room's game. Only a room in the lobby changes, so two Start taps at the same moment
@@ -225,7 +320,7 @@ export async function listPlayers(db: Db, roomId: string): Promise<RoomPlayer[]>
 export async function startRoom(db: Db, roomId: string, gameId: string): Promise<boolean> {
   const rows = await db.query(
     `UPDATE rooms SET status = 'playing', game_id = $2
-     WHERE id = $1 AND status = 'lobby'
+     WHERE id = $1 AND status = 'lobby' AND closed_reason IS NULL
      RETURNING id`,
     [roomId, gameId],
   );
