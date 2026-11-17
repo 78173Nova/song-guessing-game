@@ -5,6 +5,7 @@ import {
   createNewRoom,
   getRoomState,
   joinRoom,
+  replaceRoomSong,
   startRoomGame,
 } from "@/lib/api/rooms";
 import type { TransactionDb } from "@/lib/db/client";
@@ -278,6 +279,22 @@ describe("songs played match the settings", () => {
 });
 
 type NextRound = { number: number; startsAt: string };
+
+describe("song swap keeps the settings", () => {
+  it("gives a swapped round a song from the chosen genres and decades, with options of the room's mode", async () => {
+    const room = await newRoom({ mode: "artist", genres: ["pop", "rock"], decades: [1980, 1990] });
+    const ben = await joined(room.code, "Ben");
+    await startRoomGame(db, room.code, bearer(room.creatorToken), deps);
+    const before = (await roundsOf(room.code))[1];
+
+    const swapped = await replaceRoomSong(db, room.code, bearer(ben), JSON.stringify({ round: 2 }), deps);
+    expect(swapped.status).toBe(200);
+    const after = (await roundsOf(room.code))[1];
+    expect(after.songId).not.toBe(before.songId);
+    expect(after.song.title).toMatch(/^(pop 1981|rock 1991) title/);
+    expect(after.options).toContain(after.song.artist);
+  });
+});
 
 describe("sets: the break after each set", () => {
   it("starts the next round 8 s after a close within a set, and 23 s after the close of a set's last round", async () => {

@@ -27,6 +27,7 @@ export type RoomState = {
   role: "creator" | "player";
   players: string[];
   settings?: RoomSettings; // fixed when the room was created (issue #34)
+  answered: string[]; // who has answered the round in `round` (not what they chose)
   totalRounds: number;
   serverNow: string;
   previewUrls: string[] | null;
@@ -110,6 +111,17 @@ export async function apiAnswerRoom(code: string, token: string, round: number, 
   return post<{ round: number; answer: number }>(
     `/api/rooms/${encodeURIComponent(code)}/answer`,
     { round, answer },
+    withToken(token, fetchFn),
+  );
+}
+
+// This device could not load a round's clip (issue #41): ask the server to swap that round's song. The reply has
+// the new clip. The server allows one swap per round and only before the round starts, so a refusal means the
+// round plays with the clip it has.
+export async function apiReportClip(code: string, token: string, round: number, fetchFn: FetchFn = fetch) {
+  return post<{ round: number; previewUrl: string }>(
+    `/api/rooms/${encodeURIComponent(code)}/replace`,
+    { round },
     withToken(token, fetchFn),
   );
 }

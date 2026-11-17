@@ -109,6 +109,11 @@ CREATE TABLE IF NOT EXISTS room_players (
 -- A nickname may only exist once per room, ignoring upper/lower case ("Anna" = "anna").
 CREATE UNIQUE INDEX IF NOT EXISTS room_players_nickname_unique ON room_players (room_id, lower(nickname));
 
+-- Room games only: true once a device reported that it could not load this round's clip and the server gave the
+-- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting
+-- failures again and again. Solo games leave it false.
+ALTER TABLE rounds ADD COLUMN IF NOT EXISTS swapped boolean NOT NULL DEFAULT false;
+
 -- One row per player per round of a room game. No row = the player did not answer (0 points).
 -- Room games use the normal games / rounds tables for songs, options and the correct answer, and the
 -- normal round statuses (open while it runs, answered once it has closed). But rounds.chosen_option and

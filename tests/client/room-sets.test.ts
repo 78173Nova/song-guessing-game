@@ -33,6 +33,7 @@ function closed(number: number, summary: SummaryItem[], status: "playing" | "fin
     status,
     role: "player",
     players: ["Anna", "Ben"],
+    answered: [],
     settings: { type: "multiplayer", mode: "title", genres: "any", decades: "any", songsPerSet: 3, sets: 2 },
     totalRounds: 6,
     serverNow: iso(T0),

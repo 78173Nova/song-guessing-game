@@ -16,6 +16,7 @@ import {
   totalRoundsOf,
   type RoomSettings,
 } from "@/lib/game/room-settings";
+import { markShareOnArrival } from "@/lib/client/share";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import styles from "./Landing.module.css";
 
@@ -64,6 +65,7 @@ export default function CreateRoomForm() {
     const result = await apiCreateRoom(nickname, fetch, settings);
     if (result.ok) {
       saveRoomToken(result.data.code, result.data.playerToken);
+      markShareOnArrival(result.data.code); // the lobby opens the share pop-up once
       router.push(`/join/${result.data.code}`);
       return;
     }

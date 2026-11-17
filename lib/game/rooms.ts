@@ -78,6 +78,9 @@ export const SET_STANDINGS_SECONDS = 5;
 export const SET_BREAK_SECONDS = SET_SUMMARY_SECONDS + SET_STANDINGS_SECONDS;
 // After the last round of the game: the final standings, then the full summary, which stays.
 export const FINAL_STANDINGS_SECONDS = 5;
+// When a round's song is swapped (issue #41), every device needs this long to load the new clip. A round that would
+// start sooner starts this long after the swap instead – so it starts at most this much later than planned.
+export const SWAP_LOAD_SECONDS = 5;
 
 // The moment a closed round closed: when the last player answered if everyone did, otherwise at the end of
 // its 15 seconds. Worked out from the stored times, so every request gets the same moment – and with it the
