@@ -68,7 +68,13 @@ export type RoomScreen =
   | { kind: "set-summary"; set: number; songs: SummaryItem[] }
   | { kind: "set-standings"; set: number; standings: Standing[]; me: string }
   | { kind: "final"; standings: Standing[]; me: string }
-  | { kind: "final-summary"; songs: SummaryItem[]; score: number };
+  | {
+      kind: "final-summary";
+      songs: SummaryItem[];
+      score: number;
+      // "Play again" and "Leave" (issue #43); missing after the last game a room may host.
+      playAgain?: { secondsLeft: number; chosen: boolean };
+    };
 
 export const initialRoomView: RoomView = {
   latest: null,
@@ -87,18 +93,22 @@ export function roomReducer(view: RoomView, action: RoomAction): RoomView {
       const { state } = action;
       // Replies can overtake each other on a slow connection: only a newer request counts.
       if (action.request <= view.request) return view;
-      // A started game never goes back to the lobby.
-      if (state.status === "lobby" && view.latest !== null && view.latest.status !== "lobby") return view;
+      // A started game never goes back to the lobby – unless the room is in the lobby for its next game (#43).
+      const nextGame = (state.gameNumber ?? 1) > (view.latest?.gameNumber ?? 1);
+      if (state.status === "lobby" && view.latest !== null && view.latest.status !== "lobby" && !nextGame) return view;
+      // A new game: forget what this device did in the last one.
+      const fresh = nextGame ? { tapped: null, resultSeen: null, continued: null, skipped: [], failedClips: [] } : {};
 
       const round = state.round;
       const newlyClosed = round?.status === "closed" && view.resultSeen?.round !== round.number;
       return {
         ...view,
+        ...fresh,
         latest: state,
         request: action.request,
         // Measured on every reply. The time the reply took to travel is ignored: well under a second.
         offsetMs: Date.parse(state.serverNow) - action.receivedAt,
-        resultSeen: newlyClosed ? { round: round.number, at: action.receivedAt } : view.resultSeen,
+        resultSeen: newlyClosed ? { round: round.number, at: action.receivedAt } : nextGame ? null : view.resultSeen,
       };
     }
 
@@ -186,7 +196,14 @@ export function roomScreen(view: RoomView, localNow: number): RoomScreen {
     if (summary === undefined || shows("standings", standingsEnd)) {
       return { kind: "final", standings: state.standings, me: state.me.nickname };
     }
-    return { kind: "final-summary", songs: summary, score: state.me.score };
+    const vote = state.playAgain;
+    if (!vote) return { kind: "final-summary", songs: summary, score: state.me.score };
+    return {
+      kind: "final-summary",
+      songs: summary,
+      score: state.me.score,
+      playAgain: { secondsLeft: secondsUntil(Date.parse(vote.endsAt), serverNow), chosen: vote.chosen.includes(state.me.nickname) },
+    };
   }
 
   const songsPerSet = state.settings?.songsPerSet;
