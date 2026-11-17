@@ -125,11 +125,17 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
 - **How it could change:** the drawing sits in `roomJoinQrCode` in `lib/client/share.ts`; another package would only
   change that function.
 
+Update 2026-11-17 (issue #39): a game with exactly two players uses the duel layout – every Duel room, and a
+Multiplayer room whose game *started* with 2 players. The server stores the player count at the start
+(`rooms.starting_players`, set by the same statement that starts the game) and sends it as `startingPlayers`, so
+the layout does not switch when a player leaves. The page picks the layout with `roomLayout` (lib/client/room-duel.ts).
+
 ## Update 17 Nov 2026: several games per room (issue #43)
 - **Decision:** a room plays up to 5 games one after another (vote and handover: decision 012). Each game is its own
   `games` row with its own rounds and answers, so the standings and the summary start at 0. A new game avoids the
   songs of the room's earlier games while enough songs match the settings (`avoid` in `buildRounds`; they can
   still appear as wrong options), otherwise it picks from all matching songs. A swap avoids them too.
+  `starting_players` (#39) is cleared when the room goes back to the lobby and set again by the next start.
 - **On the device:** the full summary shows "Play again" with the seconds left; polling goes on while the vote runs.
   When the state shows the lobby with a higher `gameNumber`, `roomReducer` accepts it (a started game otherwise
   never goes back to the lobby) and forgets the last game's taps and skips.

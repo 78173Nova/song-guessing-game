@@ -723,6 +723,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         players: ["Anna", "Ben"],
         avatars: { Anna: "note", Ben: "note" },
         settings: DEFAULT_ROOM_SETTINGS,
+        startingPlayers: null, // issue #39: set once the game starts
         answered: [],
         away: [],
         kickable: [],
@@ -755,6 +756,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         players: ["Anna", "Ben"],
         avatars: { Anna: "note", Ben: "note" },
         settings: DEFAULT_ROOM_SETTINGS,
+        startingPlayers: null, // issue #39: set once the game starts
         answered: [],
         away: [],
         kickable: [],

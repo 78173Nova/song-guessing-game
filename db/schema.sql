@@ -137,6 +137,9 @@ ALTER TABLE rooms ADD CONSTRAINT rooms_closed_reason_check
   CHECK (closed_reason IN ('creator-left', 'everyone-left', 'no-account-holder'));
 -- play_again: the player chose "Play again" after the current game (reset when the room goes back to the lobby).
 ALTER TABLE room_players ADD COLUMN IF NOT EXISTS play_again boolean NOT NULL DEFAULT false;
+-- How many players the room's game started with (issue #39): a game that starts with exactly 2 players uses the
+-- duel layout, even if one of them leaves later. Empty until the game starts.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starting_players integer CHECK (starting_players >= 1);
 
 -- Room games only: true once a device reported that it could not load this round's clip and the server gave the
 -- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting

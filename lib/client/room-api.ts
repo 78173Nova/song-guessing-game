@@ -28,6 +28,7 @@ export type RoomState = {
   players: string[];
   avatars?: Record<string, string>; // each player's avatar id by nickname (issue #44); missing = music note
   settings?: RoomSettings; // fixed when the room was created (issue #34)
+  startingPlayers?: number | null; // how many players the game started with; null in the lobby (issue #39)
   answered: string[]; // who has answered the round in `round` (not what they chose)
   away?: string[]; // players whose device has not asked for 5 s (issue #40)
   kickable?: string[]; // players the room creator may kick now; always empty for other players

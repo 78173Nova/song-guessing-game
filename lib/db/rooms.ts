@@ -31,6 +31,7 @@ export type Room = {
   closedReason: ClosedReason | null; // set when the room closed early (issue #40)
   earlierGames: string[]; // the room's finished games before the current one, oldest first (issue #43)
   lobbySince: Date | null; // when the room last went back to the lobby; null = never (issue #43)
+  startingPlayers: number | null; // how many players the game started with (issue #39); null in the lobby
 };
 
 export type RoomPlayer = {
@@ -68,6 +69,7 @@ type RoomRow = {
   closed_reason: ClosedReason | null;
   earlier_games: string[];
   lobby_since: Date | string | null;
+  starting_players: number | null;
 };
 
 type PlayerRow = {
@@ -83,7 +85,7 @@ type PlayerRow = {
 };
 
 const ROOM_COLUMNS =
-  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, earlier_games, lobby_since";
+  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, starting_players, earlier_games, lobby_since";
 const PLAYER_COLUMNS =
   "id, room_id, nickname, avatar, joined_at, last_seen_at, removed, play_again, account_id IS NOT NULL AS has_account";
 
@@ -105,6 +107,7 @@ const toRoom = (row: RoomRow): Room => ({
   closedReason: row.closed_reason,
   earlierGames: row.earlier_games,
   lobbySince: row.lobby_since === null ? null : new Date(row.lobby_since),
+  startingPlayers: row.starting_players,
 });
 
 const toPlayer = (row: PlayerRow): RoomPlayer => ({
@@ -362,11 +365,13 @@ export async function kickPlayer(
   return rows.length === 1;
 }
 
-// Starts the room's game. Only a room in the lobby changes, so two Start taps at the same moment
+// Starts the room's game and records how many players it starts with (issue #39) in the same statement, so a
+// join or leave cannot slip in between. Only a room in the lobby changes, so two Start taps at the same moment
 // cannot both count. Returns false if nothing changed.
 export async function startRoom(db: Db, roomId: string, gameId: string): Promise<boolean> {
   const rows = await db.query(
-    `UPDATE rooms SET status = 'playing', game_id = $2
+    `UPDATE rooms SET status = 'playing', game_id = $2,
+       starting_players = (SELECT count(*) FROM room_players WHERE room_id = $1 AND removed IS NULL)
      WHERE id = $1 AND status = 'lobby' AND closed_reason IS NULL
      RETURNING id`,
     [roomId, gameId],
@@ -541,6 +546,7 @@ export async function endPlayAgainVote(
                earlier_games = CASE WHEN $5::text IS NULL THEN earlier_games || game_id ELSE earlier_games END,
                game_id = CASE WHEN $5::text IS NULL THEN NULL ELSE game_id END,
                lobby_since = CASE WHEN $5::text IS NULL THEN $3::timestamptz ELSE lobby_since END,
+               starting_players = CASE WHEN $5::text IS NULL THEN NULL ELSE starting_players END,
                host_token_hash = COALESCE(
                  (SELECT token_hash FROM room_players WHERE id = $4::uuid AND room_id = $1 AND removed IS NULL),
                  host_token_hash)

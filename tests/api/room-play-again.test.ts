@@ -116,7 +116,7 @@ describe("the vote after a game", () => {
     expect((await playAgain(room.code, ben)).status).toBe(200);
 
     const reply = (await state(room.code, anna)).body;
-    expect(reply).toMatchObject({ status: "lobby", players: ["Anna", "Ben"], settings: SETTINGS, role: "creator" });
+    expect(reply).toMatchObject({ status: "lobby", players: ["Anna", "Ben"], settings: SETTINGS, role: "creator", startingPlayers: null });
     expect(reply.gameNumber).toBe(2);
   });
 });
