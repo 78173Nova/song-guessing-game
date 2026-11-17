@@ -1,10 +1,22 @@
 // The browser's calls to the room routes, and where a browser tab keeps its room token. Like game-api.ts,
 // each call returns the data or a readable message – it never throws.
+import type { QuestionType } from "../game/modes";
+import type { RoomSettings } from "../game/room-settings";
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE, post, type FetchFn } from "./game-api";
 
 export type JoinedRoom = { code: string; playerToken: string; nickname: string };
 
 export type Song = { title: string; artist: string; artworkUrl: string | null; storeUrl: string | null };
+// One closed round in the player's set summary (issue #34).
+export type SummaryItem = {
+  round: number;
+  set: number;
+  title: string;
+  artist: string;
+  storeUrl: string | null;
+  correct: boolean;
+  points: number;
+};
 export type Standing = { rank: number; nickname: string; score: number };
 
 // The room state every page polls (described in lib/api/rooms.ts, getRoomState). Times are ISO strings on the
@@ -15,6 +27,7 @@ export type RoomState = {
   role: "creator" | "player";
   players: string[];
   avatars?: Record<string, string>; // each player's avatar id by nickname (issue #44); missing = music note
+  settings?: RoomSettings; // fixed when the room was created (issue #34)
   answered: string[]; // who has answered the round in `round` (not what they chose)
   totalRounds: number;
   serverNow: string;
@@ -25,12 +38,13 @@ export type RoomState = {
     startsAt: string;
     endsAt: string;
     options: string[];
+    questionType?: QuestionType;
     secondsLeft: number;
     answeredCount: number;
     correctOption?: number;
     song?: Song;
   } | null;
-  nextRound: { number: number; startsAt: string; options: string[] } | null;
+  nextRound: { number: number; startsAt: string; options: string[]; questionType?: QuestionType } | null;
   me: {
     nickname: string;
     score: number;
@@ -38,6 +52,7 @@ export type RoomState = {
     answer: number | null;
     correct: boolean | null;
     points: number | null;
+    summary?: SummaryItem[]; // every closed round with this player's result
   };
   standings: Standing[];
 };
@@ -55,9 +70,27 @@ const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 // What a player picks on the nickname screen (issue #44).
 export type NicknameChoice = { nickname: string; avatar: string };
 
-// Creating needs the session cookie, which the browser sends by itself.
-export function apiCreateRoom(choice: NicknameChoice, fetchFn: FetchFn = fetch) {
-  return post<JoinedRoom>("/api/rooms", choice, fetchFn);
+// Creating needs the session cookie, which the browser sends by itself. Without settings the server uses the
+// default ones.
+export function apiCreateRoom(choice: NicknameChoice, fetchFn: FetchFn = fetch, settings?: RoomSettings) {
+  return post<JoinedRoom>("/api/rooms", settings === undefined ? choice : { ...choice, settings }, fetchFn);
+}
+
+// How many songs match these genres and decades, for the create form. null = the server could not say.
+export async function apiMatchingSongs(
+  choice: Pick<RoomSettings, "genres" | "decades">,
+  fetchFn: FetchFn = fetch,
+): Promise<number | null> {
+  const list = (value: "any" | (string | number)[]) => (value === "any" ? "any" : value.join(","));
+  const query = new URLSearchParams({ genres: list(choice.genres), decades: list(choice.decades) });
+  try {
+    const response = await fetchFn(`/api/rooms/matching-songs?${query}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { count?: unknown };
+    return typeof data.count === "number" ? data.count : null;
+  } catch {
+    return null;
+  }
 }
 
 // The browser also sends the session cookie of an account holder, so the server can save a first avatar.

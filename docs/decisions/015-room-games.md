@@ -69,6 +69,27 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
 - Sets and set summaries (#34) would add a pause with the standings after each set by giving the first round
   of the next set a later start time.
 
+## Update 17 Nov 2026: room settings and sets (issue #34)
+- **Decision:** the room creator chooses the room settings when creating the room: room type (Duel = exactly 2
+  players, Multiplayer = 2–25), mode (title / artist / year / mixed), genres and decades ("Any" or one or more
+  tiles), songs per set (3 / 5 / 10) and number of sets (1 / 2 / 3). They are stored on the room (`rooms.room_type`,
+  `mode`, `genres`, `decades`, `songs_per_set`, `sets`; an empty list = Any) and never change. A song plays if it
+  matches one of the genres **and** one of the decades. The game has sets × songs per set rounds, no song twice.
+- **Why fixed at creation:** players join knowing what they get, and the server never has to handle a game whose
+  rules change in the lobby. Too few matching songs is refused at creation with the count ("Only 18 songs
+  match …"), and the create form shows the count while choosing (`GET /api/rooms/matching-songs`).
+- **A full room starts by itself:** the join that fills the last seat (2 in a Duel, 25 in Multiplayer) starts the
+  game exactly like "Start now". A Duel therefore always starts when the second player joins.
+- **Sets:** after the last round of a set the next round starts 23 s after the close instead of 8 s (result 5 s +
+  set summary 10 s + standings 5 s + 3 s), the same way as before: one later start time, no timer. Every state
+  reply has `me.summary` (each closed round: title, artist, right/wrong, points, iTunes link). The page shows a
+  set's part after each set and all of it at the end, after 5 s of final standings. "Tap to continue" skips each
+  screen on that device only.
+- **Limits:** the next set starts at the same server time for everyone, so a player who skips the summary waits on
+  "Next round starting…". A swapped song (#41) also matches the genres and decades and keeps the round's
+  question type. Rooms created without settings (older screens) get Multiplayer, title, Any, 1 set of 5.
+- **How it could change:** the pauses are `SET_SUMMARY_SECONDS`, `SET_STANDINGS_SECONDS` and
+  `FINAL_STANDINGS_SECONDS` in `lib/game/rooms.ts`; the choices are lists in `lib/game/room-settings.ts`.
 ## Update 17 Nov 2026: song swap in rooms (issue #41)
 - **Decision:** every device loads the clips in advance. If a clip will not load (load, try once more), the device
   reports it with `POST /api/rooms/[code]/replace` `{ round }`. Any player of the room may report, but only before

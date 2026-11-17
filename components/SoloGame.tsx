@@ -14,7 +14,11 @@ import {
 } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
+import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
+import { DECADES, type Decade } from "@/lib/game/filters";
+import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
+import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
 import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
 import styles from "./SoloGame.module.css";
 
@@ -45,6 +49,15 @@ export default function SoloGame() {
   const [getReadyAt, setGetReadyAt] = useState(0);
   const [roundStartedAt, setRoundStartedAt] = useState(0);
   const [now, setNow] = useState(0);
+  // The mode chosen on the start screen. "Play again", "Try again" and "Change settings" keep it.
+  const [mode, setMode] = useState<Mode>("title");
+  // The filters chosen on the start screen (undefined = Any). "Play again", "Try again" and "Change settings"
+  // keep them.
+  const [genre, setGenre] = useState<Genre | undefined>(undefined);
+  const [decade, setDecade] = useState<Decade | undefined>(undefined);
+  // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
+  // a reload forgets them.
+  const recentGamesRef = useRef<string[]>([]);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -122,12 +135,14 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame();
+    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current);
     if (!game.ok) {
-      dispatch({ type: "failed", message: game.message });
+      // Too few songs match the filters: back to the start screen, which says so.
+      dispatch(game.tooFewSongs ? { type: "start-refused", message: game.message } : { type: "failed", message: game.message });
       return;
     }
     const { gameId, previewUrls } = game.data;
+    recentGamesRef.current = rememberGame(recentGamesRef.current, gameId);
     dispatch({ type: "game-created", gameId, previewUrls });
 
     // Only the first clip is waited for. The 3-2-1 starts the moment it is ready.
@@ -233,13 +248,69 @@ export default function SoloGame() {
   }, [state.screen]);
   useEffect(() => () => pauseAll(), []);
 
+  // What the current round asks. The server sends it with each round; without it (older data),
+  // title/artist/year games fall back to the chosen mode and mixed games show no question.
+  const questionType =
+    state.screen === "round" || state.screen === "reveal"
+      ? (state.round.questionType ?? (mode === "mixed" ? undefined : mode))
+      : undefined;
+
   return (
     <div className={styles.game}>
       {state.screen === "start" && (
         <section className={styles.center}>
           <p className={styles.intro}>
-            Hear a 30-second clip and pick the right song title. {ROUNDS_PER_GAME} rounds – faster answers score more.
+            Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
+          <fieldset className={styles.modes}>
+            <legend>What do you want to guess?</legend>
+            {MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={m === mode ? `${styles.option} ${styles.chosen}` : styles.option}
+                aria-pressed={m === mode}
+                onClick={() => setMode(m)}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
+          </fieldset>
+          <div className={styles.filters}>
+            <label>
+              Genre
+              <select
+                value={genre ?? ""}
+                onChange={(e) => setGenre(GENRES.find((g) => g === e.target.value))}
+              >
+                <option value="">Any</option>
+                {GENRES.map((g) => (
+                  <option key={g} value={g}>
+                    {GENRE_LABELS[g]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Decade
+              <select
+                value={decade ?? ""}
+                onChange={(e) => setDecade(DECADES.find((d) => String(d) === e.target.value))}
+              >
+                <option value="">Any</option>
+                {DECADES.map((d) => (
+                  <option key={d} value={d}>
+                    {d}s
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {state.message && (
+            <p className={styles.error} role="alert">
+              {state.message}
+            </p>
+          )}
           <button className={styles.primary} onClick={handleStart}>
             Start game
           </button>
@@ -294,6 +365,9 @@ export default function SoloGame() {
             <Countdown left={state.pending === null ? secondsLeft(now - roundStartedAt) : null} />
           )}
 
+          {/* The server says what each round asks – in mixed games it changes from round to round. */}
+          {questionType && <h2 className={styles.question}>{QUESTION_LABELS[questionType]}</h2>}
+
           <div className={styles.options}>
             {state.round.options.map((title, index) => (
               <button
@@ -327,6 +401,10 @@ export default function SoloGame() {
           <button className={styles.primary} onClick={handleStart}>
             Play again
           </button>
+          {/* Back to the start screen: mode, genre and decade stay as chosen, so they are preselected. */}
+          <button className={styles.secondary} onClick={() => dispatch({ type: "reset" })}>
+            Change settings
+          </button>
         </section>
       )}
 
@@ -343,6 +421,8 @@ export default function SoloGame() {
 }
 
 const OUTCOME_ICON = { correct: "✅", wrong: "❌", skipped: "⏭", timeout: "⏱" } as const;
+
+const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
 function optionClass(state: GameState, index: number): string {
   if (state.screen !== "reveal") return styles.option;
@@ -380,6 +460,7 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
         <div>
           <p className={styles.title}>{result.song.title}</p>
           <p>{result.song.artist}</p>
+          {result.song.year !== undefined && <p>{result.song.year}</p>}
           {result.song.storeUrl && (
             <a href={result.song.storeUrl} target="_blank" rel="noopener noreferrer">
               Open in Apple Music

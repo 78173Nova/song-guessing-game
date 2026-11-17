@@ -3,6 +3,10 @@
 // reach the database (decision 012).
 import { createHash } from "node:crypto";
 import { DEFAULT_AVATAR } from "../game/avatars";
+import type { Decade } from "../game/filters";
+import type { Genre } from "../game/genres";
+import type { Mode } from "../game/modes";
+import { DEFAULT_ROOM_SETTINGS, type RoomSettings, type RoomType } from "../game/room-settings";
 import type { NewRound } from "../game/rounds";
 import type { Db, TransactionDb } from "./client";
 
@@ -18,6 +22,7 @@ export type Room = {
   status: RoomStatus;
   gameId: string | null; // empty until the room creator starts the game
   createdAt: Date; // the room expires 3 hours after this (rule in lib/game/rooms.ts)
+  settings: RoomSettings; // fixed when the room is created (issue #34)
 };
 
 export type RoomPlayer = {
@@ -42,6 +47,12 @@ type RoomRow = {
   status: RoomStatus;
   game_id: string | null;
   created_at: Date | string;
+  room_type: RoomType;
+  mode: Mode;
+  genres: Genre[];
+  decades: Decade[];
+  songs_per_set: number;
+  sets: number;
 };
 
 type PlayerRow = {
@@ -52,7 +63,7 @@ type PlayerRow = {
   joined_at: Date | string;
 };
 
-const ROOM_COLUMNS = "id, code, status, game_id, created_at";
+const ROOM_COLUMNS = "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets";
 const PLAYER_COLUMNS = "id, room_id, nickname, avatar, joined_at";
 
 const toRoom = (row: RoomRow): Room => ({
@@ -61,6 +72,15 @@ const toRoom = (row: RoomRow): Room => ({
   status: row.status,
   gameId: row.game_id,
   createdAt: new Date(row.created_at),
+  // An empty list in the database means Any.
+  settings: {
+    type: row.room_type,
+    mode: row.mode,
+    genres: row.genres.length === 0 ? "any" : row.genres,
+    decades: row.decades.length === 0 ? "any" : row.decades.map(Number) as Decade[],
+    songsPerSet: row.songs_per_set as RoomSettings["songsPerSet"],
+    sets: row.sets as RoomSettings["sets"],
+  },
 });
 
 const toPlayer = (row: PlayerRow): RoomPlayer => ({
@@ -81,24 +101,38 @@ export function hashToken(token: string): string {
 // The creator has one token: it is their player token, and its hash is also kept in rooms.host_token_hash as the
 // room's creator key (the column keeps its old name). Room and player are inserted by one statement, so a room
 // never exists without its creator. Returns null if the code is already used (codes are never reused), so the
-// caller can try again with a different code.
+// caller can try again with a different code. Without settings the room gets the default ones.
 export async function createRoom(
   db: Db,
-  room: { code: string; creatorToken: string; nickname: string; avatar?: string; now: Date },
+  room: { code: string; creatorToken: string; nickname: string; avatar?: string; now: Date; settings?: RoomSettings },
 ): Promise<{ room: Room; creator: RoomPlayer } | null> {
+  const settings = room.settings ?? DEFAULT_ROOM_SETTINGS;
   const rows = await db.query<RoomRow & { player_id: string; nickname: string; avatar: string; joined_at: Date | string }>(
     `WITH new_room AS (
-       INSERT INTO rooms (code, host_token_hash, created_at) VALUES ($1, $2, $3)
+       INSERT INTO rooms (code, host_token_hash, created_at, room_type, mode, genres, decades, songs_per_set, sets)
+       VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10)
        ON CONFLICT (code) DO NOTHING
        RETURNING ${ROOM_COLUMNS}
      ), creator AS (
        INSERT INTO room_players (room_id, nickname, avatar, token_hash, joined_at)
-       SELECT id, $4, $5, $2, $3 FROM new_room
+       SELECT id, $4, $11, $2, $3 FROM new_room
        RETURNING id, nickname, avatar, joined_at
      )
      SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.avatar, creator.joined_at
      FROM new_room, creator`,
-    [room.code, hashToken(room.creatorToken), room.now.toISOString(), room.nickname, room.avatar ?? DEFAULT_AVATAR],
+    [
+      room.code,
+      hashToken(room.creatorToken),
+      room.now.toISOString(),
+      room.nickname,
+      settings.type,
+      settings.mode,
+      settings.genres === "any" ? [] : settings.genres,
+      settings.decades === "any" ? [] : settings.decades,
+      settings.songsPerSet,
+      settings.sets,
+      room.avatar ?? DEFAULT_AVATAR,
+    ],
   );
   if (rows.length !== 1) return null;
   const [row] = rows;
@@ -134,7 +168,7 @@ export type AddPlayerResult =
   | { ok: true; player: RoomPlayer }
   | { ok: false; reason: "room_not_found" | "not_in_lobby" | "room_full" | "nickname_taken" };
 
-// Adds a player to a room that is still in the lobby, has a free seat and does not have this nickname yet
+// Adds a player to a room that is still in the lobby, has a free seat (fewer than `maxPlayers`: 2 in a Duel room) and does not have this nickname yet
 // (ignoring upper/lower case).
 //
 // Three queries in one transaction (decision 012):
@@ -147,7 +181,7 @@ export type AddPlayerResult =
 // The lock has to be its own query: one query only sees the data as it was when it began.
 export async function addPlayer(
   db: TransactionDb,
-  join: { roomId: string; nickname: string; avatar?: string; token: string; now: Date },
+  join: { roomId: string; nickname: string; avatar?: string; token: string; now: Date; maxPlayers?: number },
 ): Promise<AddPlayerResult> {
   const [, inserted, check] = await db.transaction([
     { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [join.roomId] },
@@ -164,7 +198,7 @@ export async function addPlayer(
         join.nickname,
         hashToken(join.token),
         join.now.toISOString(),
-        MAX_PLAYERS,
+        join.maxPlayers ?? MAX_PLAYERS,
         join.avatar ?? DEFAULT_AVATAR,
       ],
     },

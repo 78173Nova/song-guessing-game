@@ -19,6 +19,7 @@ import {
   saveRoomToken,
   type RoomState,
 } from "@/lib/client/room-api";
+import type { Standing, SummaryItem } from "@/lib/client/room-api";
 import {
   clipsToLoad,
   couldNotPlay,
@@ -26,10 +27,13 @@ import {
   roomReducer,
   roomScreen,
   type RoomScreen,
+  type SkipStep,
 } from "@/lib/client/room-game";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
 import { avatarEmoji } from "@/lib/game/avatars";
+import { QUESTION_LABELS } from "@/lib/game/modes";
+import { MAX_PLAYERS_BY_TYPE, totalRoundsOf } from "@/lib/game/room-settings";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
 import RoomBoard from "./RoomBoard";
@@ -44,6 +48,8 @@ const TICK_MS = 100;
 const CLIP_LOAD_LIMIT_MS = 10_000; // one attempt to load one clip
 // A tiny silent sound. Playing it during a tap "unlocks" the players on phones, so the clips may start later
 // without another tap (the same trick as the solo game).
+// The most rounds a room game can have (3 sets of 10 songs): one audio player each.
+const MAX_ROUNDS = 30;
 const SILENT_SOUND = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
 // Getting into the room. Once "in", the screen comes from roomScreen.
@@ -159,7 +165,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     // roundStartsAt is the same for the whole round; only a new round should start a clip.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundNumber, play]);
-  const silent = screen.kind === "next-starting" || screen.kind === "final";
+  const silent = !["get-ready", "round", "result"].includes(screen.kind);
   useEffect(() => {
     if (silent) stopAll();
   }, [silent, stopAll]);
@@ -272,6 +278,14 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         <p className={styles.pitch}>
           {isCreator ? "Invite your friends, then start when everyone is in." : "Waiting for the room creator to start…"}
         </p>
+        {state.settings && (
+          <p className={styles.hint}>
+            {state.settings.type === "duel" ? "Duel" : "Multiplayer"} · {state.settings.sets}{" "}
+            {state.settings.sets === 1 ? "set" : "sets"} of {state.settings.songsPerSet} songs (
+            {totalRoundsOf(state.settings)} in all) · The game starts by itself when{" "}
+            {MAX_PLAYERS_BY_TYPE[state.settings.type]} players are in.
+          </p>
+        )}
         {isCreator && (
           <>
             <button type="button" className={styles.secondary} onClick={() => setShareOpen(true)}>
@@ -309,7 +323,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         screen={screen}
         state={state}
         onAnswer={sendAnswer}
-        onContinue={(round) => dispatch({ type: "continued", round })}
+        onContinue={(round, step) => dispatch({ type: "continued", round, step })}
       />
       {screen.kind === "round" && couldNotPlay(view, screen.number) && (
         <p className={game.center} role="status">
@@ -352,8 +366,13 @@ function GameScreen({
   screen: Exclude<RoomScreen, { kind: "loading" | "lobby" }>;
   state: RoomState; // the latest reply, for the game board during a round (#38)
   onAnswer: (round: number, option: number) => void;
-  onContinue: (round: number) => void;
+  onContinue: (round: number, step?: SkipStep) => void;
 }) {
+  // The round whose result, summary or standings are on screen (what "Tap to continue" skips).
+  const closedRound = state.round?.status === "closed" ? state.round.number : null;
+  const skip = (step: SkipStep) => {
+    if (closedRound !== null) onContinue(closedRound, step);
+  };
   switch (screen.kind) {
     case "get-ready":
       return (
@@ -378,6 +397,7 @@ function GameScreen({
             totalRounds={screen.totalRounds}
             secondsLeft={screen.secondsLeft}
           />
+          {screen.questionType && <p className={game.center}>{QUESTION_LABELS[screen.questionType]}</p>}
           <div className={game.options}>
             {screen.options.map((title, index) => (
               <button
@@ -451,26 +471,100 @@ function GameScreen({
         </p>
       );
 
+    case "set-summary":
+      return (
+        <section className={game.center}>
+          <h2>Set {screen.set} – your songs</h2>
+          <SummaryList songs={screen.songs} />
+          <button type="button" className={game.secondary} onClick={() => skip("summary")}>
+            Tap to continue
+          </button>
+        </section>
+      );
+
+    case "set-standings":
+      return (
+        <section className={game.center}>
+          <h2>Standings after set {screen.set}</h2>
+          <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
+          <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+            Tap to continue
+          </button>
+        </section>
+      );
+
     case "final":
       return (
         <section className={game.center}>
           <h2>Final standings</h2>
-          <ol className={game.results}>
-            {screen.standings.map((player) => (
-              <li key={player.nickname} className={player.nickname === screen.me ? styles.self : undefined}>
-                <span>
-                  {player.rank}. <Avatar id={state.avatars?.[player.nickname]} />
-                  {player.nickname}
-                  {player.nickname === screen.me ? " (you)" : ""}
-                </span>
-                <span>{player.score}</span>
-              </li>
-            ))}
-          </ol>
+          <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
+          {closedRound !== null && (
+            <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+              Tap to continue
+            </button>
+          )}
+          <BackLink />
+        </section>
+      );
+
+    case "final-summary":
+      return (
+        <section className={game.center}>
+          <h2>Your songs</h2>
+          <SummaryList songs={screen.songs} />
+          <p className={game.points}>Score {screen.score}</p>
           <BackLink />
         </section>
       );
   }
+}
+
+function Standings({
+  standings,
+  me,
+  avatars,
+}: {
+  standings: Standing[];
+  me: string;
+  avatars: RoomState["avatars"]; // issue #44
+}) {
+  return (
+    <ol className={game.results}>
+      {standings.map((player) => (
+        <li key={player.nickname} className={player.nickname === me ? styles.self : undefined}>
+          <span>
+            {player.rank}. <Avatar id={avatars?.[player.nickname]} />
+            {player.nickname}
+            {player.nickname === me ? " (you)" : ""}
+          </span>
+          <span>{player.score}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// The set summary: each song with right/wrong, points and, on the right, a link that opens the song on iTunes.
+function SummaryList({ songs }: { songs: SummaryItem[] }) {
+  return (
+    <ol className={game.results}>
+      {songs.map((song) => (
+        <li key={song.round}>
+          <span>
+            {song.correct ? "✅" : "❌"} <strong>{song.title}</strong> – {song.artist}
+          </span>
+          <span>
+            +{song.points}{" "}
+            {song.storeUrl && (
+              <a href={song.storeUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${song.title} on iTunes`}>
+                🎵
+              </a>
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 // The clips of a room game on this device: one audio player per round, loaded in advance as soon as the clip
@@ -509,7 +603,7 @@ function useRoomClips(
 
   // Called inside a tap (Join, Start now): plays a silent sound on every player so later clips may start alone.
   const unlock = useCallback(() => {
-    for (const player of players(5)) {
+    for (const player of players(MAX_ROUNDS)) {
       if (player.src && player.src !== SILENT_SOUND) continue;
       player.src = SILENT_SOUND;
       player.play().catch(() => {});

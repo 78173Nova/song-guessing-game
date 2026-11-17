@@ -281,3 +281,36 @@
 .accountLink {
   color: var(--accent);
 }
+/* Room settings on "Create a room": rows of tiles, the selected ones outlined (issue #34). */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  border: none;
+}
+
+.tiles legend {
+  margin-bottom: 0.4rem;
+}
+
+.tile {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  border: 2px solid var(--muted);
+  border-radius: 999px;
+  color: var(--foreground);
+  background: var(--background);
+  cursor: pointer;
+}
+
+.tileOn {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}

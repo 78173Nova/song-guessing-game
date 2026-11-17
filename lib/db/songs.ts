@@ -15,6 +15,7 @@ export type Song = SongInput & {
   artworkUrl: string | null;
   storeUrl: string | null;
   previewCachedAt: Date | null;
+  inCatalogue: boolean; // false = removed from db/songs.ts, never played (see setCatalogue)
 };
 
 type SongRow = {
@@ -27,6 +28,7 @@ type SongRow = {
   artwork_url: string | null;
   store_url: string | null;
   preview_cached_at: Date | string | null;
+  in_catalogue: boolean;
 };
 
 // Adds new songs. A song that already exists (same artist + title, ignoring case) only gets its
@@ -44,6 +46,23 @@ export async function upsertSongs(db: Db, songs: SongInput[]): Promise<void> {
   }
 }
 
+// Marks which songs are in the catalogue: true for every song in `songs` (same artist + title, ignoring
+// case), false for every other song. Nothing is deleted – old rounds still point to retired songs.
+// One query, so the game never sees a half-updated catalogue. An empty list is refused: it would retire
+// every song, which is almost certainly a mistake.
+export async function setCatalogue(db: Db, songs: SongInput[]): Promise<void> {
+  if (songs.length === 0) {
+    throw new Error("setCatalogue: the song list is empty, refusing to retire every song");
+  }
+  await db.query(
+    `UPDATE songs SET in_catalogue = EXISTS (
+       SELECT 1 FROM unnest($1::text[], $2::text[]) AS listed (artist, title)
+       WHERE lower(listed.artist) = lower(songs.artist) AND lower(listed.title) = lower(songs.title)
+     )`,
+    [songs.map((s) => s.artist), songs.map((s) => s.title)],
+  );
+}
+
 // The cached iTunes data for one song (see lib/music/).
 export type PreviewData = {
   previewUrl: string;
@@ -52,26 +71,27 @@ export type PreviewData = {
 };
 
 const SONG_COLUMNS =
-  "id, title, artist, year, genre, preview_url, artwork_url, store_url, preview_cached_at";
+  "id, title, artist, year, genre, preview_url, artwork_url, store_url, preview_cached_at, in_catalogue";
 
-// All songs, in the order they were added.
+// All songs, retired ones included, in the order they were added.
 export async function listSongs(db: Db): Promise<Song[]> {
   const rows = await db.query<SongRow>(`SELECT ${SONG_COLUMNS} FROM songs ORDER BY id`);
   return rows.map(toSong);
 }
 
-// Songs whose preview has not been looked up yet, in the order they were added.
+// Catalogue songs whose preview has not been looked up yet, in the order they were added.
+// Retired songs are skipped: there is no point looking them up on iTunes.
 export async function listSongsWithoutPreview(db: Db): Promise<Song[]> {
   const rows = await db.query<SongRow>(
-    `SELECT ${SONG_COLUMNS} FROM songs WHERE preview_url IS NULL ORDER BY id`,
+    `SELECT ${SONG_COLUMNS} FROM songs WHERE preview_url IS NULL AND in_catalogue ORDER BY id`,
   );
   return rows.map(toSong);
 }
 
-// Songs that can be played: those with a cached preview (decision 006).
+// Songs that can be played: catalogue songs with a cached preview (decisions 005 and 006).
 export async function listSongsWithPreview(db: Db): Promise<Song[]> {
   const rows = await db.query<SongRow>(
-    `SELECT ${SONG_COLUMNS} FROM songs WHERE preview_url IS NOT NULL ORDER BY id`,
+    `SELECT ${SONG_COLUMNS} FROM songs WHERE preview_url IS NOT NULL AND in_catalogue ORDER BY id`,
   );
   return rows.map(toSong);
 }
@@ -105,5 +125,6 @@ function toSong(row: SongRow): Song {
     artworkUrl: row.artwork_url,
     storeUrl: row.store_url,
     previewCachedAt: row.preview_cached_at === null ? null : new Date(row.preview_cached_at),
+    inCatalogue: row.in_catalogue,
   };
 }

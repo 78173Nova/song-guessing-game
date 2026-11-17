@@ -11,6 +11,7 @@ import { getAccountSettings } from "@/lib/api/accounts";
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { hashToken, listRoomAnswers } from "@/lib/db/rooms";
+import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
@@ -278,7 +279,7 @@ describe("POST /api/rooms/[code]/join", () => {
     expect((await join(room.code, "Player 25")).status).toBe(201);
     expect(await join(room.code, "Player 26")).toEqual({
       status: 409,
-      body: { error: "room-full", message: "This room is full." },
+      body: { error: "room-started", message: "This game has already started." },
     });
     expect(await playersOf(room.code, room.creatorToken)).toHaveLength(25);
   });
@@ -459,7 +460,7 @@ describe("server-paced rounds (nobody taps Next)", () => {
     for (const token of [room.creatorToken, ben]) {
       const body = (await state(room.code, token)).body;
       expect(body).toMatchObject({ status: "playing", round: null, serverNow: clock.toISOString() });
-      expect(body.nextRound).toEqual({ number: 1, startsAt: plus(startedAt, 5), options: stored.options });
+      expect(body.nextRound).toEqual({ number: 1, startsAt: plus(startedAt, 5), options: stored.options, questionType: "title" });
       expect(JSON.stringify(body)).not.toContain("correctOption");
     }
   });
@@ -721,13 +722,14 @@ describe("GET /api/rooms/[code] – room state", () => {
         role: "creator",
         players: ["Anna", "Ben"],
         avatars: { Anna: "note", Ben: "note" },
+        settings: DEFAULT_ROOM_SETTINGS,
         answered: [],
         totalRounds: 5,
         serverNow: clock.toISOString(),
         round: null,
         nextRound: null,
         previewUrls: null,
-        me: { nickname: "Anna", score: 0, rank: 1, answer: null, correct: null, points: null },
+        me: { nickname: "Anna", score: 0, rank: 1, answer: null, correct: null, points: null, summary: [] },
         standings: [
           { rank: 1, nickname: "Anna", score: 0 },
           { rank: 1, nickname: "Ben", score: 0 },
@@ -748,13 +750,14 @@ describe("GET /api/rooms/[code] – room state", () => {
         role: "player",
         players: ["Anna", "Ben"],
         avatars: { Anna: "note", Ben: "note" },
+        settings: DEFAULT_ROOM_SETTINGS,
         answered: [],
         totalRounds: 5,
         serverNow: clock.toISOString(),
         round: null,
         nextRound: null,
         previewUrls: null,
-        me: { nickname: "Ben", score: 0, rank: 1, answer: null, correct: null, points: null },
+        me: { nickname: "Ben", score: 0, rank: 1, answer: null, correct: null, points: null, summary: [] },
         standings: [
           { rank: 1, nickname: "Anna", score: 0 },
           { rank: 1, nickname: "Ben", score: 0 },
@@ -791,6 +794,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         startsAt: roundStart.toISOString(),
         endsAt: plus(roundStart, 15),
         options: stored.options,
+        questionType: "title",
         secondsLeft: 9.4,
         answeredCount: 1,
       });
@@ -813,6 +817,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       answer: round.right,
       correct: null,
       points: null,
+      summary: [],
     });
     expect((await state(room.code, room.tokens[1])).body.standings).toEqual([
       { rank: 1, nickname: "Anna", score: 0 },
@@ -839,6 +844,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       startsAt: roundStart.toISOString(),
       endsAt: plus(roundStart, 15),
       options: stored.options,
+      questionType: "title",
       secondsLeft: 0,
       answeredCount: 2,
       correctOption: round.right,
@@ -860,6 +866,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       answer: round.right,
       correct: true,
       points: 140,
+      summary: expect.any(Array),
     });
     expect((await state(room.code, room.tokens[1])).body.me).toEqual({
       nickname: "Ben",
@@ -868,6 +875,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       answer: round.wrong,
       correct: false,
       points: 0,
+      summary: expect.any(Array),
     });
   });
 
@@ -884,6 +892,7 @@ describe("GET /api/rooms/[code] – room state", () => {
       answer: null,
       correct: false,
       points: 0,
+      summary: expect.any(Array),
     });
   });
 
@@ -1081,7 +1090,7 @@ describe("POST /api/rooms/[code]/replace – a device could not load a clip (iss
 
     const swapped = (await roundsOf(room.code))[1];
     const body = (await state(room.code, room.tokens[0])).body;
-    expect(body.nextRound).toEqual({ number: 2, startsAt: scheduled.startsAt, options: swapped.options });
+    expect(body.nextRound).toEqual({ number: 2, startsAt: scheduled.startsAt, options: swapped.options, questionType: "title" });
     expect((body.previewUrls as string[])[1]).toBe(swapped.song.previewUrl);
   });
 
