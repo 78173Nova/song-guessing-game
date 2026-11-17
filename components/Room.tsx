@@ -17,7 +17,9 @@ import {
   saveRoomToken,
 } from "@/lib/client/room-api";
 import { initialRoomView, roomReducer, roomScreen, type RoomScreen } from "@/lib/client/room-game";
+import { takeShareOnArrival } from "@/lib/client/share";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
+import SharePopup from "./SharePopup";
 import styles from "./Landing.module.css";
 import game from "./SoloGame.module.css";
 
@@ -33,7 +35,8 @@ const SILENT_SOUND = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8A
 // Getting into the room. Once "in", the screen comes from roomScreen.
 type Access = { kind: "loading" } | { kind: "gone"; message: string } | { kind: "join" } | { kind: "in" };
 
-export default function Room({ code }: { code: string }) {
+// appAddress: the site's configured address (APP_URL) from the server, for the share link.
+export default function Room({ code, appAddress }: { code: string; appAddress: string }) {
   const [access, setAccess] = useState<Access>({ kind: "loading" });
   const [view, dispatch] = useReducer(roomReducer, initialRoomView);
   const [token, setToken] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export default function Room({ code }: { code: string }) {
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState(""); // e.g. "can't reach the server" while polling
   const [now, setNow] = useState(() => Date.now());
+  const [shareOpen, setShareOpen] = useState(false);
   const clips = useRoomClips(view.latest?.previewUrls ?? null);
 
   // Numbers each state request, so the reducer can ignore a reply that arrives after a newer one.
@@ -95,6 +99,12 @@ export default function Room({ code }: { code: string }) {
   }, [playing]);
 
   const screen = roomScreen(view, now);
+
+  // The share pop-up opens by itself once, when the room creator arrives in the lobby right after creating it.
+  const creatorInLobby = view.latest?.status === "lobby" && view.latest.role === "creator";
+  useEffect(() => {
+    if (creatorInLobby && takeShareOnArrival(code)) queueMicrotask(() => setShareOpen(true));
+  }, [creatorInLobby, code]);
 
   // Start a round's clip the moment its round starts on this screen; stop the music between rounds and at the end.
   const { play, stopAll } = clips;
@@ -206,8 +216,16 @@ export default function Room({ code }: { code: string }) {
           {state.code}
         </p>
         <p className={styles.pitch}>
-          {isCreator ? "Share the code or the link of this page. Start when everyone is in." : "Waiting for the room creator to start…"}
+          {isCreator ? "Invite your friends, then start when everyone is in." : "Waiting for the room creator to start…"}
         </p>
+        {isCreator && (
+          <>
+            <button type="button" className={styles.secondary} onClick={() => setShareOpen(true)}>
+              Share link and code
+            </button>
+            <SharePopup code={state.code} appAddress={appAddress} open={shareOpen} onClose={() => setShareOpen(false)} />
+          </>
+        )}
         <h2 className={styles.codeLabel}>Players ({state.players.length})</h2>
         <ul className={styles.playerList} aria-live="polite">
           {state.players.map((player) => (

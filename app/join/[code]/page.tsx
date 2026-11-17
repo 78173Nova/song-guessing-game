@@ -3,6 +3,7 @@ import ComingSoon from "@/components/ComingSoon";
 import Room from "@/components/Room";
 import styles from "@/components/Landing.module.css";
 import { parseRoomCode, ROOM_CODE_RULE } from "@/lib/client/room-code";
+import { appUrl } from "@/lib/email/messages";
 
 export const metadata = { title: "Room · Song Guessing Game" };
 
@@ -27,7 +28,8 @@ async function RoomForCode({ params }: { params: Promise<{ code: string }> }) {
     <div className={styles.page}>
       <main className={styles.card}>
         <h1 className={styles.title}>Room</h1>
-        <Room code={code} />
+        {/* The share link uses the configured address, never the request's Host header (see appUrl). */}
+        <Room code={code} appAddress={appUrl()} />
       </main>
     </div>
   );
