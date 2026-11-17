@@ -13,6 +13,7 @@ import {
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { DEFAULT_ROOM_SETTINGS, type RoomSettings } from "@/lib/game/room-settings";
+import { ANSWER_TIME_SECONDS } from "@/lib/game/scoring";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -86,8 +87,9 @@ async function gameId(code: string): Promise<string> {
 }
 
 // Plays the game to its end: every player in `tokens` answers every round right, so each round closes at once.
-// Returns with the clock at the last round's close.
-async function playToTheEnd(code: string, tokens: string[]) {
+// The players in `missLastRound` do not answer the last round (their device is away), so it runs its full 15 s.
+// Returns with the clock at the last round's close (1 ms after it when the last round ran its full 15 s).
+async function playToTheEnd(code: string, tokens: string[], missLastRound: string[] = []) {
   for (;;) {
     const reply = (await state(code, tokens[0])).body;
     if (reply.status === "finished") return;
@@ -95,10 +97,13 @@ async function playToTheEnd(code: string, tokens: string[]) {
     if (!upcoming) throw new Error("Test setup: no round is scheduled");
     clock = new Date(upcoming.startsAt);
     const rounds = (await getGameRounds(db, await gameId(code)))!;
+    const isLast = upcoming.number === rounds.length;
     for (const token of tokens) {
+      if (isLast && missLastRound.includes(token)) continue;
       wait(0.1);
       await answer(code, token, { round: upcoming.number, answer: rounds[upcoming.number - 1].correctOption });
     }
+    if (isLast && missLastRound.length > 0) clock = new Date(Date.parse(upcoming.startsAt) + ANSWER_TIME_SECONDS * 1000 + 1);
   }
 }
 
@@ -153,12 +158,14 @@ describe("vote timing and removal", () => {
     expect(await playAgain(room.code, ben)).toMatchObject({ status: 403, body: { error: "left" } });
   });
 
-  it("changes nothing when nobody chose Play again: the final standings stay and the vote is no longer offered", async () => {
+  it("closes the room for everyone when nobody chose Play again: no account holder is left to run it", async () => {
     const room = await finishedRoom("Anna", "Ben");
     const [anna, ben] = room.tokens;
     wait(VOTE_ENDS_AFTER_CLOSE + 1);
-    expect((await state(room.code, anna)).body).toMatchObject({ status: "finished", players: ["Anna", "Ben"], playAgain: null });
-    expect(await playAgain(room.code, ben)).toMatchObject({ status: 409, body: { error: "vote-over" } });
+    const closed = { status: 409, body: { error: "no-account-holder", message: "No account holder is left to run the room." } };
+    expect(await state(room.code, anna)).toEqual(closed);
+    expect(await state(room.code, ben)).toEqual(closed);
+    expect(await playAgain(room.code, ben)).toMatchObject({ status: 409, body: { error: "no-account-holder" } });
   });
 
   it("counts Leave as a choice: the vote ends once everyone else has chosen Play again", async () => {
@@ -200,7 +207,7 @@ describe("vote timing and removal", () => {
 
 describe("room creator handover", () => {
   // Anna creates the room; Ben and Dan join logged in (account holders), Cleo as a guest.
-  async function mixedRoom() {
+  async function mixedRoom(missLastRound: string[] = []) {
     const room = await newRoom("Anna");
     const tokens: Record<string, string> = { Anna: room.creatorToken };
     for (const nickname of ["Ben", "Cleo", "Dan"]) {
@@ -210,7 +217,7 @@ describe("room creator handover", () => {
       tokens[nickname] = (result.body as { playerToken: string }).playerToken;
     }
     await start(room.code, tokens.Anna);
-    await playToTheEnd(room.code, Object.values(tokens));
+    await playToTheEnd(room.code, Object.values(tokens), missLastRound.map((nickname) => tokens[nickname]));
     return { code: room.code, tokens };
   }
   const roleOf = async (code: string, token: string) => (await state(code, token)).body.role;
@@ -256,6 +263,17 @@ describe("room creator handover", () => {
     wait(3);
     randomValue = 0; // would pick Ben first if he were not away
     await state(code, tokens.Dan);
+    expect(await roleOf(code, tokens.Dan)).toBe("creator");
+    expect(await roleOf(code, tokens.Ben)).toBe("player");
+  });
+
+  it("prefers an account holder who was there in the last round over one who was away then and is back now", async () => {
+    const { code, tokens } = await mixedRoom(["Ben"]); // Ben's device was away during the last round
+    await state(code, tokens.Ben); // ... and is back for the vote
+    await state(code, tokens.Dan);
+    randomValue = 0; // would pick Ben first if he had been there in the last round
+    await leave(code, tokens.Anna);
+    for (const nickname of ["Ben", "Cleo", "Dan"]) await playAgain(code, tokens[nickname]);
     expect(await roleOf(code, tokens.Dan)).toBe("creator");
     expect(await roleOf(code, tokens.Ben)).toBe("player");
   });

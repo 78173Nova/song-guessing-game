@@ -670,7 +670,7 @@ export async function getRoomState(
 
   // After the game: the vote on "Play again" (issue #43). Once it is over, the room goes back to the lobby (or
   // closes), and this request answers with the room as it is now – or with "You have left" for a non-voter.
-  const vote = game.status === "finished" ? playAgainVote(room, game, at) : null;
+  const vote = game.status === "finished" ? playAgainVote(room, game) : null;
   if (vote !== null && isPlayAgainVoteOver(vote, at)) {
     await endVote(db, room, game, at, deps.random ?? Math.random);
     return getRoomState(db, code, authorization, deps);
@@ -970,41 +970,37 @@ const gameNumberOf = (room: Room) => room.earlierGames.length + 1;
 
 // The vote after a finished game: when it ends, how many of the players still in the room have chosen "Play again",
 // and how many players there are. null after the last game a room may host: then "Play again" is not offered.
-// With `now`: also null once the time is over and nobody chose "Play again" – then nothing changes, and the room
-// stays finished with its final standings, as it did before rooms hosted several games.
-function playAgainVote(
-  room: Room,
-  game: RoomGame,
-  now?: Date,
-): { endsAt: Date; chosen: number; players: number } | null {
+function playAgainVote(room: Room, game: RoomGame): { endsAt: Date; chosen: number; players: number } | null {
   if (gameNumberOf(room) >= MAX_GAMES_PER_ROOM) return null;
   const lastClose = game.rounds.at(-1)?.answeredAt;
   if (!lastClose) return null;
-  const vote = {
+  return {
     endsAt: playAgainEndsAt(lastClose),
     chosen: game.players.filter((player) => player.playAgain).length,
     players: game.players.length,
   };
-  if (now !== undefined && vote.chosen === 0 && now.getTime() > vote.endsAt.getTime()) return null;
-  return vote;
 }
 
 // Ends the vote: players who did not choose "Play again" are removed, and the room goes back to the lobby with the
 // same settings. If the room creator did not choose it, the role passes at random to an account holder who did,
-// preferring one who is not away. Without such an account holder the room closes for everyone. A lobby that is
+// preferring one who was there in the last round (answered it) and is not away now. Without such an account holder (also when nobody chose "Play again") the room
+// closes for everyone: "No account holder is left to run the room". A lobby that is
 // already full (a Duel where both chose "Play again") starts its next game at once, as a full room always does.
 async function endVote(db: TransactionDb, room: Room, game: RoomGame, now: Date, random: () => number) {
   const voters = game.players.filter((player) => player.playAgain);
   const creatorId = await creatorPlayerId(db, room.id);
   const creatorStays = voters.some((player) => player.id === creatorId);
+  // Only the latest request time is stored, so "there in the last round" is read from that round's answers.
+  const lastRound = game.rounds.at(-1)?.roundNumber;
+  const answeredLastRound = (player: RoomPlayer) =>
+    game.answers.some((a) => a.roundNumber === lastRound && a.playerId === player.id);
   const newCreator = creatorStays
     ? null
     : pickNewCreator(
-        voters.map((player) => ({ ...player, away: isAway(player.lastSeenAt, now) })),
+        voters.map((player) => ({ ...player, away: !answeredLastRound(player) || isAway(player.lastSeenAt, now) })),
         random,
       );
-  const closeReason =
-    voters.length === 0 ? "everyone-left" : !creatorStays && newCreator === null ? "no-account-holder" : null;
+  const closeReason = !creatorStays && newCreator === null ? "no-account-holder" : null;
 
   const ended = await endPlayAgainVote(db, {
     roomId: room.id,

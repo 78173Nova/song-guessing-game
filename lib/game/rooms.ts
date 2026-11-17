@@ -186,8 +186,8 @@ export function isPlayAgainVoteOver(vote: { endsAt: Date; chosen: number; player
 }
 
 // Who becomes the room creator when the room creator did not choose "Play again": one of the account holders who
-// chose it, at random, preferring those who are not away (lib/game/rooms.ts isAway) at that moment.
-// null = no account holder chose it, so nobody can run the room.
+// chose it, at random, preferring those who are not `away`: the caller marks a player away who missed the last round
+// or is away now (isAway). null = no account holder chose it, so nobody can run the room.
 export function pickNewCreator<Player extends { hasAccount: boolean; away: boolean }>(
   voters: Player[],
   random: () => number,
