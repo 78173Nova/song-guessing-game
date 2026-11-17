@@ -17,6 +17,7 @@ import { FINAL_STANDINGS_SECONDS, RESULT_SECONDS, SET_STANDINGS_SECONDS, SET_SUM
 import { ANSWER_TIME_SECONDS } from "../game/scoring";
 import type { QuestionType } from "../game/modes";
 import type { RoomState, Song, Standing, SummaryItem } from "./room-api";
+import { formatCountdown, serverClockOffset } from "./countdown";
 
 export type RoomView = {
   latest: RoomState | null;
@@ -106,8 +107,8 @@ export function roomReducer(view: RoomView, action: RoomAction): RoomView {
         ...fresh,
         latest: state,
         request: action.request,
-        // Measured on every reply. The time the reply took to travel is ignored: well under a second.
-        offsetMs: Date.parse(state.serverNow) - action.receivedAt,
+        // Measured on every reply.
+        offsetMs: serverClockOffset(state.serverNow, action.receivedAt),
         resultSeen: newlyClosed ? { round: round.number, at: action.receivedAt } : nextGame ? null : view.resultSeen,
       };
     }
@@ -134,12 +135,6 @@ export function roomReducer(view: RoomView, action: RoomAction): RoomView {
 }
 
 const secondsUntil = (time: number, now: number) => Math.max(0, Math.ceil((time - now) / 1000));
-
-// Milliseconds left as "m:ss", whole seconds rounded up (so 0:00 only shows at the end), e.g. "0:42".
-export function formatCountdown(msLeft: number): string {
-  const seconds = secondsUntil(msLeft, 0);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
 
 // The lobby countdown (issue #37) as this device shows it: the time left on the server's clock and whether this
 // viewer sees "Extend +60 s". null when the room has none (private, fewer than 2 players, started).

@@ -2,6 +2,7 @@
 // Tokens come in as the raw value and are hashed here (SHA-256, like room tokens in decision 012), so a raw
 // token can never reach the database. Password hashes are made in lib/accounts before they get here.
 import type { TransactionDb } from "./client";
+import type { AvatarId } from "../game/avatars";
 // Value imports end in .ts so that `npm run db:team-accounts` can load this file with plain Node.
 import { EMAIL_THROTTLE_MS } from "../accounts/rules.ts";
 import { hashToken } from "./rooms.ts";
@@ -129,8 +130,9 @@ export async function findSessionUsername(db: TransactionDb, token: string, now:
   return rows.length === 1 ? rows[0].username : null;
 }
 
-// The logged-in account with its settings (issue #44): avatar and usual nickname are null until chosen.
-export type SessionAccount = { id: string; username: string; avatar: string | null; nickname: string | null };
+// The logged-in account with its settings (issue #44): avatar and usual nickname are null until chosen. Only ids of
+// the fixed set are ever saved (lib/api checks them with isAvatar first).
+export type SessionAccount = { id: string; username: string; avatar: AvatarId | null; nickname: string | null };
 
 // The account of this session token with its settings, or null for an unknown or expired session.
 export async function findSessionAccount(db: TransactionDb, token: string, now: Date): Promise<SessionAccount | null> {
@@ -147,7 +149,7 @@ export async function findSessionAccount(db: TransactionDb, token: string, now: 
 export async function saveAccountSettings(
   db: TransactionDb,
   userId: string,
-  settings: { avatar: string; nickname: string | null },
+  settings: { avatar: AvatarId; nickname: string | null },
 ): Promise<void> {
   await db.query("UPDATE users SET avatar = $2, usual_nickname = $3 WHERE id = $1", [
     userId,
@@ -158,7 +160,7 @@ export async function saveAccountSettings(
 
 // An account holder's first room: saves the avatar they picked, but only if the account has none yet, so it is
 // asked once and a later room never changes it (Account settings does).
-export async function saveFirstAvatar(db: TransactionDb, userId: string, avatar: string): Promise<void> {
+export async function saveFirstAvatar(db: TransactionDb, userId: string, avatar: AvatarId): Promise<void> {
   await db.query("UPDATE users SET avatar = $2 WHERE id = $1 AND avatar IS NULL", [userId, avatar]);
 }
 

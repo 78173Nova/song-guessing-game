@@ -20,7 +20,7 @@ export type RoomSettings = {
   sets: (typeof SET_CHOICES)[number];
 };
 
-// A room created without settings (older screens, the tests of #32/#33) plays this.
+// The settings the create form starts with. The database also uses them for a room stored without settings (tests).
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   type: "multiplayer",
   mode: "title",

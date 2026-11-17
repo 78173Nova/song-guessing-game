@@ -11,6 +11,7 @@ import {
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
 import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
+import { withDefaultSettings } from "../helpers/rooms";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -51,7 +52,7 @@ const rejoin = (code: string, nickname: string, oldToken: string) =>
 
 async function newRoom(creator = "Anna", isPrivate = false) {
   const body = isPrivate ? { nickname: creator, private: true } : { nickname: creator };
-  const result = await createNewRoom(db, session, json(body), { ...deps, newCode: () => String(nextCode++) });
+  const result = await createNewRoom(db, session, json(withDefaultSettings(body)), { ...deps, newCode: () => String(nextCode++) });
   if (result.status !== 201) throw new Error("Test setup: the room was not created");
   const { code, playerToken } = result.body as { code: string; playerToken: string };
   return { code, creatorToken: playerToken };
@@ -194,6 +195,27 @@ describe("kick", () => {
     expect((await state(code, anna)).body.players).toEqual(["Anna", "Cleo"]);
   });
 
+  it("a kicked account holder cannot come back from another tab: their account is recognised", async () => {
+    const room = await newRoom("Anna", true);
+    const benSession = await loggedInSession(db, clock, "ben_test");
+    const joinAs = (nickname: string, sessionToken?: string) =>
+      joinRoom(db, room.code, json({ nickname }), deps, { sessionToken });
+    await joinAs("Ben", benSession);
+    wait(66);
+    await state(room.code, room.creatorToken);
+    expect((await kick(room.code, room.creatorToken, { nickname: "Ben" })).status).toBe(200);
+
+    // A new tab: no old token, but the same login.
+    expect(await joinAs("Benny", benSession)).toMatchObject({ status: 403, body: { error: "kicked" } });
+    // Another account and a guest can still join.
+    const cleoSession = await loggedInSession(db, clock, "cleo_test");
+    expect((await joinAs("Cleo", cleoSession)).status).toBe(201);
+    expect((await joinAs("Dan")).status).toBe(201);
+    // Ben's account is only refused in the room he was kicked from.
+    const other = await newRoom("Anna", true);
+    expect((await joinRoom(db, other.code, json({ nickname: "Ben" }), deps, { sessionToken: benSession })).status).toBe(201);
+  });
+
   // A full room starts by itself (#34), so a freed seat shows as one more join before the room is full.
   it("frees the seat in the lobby: the room fills up one player later", async () => {
     // Private: a public lobby with 2+ players would start after 60 s (issue #37).
@@ -323,7 +345,7 @@ describe("leave", () => {
   it("also works after the game has finished: the player leaves the final standings", async () => {
     const room = await startedRoom("Anna", "Ben");
     const [anna, ben] = room.tokens;
-    wait(10 * 60);
+    wait(150); // the 5 rounds end after 112 s; the vote on "Play again" runs until 182 s (then the room closes, #43)
     expect((await state(room.code, anna)).body.status).toBe("finished");
     await leave(room.code, ben);
     expect((await state(room.code, anna)).body.standings).toEqual([{ rank: 1, nickname: "Anna", score: 0 }]);

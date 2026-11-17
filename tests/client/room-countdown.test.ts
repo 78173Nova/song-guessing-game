@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { apiExtendCountdown, type ListedRoom, type RoomState } from "@/lib/client/room-api";
-import { formatCountdown, lobbyCountdown } from "@/lib/client/room-game";
+import { formatCountdown, serverClockOffset } from "@/lib/client/countdown";
+import { lobbyCountdown } from "@/lib/client/room-game";
 import { listedRoomCountdown } from "@/lib/client/room-list";
 
 // The browser side of the lobby countdown (issue #37). The server works out the end; the page only shows it.
@@ -79,8 +80,15 @@ describe("listedRoomCountdown – the countdown in the list", () => {
   };
 
   it("shows when the game starts, or nothing while the countdown does not run", () => {
-    expect(listedRoomCountdown({ ...room, countdownEndsAt: iso(T0 + 42_000) }, T0)).toBe("Starts in 0:42");
-    expect(listedRoomCountdown({ ...room, countdownEndsAt: null }, T0)).toBeNull();
-    expect(listedRoomCountdown(room, T0)).toBeNull();
+    expect(listedRoomCountdown({ ...room, countdownEndsAt: iso(T0 + 42_000) }, 0, T0)).toBe("Starts in 0:42");
+    expect(listedRoomCountdown({ ...room, countdownEndsAt: null }, 0, T0)).toBeNull();
+    expect(listedRoomCountdown(room, 0, T0)).toBeNull();
+  });
+
+  it("counts on the server's clock: a device clock 30 s behind still shows the right time", () => {
+    const deviceNow = T0 - 30_000;
+    const offset = serverClockOffset(iso(T0), deviceNow);
+    expect(offset).toBe(30_000);
+    expect(listedRoomCountdown({ ...room, countdownEndsAt: iso(T0 + 42_000) }, offset, deviceNow)).toBe("Starts in 0:42");
   });
 });

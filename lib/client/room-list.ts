@@ -2,7 +2,7 @@
 import { GENRE_LABELS, type Genre } from "../game/genres";
 import type { Mode } from "../game/modes";
 import type { ListedRoom } from "./room-api";
-import { formatCountdown } from "./room-game";
+import { formatCountdown } from "./countdown";
 
 export const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
@@ -21,8 +21,10 @@ export function describeListedRoom(room: ListedRoom) {
   };
 }
 
-// "Starts in 0:42" while the room's lobby countdown runs (issue #37), null otherwise. `now` is this device's clock.
-export function listedRoomCountdown(room: ListedRoom, now: number): string | null {
+// "Starts in 0:42" while the room's lobby countdown runs (issue #37), null otherwise. Counted on the server's clock:
+// `offsetMs` = server clock − this device's clock (serverClockOffset of the list's `serverNow`); `localNow` is
+// Date.now().
+export function listedRoomCountdown(room: ListedRoom, offsetMs: number, localNow: number): string | null {
   const endsAt = room.countdownEndsAt ?? null;
-  return endsAt === null ? null : `Starts in ${formatCountdown(Date.parse(endsAt) - now)}`;
+  return endsAt === null ? null : `Starts in ${formatCountdown(Date.parse(endsAt) - (localNow + offsetMs))}`;
 }

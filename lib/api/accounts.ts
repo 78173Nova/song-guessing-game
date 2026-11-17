@@ -30,7 +30,6 @@ import {
   createSession,
   deleteSession,
   findAccountForLogin,
-  findSessionAccount,
   findSessionLogin,
   findSessionUsername,
   findUnverifiedUserId,
@@ -39,7 +38,7 @@ import {
   replacePassword,
   saveAccountSettings as storeAccountSettings,
 } from "../db/accounts";
-import { isAvatar } from "../game/avatars";
+import { isAvatar, type AvatarId } from "../game/avatars";
 import { parseNickname } from "../game/rooms";
 import {
   alreadyHaveAccountMessage,
@@ -52,6 +51,7 @@ import {
   verifyEmailMessage,
 } from "../email/messages";
 import { getEmailSender, type EmailSender } from "../email/sender";
+import { findBySession, isJsonObject, PLAYER_INPUT_ERRORS, sessionAccount } from "./shared";
 
 // setCookie is the value of a Set-Cookie header for the route to send (log in, log out). It is the only place a
 // session token leaves the server; the body never contains one.
@@ -104,8 +104,7 @@ const ERRORS = {
     status: 409,
     message: "This address already has an account, so your email was not changed.",
   },
-  "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
-  "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
+  ...PLAYER_INPUT_ERRORS,
   "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
@@ -305,8 +304,8 @@ export async function whoIsLoggedIn(
   deps: AccountDeps = {},
 ): Promise<ApiResult> {
   const { now } = resolveDeps(deps);
-  if (!looksLikeToken(sessionToken)) return { status: 200, body: { username: null } };
-  return { status: 200, body: { username: await findSessionUsername(db, sessionToken, now) } };
+  const username = await findBySession(sessionToken, (token) => findSessionUsername(db, token, now));
+  return { status: 200, body: { username } };
 }
 
 // POST /api/accounts/logout – ends this browser's session on the server and clears the cookie. Always works,
@@ -388,13 +387,8 @@ export async function resetPassword(
 }
 
 // The account settings as the page sees them (issue #44). The account id never leaves the server.
-function settingsReply(account: { username: string; avatar: string | null; nickname: string | null }): ApiResult {
+function settingsReply(account: { username: string; avatar: AvatarId | null; nickname: string | null }): ApiResult {
   return { status: 200, body: { username: account.username, avatar: account.avatar, nickname: account.nickname } };
-}
-
-// The account of a session cookie, or null for a missing, unknown or expired session.
-async function sessionAccount(db: TransactionDb, sessionToken: string | undefined, now: Date) {
-  return looksLikeToken(sessionToken) ? findSessionAccount(db, sessionToken, now) : null;
 }
 
 // GET /api/accounts/settings – the logged-in account's avatar and usual nickname (null until chosen), for the
@@ -422,11 +416,8 @@ export async function saveAccountSettings(
   const account = await sessionAccount(db, sessionToken, now);
   if (account === null) return fail("log-in-needed");
 
-  const json = readJson(rawBody);
-  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
-    return fail("malformed");
-  }
-  const body = json.body as Record<string, unknown>;
+  const body = readJsonObject(rawBody);
+  if (body === null) return fail("malformed");
   if (!isAvatar(body.avatar)) return fail("invalid-avatar");
   const nickname = body.nickname === null || body.nickname === "" ? null : parseNickname(body.nickname);
   if (nickname === null && body.nickname !== null && body.nickname !== "") return fail("invalid-nickname");
@@ -437,15 +428,14 @@ export async function saveAccountSettings(
 
 // The login details of the account of a session cookie (issue #45), or null for a missing, unknown or expired
 // session.
-async function sessionLogin(db: TransactionDb, sessionToken: string | undefined, now: Date) {
-  return looksLikeToken(sessionToken) ? findSessionLogin(db, sessionToken, now) : null;
+function sessionLogin(db: TransactionDb, sessionToken: string | undefined, now: Date) {
+  return findBySession(sessionToken, (token) => findSessionLogin(db, token, now));
 }
 
 // Reads a small JSON object; null when it is missing, too long, not JSON or not an object.
 function readJsonObject(rawBody: string | null): Record<string, unknown> | null {
   const json = readJson(rawBody);
-  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) return null;
-  return json.body as Record<string, unknown>;
+  return json.ok && isJsonObject(json.body) ? json.body : null;
 }
 
 // POST /api/accounts/username – { username } → gives the logged-in account a new username, same rules as at

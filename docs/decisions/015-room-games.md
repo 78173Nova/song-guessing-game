@@ -87,7 +87,9 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
   screen on that device only.
 - **Limits:** the next set starts at the same server time for everyone, so a player who skips the summary waits on
   "Next round starting…". A swapped song (#41) also matches the genres and decades and keeps the round's
-  question type. Rooms created without settings (older screens) get Multiplayer, title, Any, 1 set of 5.
+  question type. Rooms created without settings (older screens) get Multiplayer, title, Any, 1 set of 5. Update 17 Nov
+  2026 (code review): the settings are required now; a create request without them is refused with 400
+  `invalid-settings`, as the issue asks ("every setting is validated").
 - **How it could change:** the pauses are `SET_SUMMARY_SECONDS`, `SET_STANDINGS_SECONDS` and
   `FINAL_STANDINGS_SECONDS` in `lib/game/rooms.ts`; the choices are lists in `lib/game/room-settings.ts`.
 ## Update 17 Nov 2026: song swap in rooms (issue #41)

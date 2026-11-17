@@ -13,6 +13,7 @@ import { getGameRounds } from "@/lib/db/games";
 import { hashToken, listRoomAnswers } from "@/lib/db/rooms";
 import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "@/lib/music/itunes";
+import { withDefaultSettings } from "../helpers/rooms";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -49,7 +50,7 @@ const bearer = (token: string | null) => (token === null ? null : `Bearer ${toke
 const json = (body: unknown) => (typeof body === "string" ? body : JSON.stringify(body));
 
 const create = (sessionToken: string | undefined, body: unknown, extra = {}) =>
-  createNewRoom(db, sessionToken, json(body), { ...deps, ...extra });
+  createNewRoom(db, sessionToken, json(withDefaultSettings(body)), { ...deps, ...extra });
 const join = (code: string, nickname: unknown) => joinRoom(db, code, json({ nickname }), deps);
 const start = (code: string, token: string | null) => startRoomGame(db, code, bearer(token), deps);
 const answer = (code: string, token: string | null, body: unknown) =>
@@ -389,11 +390,11 @@ describe("POST /api/rooms/[code]/start", () => {
   });
 
   it("returns 503 when fewer than 5 songs have a clip, and stays in the lobby", async () => {
-    db = await createTestDb();
-    await addTestSongs(db, 8, 4);
-    session = await loggedInSession(db, START);
     const room = await newRoom("Anna");
     await joined(room.code, "Ben");
+    // Creating checks the songs too (the settings are required, issue #34), so only after the room exists do 4 of
+    // the 8 songs leave the catalogue: 4 songs with a clip are left.
+    await db.query("UPDATE songs SET in_catalogue = false WHERE id IN (SELECT id FROM songs ORDER BY id LIMIT 4)");
 
     expect(await start(room.code, room.creatorToken)).toEqual({
       status: 503,
@@ -417,6 +418,10 @@ describe("closing rules", () => {
   it("keeps a started room open after 30 minutes and closes it from exactly 3 hours on", async () => {
     const room = await newRoom("Anna");
     const ben = await joined(room.code, "Ben");
+    // Setup: this is the room's 5th game, so no "Play again" vote follows it (a vote nobody chooses would close the
+    // room, issue #43). Then only the 3-hour limit closes the finished room.
+    const fourEarlierGames = "ARRAY[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()]";
+    await db.query(`UPDATE rooms SET earlier_games = ${fourEarlierGames} WHERE code = $1`, [room.code]);
     wait(29 * MINUTES);
     await start(room.code, room.creatorToken);
 

@@ -8,6 +8,7 @@ import {
   playerLeavesRoom,
 } from "@/lib/api/rooms";
 import type { TransactionDb } from "@/lib/db/client";
+import { withDefaultSettings } from "../helpers/rooms";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -43,7 +44,7 @@ const list = () =>
   listPublicRooms(db, new URLSearchParams({ type: "multiplayer", mode: "any", genres: "any", decades: "any" }), deps);
 
 async function newRoom(isPrivate = false) {
-  const result = await createNewRoom(db, session, JSON.stringify({ nickname: "Anna", private: isPrivate }), {
+  const result = await createNewRoom(db, session, JSON.stringify(withDefaultSettings({ nickname: "Anna", private: isPrivate })), {
     ...deps,
     newCode: () => String(nextCode++),
   });
