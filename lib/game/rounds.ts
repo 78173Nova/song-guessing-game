@@ -19,7 +19,8 @@ export type NewRound = {
 export type BuildResult = { ok: true; rounds: NewRound[] } | { ok: false; reason: "not-enough-songs" };
 
 // `currentYear` is passed in by the server (and fixed in tests), so wrong years never lie in the future.
-export type BuildSettings = { mode?: Mode; currentYear?: number };
+// `rounds`: how many rounds to build (rooms choose it, issue #34); missing = ROUNDS_PER_GAME.
+export type BuildSettings = { mode?: Mode; currentYear?: number; rounds?: number };
 
 // Options that differ only in upper/lower case or spaces count as the same ("Queen" = "queen").
 function optionKey(text: string): string {
@@ -59,7 +60,7 @@ function typesFor(mode: Mode): readonly QuestionType[] {
   return mode === "mixed" ? QUESTION_TYPES : [mode];
 }
 
-// Picks ROUNDS_PER_GAME different songs and gives each round 1 correct + 3 wrong options, shuffled.
+// Picks ROUNDS_PER_GAME (or settings.rounds) different songs and gives each round 1 correct + 3 wrong options, shuffled.
 // Mixed mode picks the question type of each round at random.
 export function buildRounds(
   songs: SongForGame[],
@@ -68,11 +69,12 @@ export function buildRounds(
 ): BuildResult {
   const mode = settings.mode ?? "title";
   const currentYear = settings.currentYear ?? new Date().getFullYear();
-  if (songs.length < ROUNDS_PER_GAME || !typesFor(mode).every((type) => canAsk(songs, type))) {
+  const count = settings.rounds ?? ROUNDS_PER_GAME;
+  if (songs.length < count || !typesFor(mode).every((type) => canAsk(songs, type))) {
     return { ok: false, reason: "not-enough-songs" };
   }
 
-  const chosen = shuffle(songs, random).slice(0, ROUNDS_PER_GAME);
+  const chosen = shuffle(songs, random).slice(0, count);
   const rounds: NewRound[] = [];
   for (const [index, song] of chosen.entries()) {
     const types = typesFor(mode);

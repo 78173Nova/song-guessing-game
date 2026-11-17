@@ -82,7 +82,22 @@ CREATE TABLE IF NOT EXISTS rooms (
   CHECK (status = 'lobby' OR game_id IS NOT NULL)     -- a started room always has its game
 );
 
--- The players of a room. The limit of 50 per room is enforced in lib/db/rooms.ts (addPlayer), not here.
+-- Room settings (issue #34): chosen by the room creator when creating the room, never changed afterwards.
+-- Added with ALTER TABLE because CREATE TABLE IF NOT EXISTS skips tables that already exist; older rooms get the
+-- defaults (Multiplayer, title mode, any genre and decade, 1 set of 5 songs).
+-- genres / decades: an empty list = Any. The lists must match lib/game/genres.ts and lib/game/filters.ts.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS room_type text NOT NULL DEFAULT 'multiplayer'
+  CHECK (room_type IN ('duel', 'multiplayer'));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'title'
+  CHECK (mode IN ('title', 'artist', 'year', 'mixed'));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS genres text[] NOT NULL DEFAULT '{}'
+  CHECK (genres <@ ARRAY['pop', 'rock', 'hip-hop', 'r&b', 'dance', 'country']::text[]);
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS decades integer[] NOT NULL DEFAULT '{}'
+  CHECK (decades <@ ARRAY[1960, 1970, 1980, 1990, 2000, 2010, 2020]);
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS songs_per_set integer NOT NULL DEFAULT 5 CHECK (songs_per_set IN (3, 5, 10));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS sets integer NOT NULL DEFAULT 1 CHECK (sets IN (1, 2, 3));
+
+-- The players of a room. The limit per room is enforced in lib/db/rooms.ts (addPlayer), not here.
 CREATE TABLE IF NOT EXISTS room_players (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id    uuid        NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,

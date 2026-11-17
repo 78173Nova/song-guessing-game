@@ -71,6 +71,13 @@ export const RESULT_SECONDS = 5;
 // … and the next round starts this long after the close: the result, then a few seconds of
 // "Next round starting…", so a device that polls a little late still sees the start time before it comes.
 export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 3;
+// After the last round of a set (issue #34): each player's own set summary, then the standings. The next set
+// starts after the result, both of these and the same few seconds of "Next round starting…".
+export const SET_SUMMARY_SECONDS = 10;
+export const SET_STANDINGS_SECONDS = 5;
+export const SET_BREAK_SECONDS = SET_SUMMARY_SECONDS + SET_STANDINGS_SECONDS;
+// After the last round of the game: the final standings, then the full summary, which stays.
+export const FINAL_STANDINGS_SECONDS = 5;
 
 // The moment a closed round closed: when the last player answered if everyone did, otherwise at the end of
 // its 15 seconds. Worked out from the stored times, so every request gets the same moment – and with it the
@@ -81,9 +88,11 @@ export function roundClosedAt(startedAt: Date, answerTimes: Date[], playerCount:
   return new Date(startedAt.getTime() + ANSWER_TIME_SECONDS * 1000);
 }
 
-// When the next round starts after a round that closed at `closedAt`.
-export function nextRoundStartsAt(closedAt: Date): Date {
-  return new Date(closedAt.getTime() + NEXT_ROUND_DELAY_SECONDS * 1000);
+// When the next round starts after a round that closed at `closedAt`. `endsSet`: that round was the last of its
+// set, so the set summary and the standings come first.
+export function nextRoundStartsAt(closedAt: Date, endsSet = false): Date {
+  const delay = NEXT_ROUND_DELAY_SECONDS + (endsSet ? SET_BREAK_SECONDS : 0);
+  return new Date(closedAt.getTime() + delay * 1000);
 }
 
 export type ParsedRoomAnswer =
