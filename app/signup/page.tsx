@@ -1,8 +1,21 @@
-import ComingSoon from "@/components/ComingSoon";
+import Link from "next/link";
+import SignupForm from "@/components/SignupForm";
+import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Sign up · Song Guessing Game" };
 
-// Placeholder until signing up is built (issue #24).
+// Sign up: an account is needed only to create a room (spec 004).
 export default function SignupPage() {
-  return <ComingSoon title="Sign up" text="Accounts are coming soon. You can already play solo or join a room with a code." />;
+  return (
+    <div className={styles.page}>
+      <main className={styles.card}>
+        <h1 className={styles.title}>Sign up</h1>
+        <p className={styles.pitch}>You need an account only to create a room. Solo and joining stay open to everyone.</p>
+        <SignupForm />
+        <Link href="/" className={styles.textLink}>
+          ← Back to the front page
+        </Link>
+      </main>
+    </div>
+  );
 }

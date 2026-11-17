@@ -8,17 +8,20 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "db:seed": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON db/seed.ts"
+    "db:seed": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON db/seed.ts",
+    "db:team-accounts": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON db/team-accounts.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.2.0",
     "next": "16.4.6",
+    "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.16",
     "@types/node": "24.19.2",
+    "@types/qrcode": "1.5.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "eslint": "9.39.5",

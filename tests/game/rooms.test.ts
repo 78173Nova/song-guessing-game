@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  isRoomExpired,
+  isRoomClosed,
   isRoundClosed,
   isTimeUp,
   isValidRoomCode,
@@ -89,17 +89,33 @@ describe("readBearerToken", () => {
   });
 });
 
-describe("isRoomExpired", () => {
+describe("isRoomClosed", () => {
+  const minutes = (m: number) => m * 60;
   const hours = (h: number) => h * 60 * 60;
+  const lobby = { createdAt: START, status: "lobby" as const };
+  const playing = { createdAt: START, status: "playing" as const };
+  const finished = { createdAt: START, status: "finished" as const };
 
-  it("is open until just before 3 hours after it was created", () => {
-    expect(isRoomExpired(START, START)).toBe(false);
-    expect(isRoomExpired(START, after(hours(3) - 1))).toBe(false);
+  it("keeps a room in the lobby open until just before 30 minutes after it was created", () => {
+    expect(isRoomClosed(lobby, START)).toBe(false);
+    expect(isRoomClosed(lobby, after(minutes(30) - 0.001))).toBe(false);
   });
 
-  it("is closed from exactly 3 hours on", () => {
-    expect(isRoomExpired(START, after(hours(3)))).toBe(true);
-    expect(isRoomExpired(START, after(hours(30)))).toBe(true);
+  it("closes a room whose game has not started from exactly 30 minutes on", () => {
+    expect(isRoomClosed(lobby, after(minutes(30)))).toBe(true);
+    expect(isRoomClosed(lobby, after(hours(2)))).toBe(true);
+  });
+
+  it("keeps a started room open after 30 minutes, until just before 3 hours", () => {
+    expect(isRoomClosed(playing, after(minutes(30)))).toBe(false);
+    expect(isRoomClosed(playing, after(hours(3) - 0.001))).toBe(false);
+    expect(isRoomClosed(finished, after(hours(3) - 0.001))).toBe(false);
+  });
+
+  it("closes every room from exactly 3 hours on", () => {
+    expect(isRoomClosed(playing, after(hours(3)))).toBe(true);
+    expect(isRoomClosed(finished, after(hours(3)))).toBe(true);
+    expect(isRoomClosed(lobby, after(hours(30)))).toBe(true);
   });
 });
 

@@ -20,10 +20,12 @@ Rules:
 | 004 | [The server checks answers](004-server-checks-answers.md) | decided |
 | 005 | [Curated song list](005-curated-song-list.md) | decided |
 | 006 | [Behaviour when the API fails](006-api-failure.md) | decided |
-| 007 | [No accounts, nicknames only](007-no-accounts.md) | decided (for now) |
-| 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core |
+| 007 | [No accounts, nicknames only](007-no-accounts.md) | decided, updated 15 Nov 2026 (accounts to create rooms) |
+| 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core; updated 16 Nov 2026 (shared start time, server-paced) |
 | 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
-| 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, database part built |
+| 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, built (room core, away/kick/leave, several games per room, public rooms and the lobby countdown; updated 17 Nov 2026) |
 | 013 | [Game modes: title, artist, year, mixed](013-game-modes.md) | decided, partly built |
+| 014 | [Accounts](014-accounts.md) | decided, mostly built (sign-up, verification, login, password reset, avatars and Account settings, changing username/email/password; updated 17 Nov 2026; Brevo email #25 open) |
+| 015 | [Room games: server-paced rounds, clips on every device](015-room-games.md) | decided, built (issue #33; updated 17 Nov 2026: room settings and sets, song swap, QR code, several games per room) |

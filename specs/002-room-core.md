@@ -108,6 +108,10 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] No test calls the real iTunes API or the real Neon database
 
 ## Routes (agreed 15 Nov 2026, built in `feature/room-api`)
+> Update 16 Nov 2026 (issue #33): the game is now server-paced. `POST /api/rooms/[code]/next` is gone, and the
+> state gives every player `previewUrls`, `serverNow`, `nextRound` and `standings` (instead of the creator-only
+> `scoreboard`). See decision 015.
+
 Every request except "create" and "join" sends the header `Authorization: Bearer <token>` (host token or
 player token, 64 hex characters). The game ID is never sent to any page.
 

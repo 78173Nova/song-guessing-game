@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { TransactionDb } from "@/lib/db/client";
+import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
 import { createGame, getGameRounds, markRoundSent } from "@/lib/db/games";
 import {
   addPlayer,
   closeRoomRound,
   createRoom,
   findPlayerByToken,
-  findRoomByHostToken,
+  findRoomByCreatorToken,
   finishRoom,
   getRoomByCode,
   hashToken,
@@ -29,7 +30,9 @@ let songs: Song[];
 
 const NOW = new Date("2026-11-12T12:00:00.000Z");
 const LATER = new Date("2026-11-12T12:00:05.000Z");
-const HOST_TOKEN = "host-token-for-tests";
+// The room creator is a player too (issue #32). Their one token is also the room's creator key.
+const CREATOR_TOKEN = "creator-token-for-tests";
+const CREATOR = "Cora";
 const UNKNOWN_ID = "00000000-0000-4000-8000-000000000000";
 const HASH = "a".repeat(64); // looks like a SHA-256 hash, for the plain SQL tests
 
@@ -43,10 +46,10 @@ beforeEach(async () => {
   joinCount = 0;
 });
 
-async function newRoom(code = "482913", hostToken = HOST_TOKEN): Promise<Room> {
-  const room = await createRoom(db, { code, hostToken, now: NOW });
-  if (room === null) throw new Error(`Test setup: code ${code} is already taken`);
-  return room;
+async function newRoom(code = "482913", creatorToken = CREATOR_TOKEN): Promise<Room> {
+  const created = await createRoom(db, { code, creatorToken, nickname: CREATOR, now: NOW });
+  if (created === null) throw new Error(`Test setup: code ${code} is already taken`);
+  return created.room;
 }
 
 async function join(roomId: string, nickname: string, token = `token-of-${nickname}`) {
@@ -193,32 +196,60 @@ describe("db/schema.sql – room tables", () => {
 });
 
 describe("createRoom and lookups", () => {
-  it("creates a lobby room without a game and never returns the hash", async () => {
-    const room = await newRoom();
-    expect(room).toEqual({
-      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-      code: "482913",
-      status: "lobby",
-      gameId: null,
-      createdAt: NOW,
+  it("creates a lobby room without a game, with the room creator as its first player", async () => {
+    const created = await createRoom(db, { code: "482913", creatorToken: CREATOR_TOKEN, nickname: CREATOR, now: NOW });
+
+    expect(created).toEqual({
+      room: {
+        id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+        code: "482913",
+        status: "lobby",
+        gameId: null,
+        createdAt: NOW,
+        settings: DEFAULT_ROOM_SETTINGS,
+        closedReason: null,
+        earlierGames: [],
+        lobbySince: null,
+        startingPlayers: null,
+        isPrivate: false,
+        countdownFrom: null, // issue #37: no countdown with only the room creator
+        countdownExtensions: 0,
+      },
+      creator: {
+        id: expect.any(String),
+        roomId: created!.room.id,
+        nickname: CREATOR,
+        avatar: "note",
+        joinedAt: NOW,
+        lastSeenAt: NOW,
+        removed: null,
+        playAgain: false,
+        hasAccount: false,
+      },
     });
+    expect(await listPlayers(db, created!.room.id)).toEqual([created!.creator]);
   });
 
-  it("stores only the SHA-256 hash of the host token", async () => {
+  it("stores only the SHA-256 hash of the creator's token, for the room and for the player", async () => {
     await newRoom();
-    const [row] = await db.query<Record<string, unknown>>("SELECT * FROM rooms");
-    const expected = createHash("sha256").update(HOST_TOKEN).digest("hex");
+    const [room] = await db.query<Record<string, unknown>>("SELECT * FROM rooms");
+    const [player] = await db.query<Record<string, unknown>>("SELECT * FROM room_players");
+    const expected = createHash("sha256").update(CREATOR_TOKEN).digest("hex");
 
-    expect(hashToken(HOST_TOKEN)).toBe(expected);
-    expect(row.host_token_hash).toBe(expected);
-    expect(JSON.stringify(row)).not.toContain(HOST_TOKEN);
+    expect(hashToken(CREATOR_TOKEN)).toBe(expected);
+    expect(room.host_token_hash).toBe(expected);
+    expect(player.token_hash).toBe(expected);
+    expect(JSON.stringify([room, player])).not.toContain(CREATOR_TOKEN);
   });
 
-  it("returns null when the code is already taken, and keeps the first room", async () => {
-    const first = await newRoom("482913", "first-host");
-    expect(await createRoom(db, { code: "482913", hostToken: "second-host", now: LATER })).toBeNull();
-    expect(await findRoomByHostToken(db, "482913", "first-host")).toEqual(first);
-    expect(await findRoomByHostToken(db, "482913", "second-host")).toBeNull();
+  it("returns null when the code is already taken, and keeps the first room and its creator only", async () => {
+    const first = await newRoom("482913", "first-creator");
+    const second = await createRoom(db, { code: "482913", creatorToken: "second-creator", nickname: "Max", now: LATER });
+
+    expect(second).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "first-creator")).toEqual(first);
+    expect(await findRoomByCreatorToken(db, "482913", "second-creator")).toBeNull();
+    expect((await listPlayers(db, first.id)).map((p) => p.nickname)).toEqual([CREATOR]);
   });
 
   it("getRoomByCode finds a room and returns null for an unknown code", async () => {
@@ -227,16 +258,16 @@ describe("createRoom and lookups", () => {
     expect(await getRoomByCode(db, "999999")).toBeNull();
   });
 
-  it("findRoomByHostToken only accepts this room's host token", async () => {
-    const room = await newRoom("482913", "host-a");
-    await newRoom("482914", "host-b");
+  it("findRoomByCreatorToken only accepts this room's creator token", async () => {
+    const room = await newRoom("482913", "creator-a");
+    await newRoom("482914", "creator-b");
     await joined(room.id, "Anna", "anna-token");
 
-    expect(await findRoomByHostToken(db, "482913", "host-a")).toEqual(room);
-    expect(await findRoomByHostToken(db, "482913", "wrong")).toBeNull();
-    expect(await findRoomByHostToken(db, "482913", "anna-token")).toBeNull(); // a player is not the host
-    expect(await findRoomByHostToken(db, "482913", "host-b")).toBeNull(); // host of another room
-    expect(await findRoomByHostToken(db, "999999", "host-a")).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "creator-a")).toEqual(room);
+    expect(await findRoomByCreatorToken(db, "482913", "wrong")).toBeNull();
+    expect(await findRoomByCreatorToken(db, "482913", "anna-token")).toBeNull(); // another player is not the creator
+    expect(await findRoomByCreatorToken(db, "482913", "creator-b")).toBeNull(); // creator of another room
+    expect(await findRoomByCreatorToken(db, "999999", "creator-a")).toBeNull();
   });
 });
 
@@ -247,28 +278,38 @@ describe("addPlayer", () => {
 
     expect(result).toEqual({
       ok: true,
-      player: { id: expect.any(String), roomId: room.id, nickname: "Anna", joinedAt: LATER },
+      player: {
+        id: expect.any(String),
+        roomId: room.id,
+        nickname: "Anna",
+        avatar: "note",
+        joinedAt: LATER,
+        lastSeenAt: LATER,
+        removed: null,
+        playAgain: false,
+        hasAccount: false,
+      },
     });
-    const [row] = await db.query<Record<string, unknown>>("SELECT * FROM room_players");
+    const [row] = await db.query<Record<string, unknown>>("SELECT * FROM room_players WHERE nickname = 'Anna'");
     expect(row.token_hash).toBe(hashToken("anna-token"));
     expect(JSON.stringify(row)).not.toContain("anna-token");
 
     await joined(room.id, "Zoe");
     await joined(room.id, "Ben");
-    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual(["Zoe", "Ben", "Anna"]);
+    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual([CREATOR, "Zoe", "Ben", "Anna"]);
   });
 
-  it("returns an empty list for a room without players", async () => {
-    const room = await newRoom();
-    expect(await listPlayers(db, room.id)).toEqual([]);
+  it("returns an empty list for an unknown room", async () => {
+    expect(await listPlayers(db, UNKNOWN_ID)).toEqual([]);
   });
 
-  it("rejects a nickname that is taken in a different case, and keeps the first player", async () => {
+  it("rejects a nickname that is taken in a different case – the creator's too – and keeps the first player", async () => {
     const room = await newRoom();
     await joined(room.id, "Anna");
 
     expect(await join(room.id, "anna", "other-token")).toEqual({ ok: false, reason: "nickname_taken" });
-    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual(["Anna"]);
+    expect(await join(room.id, CREATOR.toUpperCase(), "third-token")).toEqual({ ok: false, reason: "nickname_taken" });
+    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual([CREATOR, "Anna"]);
   });
 
   it("allows the same nickname in two different rooms", async () => {
@@ -286,41 +327,45 @@ describe("addPlayer", () => {
 
     await finishRoom(db, room.id);
     expect(await join(room.id, "Later")).toEqual({ ok: false, reason: "not_in_lobby" });
-    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual(["Anna"]);
+    expect((await listPlayers(db, room.id)).map((p) => p.nickname)).toEqual([CREATOR, "Anna"]);
   });
 
   it("rejects an unknown room", async () => {
     expect(await join(UNKNOWN_ID, "Anna")).toEqual({ ok: false, reason: "room_not_found" });
   });
 
-  it("lets the 50th player in and rejects the 51st", async () => {
-    const room = await newRoom();
-    for (let i = 1; i <= MAX_PLAYERS - 1; i++) await joined(room.id, `Player ${i}`);
-
-    expect((await join(room.id, "Player 50")).ok).toBe(true);
-    expect(await join(room.id, "Player 51")).toEqual({ ok: false, reason: "room_full" });
-    expect(await listPlayers(db, room.id)).toHaveLength(50);
+  it("holds at most 25 players", () => {
+    expect(MAX_PLAYERS).toBe(25);
   });
 
-  it("lets exactly 50 in when 60 join at the same moment", async () => {
+  it("lets the 25th player in (the creator counts) and rejects the 26th", async () => {
+    const room = await newRoom();
+    for (let i = 2; i <= 24; i++) await joined(room.id, `Player ${i}`);
+
+    expect((await join(room.id, "Player 25")).ok).toBe(true);
+    expect(await join(room.id, "Player 26")).toEqual({ ok: false, reason: "room_full" });
+    expect(await listPlayers(db, room.id)).toHaveLength(25);
+  });
+
+  it("lets exactly 24 in next to the creator when 30 join at the same moment", async () => {
     const room = await newRoom();
     const results = await Promise.all(
-      Array.from({ length: 60 }, (_, i) => join(room.id, `Player ${i + 1}`)),
+      Array.from({ length: 30 }, (_, i) => join(room.id, `Player ${i + 1}`)),
     );
 
-    expect(results.filter((r) => r.ok)).toHaveLength(50);
-    expect(results.filter((r) => !r.ok && r.reason === "room_full")).toHaveLength(10);
-    expect(await listPlayers(db, room.id)).toHaveLength(50);
+    expect(results.filter((r) => r.ok)).toHaveLength(24);
+    expect(results.filter((r) => !r.ok && r.reason === "room_full")).toHaveLength(6);
+    expect(await listPlayers(db, room.id)).toHaveLength(25);
   });
 
   it("lets exactly 1 in when 3 join at the same moment and one seat is left", async () => {
     const room = await newRoom();
-    for (let i = 1; i <= MAX_PLAYERS - 1; i++) await joined(room.id, `Player ${i}`);
+    for (let i = 2; i <= 24; i++) await joined(room.id, `Player ${i}`);
 
     const results = await Promise.all(["X", "Y", "Z"].map((name) => join(room.id, name)));
 
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect(await listPlayers(db, room.id)).toHaveLength(50);
+    expect(await listPlayers(db, room.id)).toHaveLength(25);
   });
 
   it("lets one in when the same nickname joins twice at the same moment", async () => {
@@ -329,7 +374,7 @@ describe("addPlayer", () => {
 
     expect(results.filter((r) => r.ok)).toHaveLength(1);
     expect(results.filter((r) => !r.ok && r.reason === "nickname_taken")).toHaveLength(1);
-    expect(await listPlayers(db, room.id)).toHaveLength(1);
+    expect(await listPlayers(db, room.id)).toHaveLength(2); // the creator and one of the two
   });
 
   it("findPlayerByToken only accepts a token from this room", async () => {
@@ -341,7 +386,8 @@ describe("addPlayer", () => {
     expect(await findPlayerByToken(db, room.id, "anna-token")).toEqual(anna);
     expect(await findPlayerByToken(db, room.id, "wrong")).toBeNull();
     expect(await findPlayerByToken(db, room.id, "ben-token")).toBeNull(); // token from another room
-    expect(await findPlayerByToken(db, room.id, HOST_TOKEN)).toBeNull(); // the host is not a player
+    // The room creator is a player like everyone else.
+    expect((await findPlayerByToken(db, room.id, CREATOR_TOKEN))?.nickname).toBe(CREATOR);
   });
 });
 
@@ -353,7 +399,8 @@ describe("startRoom / finishRoom / isRoomGame", () => {
 
     expect(await startRoom(db, room.id, gameA)).toBe(true);
     expect(await startRoom(db, room.id, gameB)).toBe(false);
-    expect(await getRoomByCode(db, room.code)).toEqual({ ...room, status: "playing", gameId: gameA });
+    // startingPlayers (issue #39): the room has only its creator here.
+    expect(await getRoomByCode(db, room.code)).toEqual({ ...room, status: "playing", gameId: gameA, startingPlayers: 1 });
   });
 
   it("lets only one of two starts at the same moment succeed", async () => {

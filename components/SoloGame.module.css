@@ -105,6 +105,11 @@
   cursor: default;
 }
 
+/* The answer a room player tapped, before the round closes (components/Room.tsx). */
+.chosen {
+  border-color: var(--accent);
+}
+
 .correct {
   border-color: var(--good);
   background: var(--good-bg);

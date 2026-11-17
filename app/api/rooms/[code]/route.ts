@@ -1,4 +1,4 @@
-// GET /api/rooms/[code] – the room state for the host or a player. The steps live in lib/api/rooms.ts.
+// GET /api/rooms/[code] – the room state for a player (the room creator is one too). The steps live in lib/api/rooms.ts.
 // The token comes in the Authorization header, never in the URL.
 import { safely } from "@/lib/api/games";
 import { getRoomState } from "@/lib/api/rooms";

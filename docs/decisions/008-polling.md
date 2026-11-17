@@ -39,3 +39,10 @@ The state every page polls is `GET /api/rooms/[code]` (`getRoomState` in `lib/ap
 also moves the game forward: it closes a round that is due and finishes the room after the last round, so no
 timer is needed. The three rules for simultaneous actions above are tested in `tests/api/rooms.test.ts` and
 `tests/game/rooms.test.ts`. Details and limits: decision 012, update 15 Nov 2026.
+
+## Update 16 Nov 2026: shared start time, server-paced rooms (issue #33)
+The start time above is now built for every room game, not only the duel. Nobody taps "Next" any more: Start
+schedules round 1 five seconds ahead, and each later round 8 seconds after the previous one closed. The state
+(`GET /api/rooms/[code]`) carries `serverNow` and `nextRound.startsAt`; each device works out how far its own
+clock is off from `serverNow` and starts the clip it loaded in advance at that time. Pages now poll every second.
+The server still decides everything from timestamps whenever a device polls. Details: decision 015.

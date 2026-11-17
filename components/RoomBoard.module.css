@@ -1,0 +1,116 @@
+/* The game board of a room round (components/RoomBoard.tsx). Every size is a share of the board, so the same
+   layout works on a phone and on a laptop. The board keeps its shape (100 × 80 board units) and is never taller
+   than about half the screen, so the answers fit below it. */
+.table {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.board {
+  position: relative;
+  width: min(100%, 34rem, 62vh);
+  aspect-ratio: 100 / 80;
+  /* Lets the labels size their text by the board's width (cqw). */
+  container-type: inline-size;
+}
+
+.seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  font-size: clamp(0.6rem, 3.2cqw, 0.95rem);
+  white-space: nowrap;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--muted);
+  box-sizing: border-box;
+}
+
+.answered {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+/* Long nicknames end in "…"; the full nickname shows when hovering (title). */
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+}
+
+.arc {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.track,
+.progress {
+  fill: none;
+  stroke-width: 9;
+}
+
+.track {
+  stroke: var(--muted);
+}
+
+.progress {
+  stroke: var(--accent);
+  transition: stroke-dasharray 0.2s linear;
+}
+
+.songText {
+  position: absolute;
+  inset: 25% 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  line-height: 1.1;
+}
+
+.seconds {
+  font-size: clamp(1rem, 6cqw, 1.8rem);
+  font-weight: 700;
+}
+
+.round {
+  font-size: clamp(0.55rem, 2.6cqw, 0.8rem);
+}
+
+/* The viewer's own nickname: larger than everyone else's, just above the answers. */
+.me {
+  margin: 0.5rem 0 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* The avatar before a nickname (issue #44). It stays inside the label; a long nickname shortens instead. */
+.avatar {
+  flex-shrink: 0;
+  margin-right: 0.25em;
+}

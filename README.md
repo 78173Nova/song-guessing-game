@@ -54,6 +54,7 @@ npm run dev                     # open http://localhost:3000 in Chrome, Safari o
 | Variable | What it is |
 |---|---|
 | `DATABASE_URL` | Connection string of a Neon Postgres database. Locally: the `dev` branch. Never commit it. |
+| `TEAM_ACCOUNTS` | Optional. Team accounts as `email\|username\|password;…`. `npm run db:team-accounts` creates them already verified, or gives an existing one its password back. Never commit it. |
 
 ## Tests and checks
 

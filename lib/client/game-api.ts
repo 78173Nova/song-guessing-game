@@ -9,7 +9,7 @@ export const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 export type ApiResponse<T> = { ok: true; data: T } | { ok: false; message: string };
 
-type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
 // A failed reply can also carry the server's error code (e.g. "too-few-songs"). Only apiStartGame uses it,
 // the other calls pass on the message only.
@@ -45,7 +45,8 @@ async function postWithCode<T>(url: string, body: unknown, fetchFn: FetchFn): Pr
   return { ok: true, data: data as T };
 }
 
-async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
+// Also used by account-api.ts and room-api.ts.
+export async function post<T>(url: string, body: unknown, fetchFn: FetchFn): Promise<ApiResponse<T>> {
   const result = await postWithCode<T>(url, body, fetchFn);
   return result.ok ? result : { ok: false, message: result.message };
 }
