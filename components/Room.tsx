@@ -5,6 +5,7 @@
 // answers. Which screen shows is decided by roomReducer / roomScreen (lib/client/room-game.ts).
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
+import { apiAccountSettings } from "@/lib/client/account-api";
 import { canPlayPreviews, prepareClip, UNSUPPORTED_BROWSER_MESSAGE } from "@/lib/client/clip-loader";
 import { answeredInRound } from "@/lib/client/room-board";
 import {
@@ -26,8 +27,11 @@ import {
   roomScreen,
   type RoomScreen,
 } from "@/lib/client/room-game";
+import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
+import { avatarEmoji } from "@/lib/game/avatars";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
+import AvatarPicker from "./AvatarPicker";
 import RoomBoard from "./RoomBoard";
 import SharePopup from "./SharePopup";
 import styles from "./Landing.module.css";
@@ -51,6 +55,8 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   const [view, dispatch] = useReducer(roomReducer, initialRoomView);
   const [token, setToken] = useState<string | null>(null);
   const [nickname, setNickname] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [askAvatar, setAskAvatar] = useState(true);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState(""); // e.g. "can't reach the server" while polling
@@ -101,6 +107,24 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     });
   }, [code, refresh]);
 
+  // The nickname screen: a guest gets an avatar picked at random; an account holder gets their usual nickname and
+  // saved avatar filled in (issue #44). Asked once each time the screen shows.
+  const joining = access.kind === "join";
+  useEffect(() => {
+    if (!joining) return;
+    let current = true;
+    apiAccountSettings().then((account) => {
+      if (!current) return;
+      const start = nicknameScreenStart(account);
+      setNickname((typed) => typed || start.nickname);
+      setAvatar(start.avatar);
+      setAskAvatar(start.askAvatar);
+    });
+    return () => {
+      current = false;
+    };
+  }, [joining]);
+
   // Ask again every second until the game is over.
   const finished = view.latest?.status === "finished";
   const polling = access.kind === "in" && token !== null && !finished;
@@ -145,7 +169,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     clips.unlock(); // still inside the tap
     setSending(true);
     setError("");
-    const result = await apiJoinRoom(code, nickname);
+    const result = await apiJoinRoom(code, { nickname, avatar });
     setSending(false);
     if (!result.ok) {
       setError(result.message);
@@ -206,10 +230,20 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
           onChange={(event) => setNickname(event.target.value)}
           required
         />
+        {askAvatar ? (
+          <AvatarPicker value={avatar} onChange={setAvatar} />
+        ) : (
+          <p className={styles.hint}>
+            Your avatar: <span aria-hidden="true">{avatarEmoji(avatar)}</span>{" "}
+            <button type="button" className={styles.linkButton} onClick={() => setAskAvatar(true)}>
+              Change for this room
+            </button>
+          </p>
+        )}
         <p className={styles.error} role="alert">
           {error}
         </p>
-        <button type="submit" className={styles.primary} disabled={sending}>
+        <button type="submit" className={styles.primary} disabled={sending || avatar === ""}>
           {sending ? "Joining…" : "Join"}
         </button>
       </form>
@@ -250,6 +284,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         <ul className={styles.playerList} aria-live="polite">
           {state.players.map((player) => (
             <li key={player} className={player === state.me.nickname ? styles.self : undefined}>
+              <Avatar id={state.avatars?.[player]} />
               {player}
               {player === state.me.nickname ? " (you)" : ""}
             </li>
@@ -291,6 +326,15 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   );
 }
 
+// A player's avatar next to their nickname (issue #44). Decorative: the nickname says who it is.
+function Avatar({ id }: { id: string | undefined }) {
+  return (
+    <span className={styles.avatar} aria-hidden="true">
+      {avatarEmoji(id)}
+    </span>
+  );
+}
+
 function BackLink() {
   return (
     <Link href="/" className={styles.textLink}>
@@ -326,6 +370,7 @@ function GameScreen({
         <section>
           <RoomBoard
             players={state.players}
+            avatars={state.avatars ?? {}}
             me={state.me.nickname}
             answered={answeredInRound(state, screen.number)}
             iAnswered={answered}
@@ -414,7 +459,8 @@ function GameScreen({
             {screen.standings.map((player) => (
               <li key={player.nickname} className={player.nickname === screen.me ? styles.self : undefined}>
                 <span>
-                  {player.rank}. {player.nickname}
+                  {player.rank}. <Avatar id={state.avatars?.[player.nickname]} />
+                  {player.nickname}
                   {player.nickname === screen.me ? " (you)" : ""}
                 </span>
                 <span>{player.score}</span>

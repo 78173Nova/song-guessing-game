@@ -48,7 +48,8 @@ import { buildReplacementRound, buildRounds, ROUNDS_PER_GAME } from "../game/rou
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 import { looksLikeToken } from "../accounts/rules";
-import { findSessionUsername } from "../db/accounts";
+import { findSessionAccount, saveFirstAvatar, type SessionAccount } from "../db/accounts";
+import { DEFAULT_AVATAR, isAvatar } from "../game/avatars";
 import { readJson, type ApiResult } from "./games";
 
 // The tests pass their own clock, song shuffle and room codes. The app uses the real ones.
@@ -60,6 +61,7 @@ const MAX_CODE_DRAWS = 10;
 const ERRORS = {
   malformed: { status: 400, message: "The request is not valid." },
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
+  "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
   "round-out-of-range": { status: 400, message: "This round does not exist in this game." },
   "wrong-token": { status: 403, message: "This device is not part of this room. Please join again." },
@@ -139,18 +141,37 @@ async function findRoomAsPlayer(
   return { ok: true, room: found.room, player };
 }
 
-// Reads { nickname } from a request body: the nickname without the spaces around it, or the error to send.
-function readNickname(rawBody: string): Found<{ nickname: string }> {
+// Reads { nickname, avatar } from a request body: the nickname without the spaces around it and the avatar
+// (undefined when the body names none), or the error to send. An avatar must be one of the fixed set (issue #44).
+function readJoinInput(rawBody: string): Found<{ nickname: string; avatar: string | undefined }> {
   const json = readJson(rawBody);
   if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) {
     return { ok: false, result: fail("malformed") };
   }
   const nickname = parseNickname((json.body as Record<string, unknown>).nickname);
   if (nickname === null) return { ok: false, result: fail("invalid-nickname") };
-  return { ok: true, nickname };
+  const { avatar } = json.body as Record<string, unknown>;
+  if (avatar !== undefined && !isAvatar(avatar)) return { ok: false, result: fail("invalid-avatar") };
+  return { ok: true, nickname, avatar };
 }
 
-// POST /api/rooms – an account holder creates a room with { nickname } and becomes its room creator: the first
+// The account of a session cookie, or null for a guest (no, an unknown or an expired session).
+async function accountOf(db: TransactionDb, sessionToken: string | undefined, now: Date): Promise<SessionAccount | null> {
+  return looksLikeToken(sessionToken) ? findSessionAccount(db, sessionToken, now) : null;
+}
+
+// The avatar a player shows in the room: the one picked on the nickname screen, else the account's saved one,
+// else the music note.
+const avatarFor = (picked: string | undefined, account: SessionAccount | null) =>
+  picked ?? account?.avatar ?? DEFAULT_AVATAR;
+
+// An account holder's first room saves the avatar they picked to the account, once (issue #44). Later rooms and
+// guests change nothing; Account settings changes it.
+async function rememberFirstAvatar(db: TransactionDb, account: SessionAccount | null, picked: string | undefined) {
+  if (account !== null && account.avatar === null && picked !== undefined) await saveFirstAvatar(db, account.id, picked);
+}
+
+// POST /api/rooms – an account holder creates a room with { nickname, avatar? } and becomes its room creator: the first
 // player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
 // creator's player token and the nickname as it was stored. The token is returned only this once: the database
 // keeps just its hash (decision 012). It is also the room's creator key for Start.
@@ -164,17 +185,24 @@ export async function createNewRoom(
   const now = deps.now ?? (() => new Date());
   const newCode = deps.newCode ?? randomRoomCode;
 
-  if (!looksLikeToken(sessionToken) || (await findSessionUsername(db, sessionToken, now())) === null) {
-    return fail("log-in-needed");
-  }
-  const input = readNickname(rawBody);
+  const account = await accountOf(db, sessionToken, now());
+  if (account === null) return fail("log-in-needed");
+  const input = readJoinInput(rawBody);
   if (!input.ok) return input.result;
+  const avatar = avatarFor(input.avatar, account);
 
   const playerToken = randomToken();
   // Codes are never reused, so a drawn code can be taken. Then we draw again.
   for (let draw = 1; draw <= MAX_CODE_DRAWS; draw++) {
-    const created = await createRoom(db, { code: newCode(), creatorToken: playerToken, nickname: input.nickname, now: now() });
+    const created = await createRoom(db, {
+      code: newCode(),
+      creatorToken: playerToken,
+      nickname: input.nickname,
+      avatar,
+      now: now(),
+    });
     if (created !== null) {
+      await rememberFirstAvatar(db, account, input.avatar);
       return { status: 201, body: { code: created.room.code, playerToken, nickname: created.creator.nickname } };
     }
   }
@@ -183,12 +211,20 @@ export async function createNewRoom(
 }
 
 // POST /api/rooms/[code]/join – adds a player to a room that is still in the lobby. Returns the player
-// token (only this once) and the nickname as it was stored.
-export async function joinRoom(db: TransactionDb, code: string, rawBody: string, deps: Deps = {}): Promise<ApiResult> {
+// token (only this once) and the nickname as it was stored. Guests and account holders can join; the session
+// cookie (if any) only decides the avatar: an account holder's saved one when none is picked, and a first pick
+// is saved to the account (issue #44).
+export async function joinRoom(
+  db: TransactionDb,
+  code: string,
+  rawBody: string,
+  deps: Deps = {},
+  sessionToken?: string,
+): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
 
-  const input = readNickname(rawBody);
+  const input = readJoinInput(rawBody);
   if (!input.ok) return input.result;
   const { nickname } = input;
 
@@ -197,13 +233,16 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
-  const added = await addPlayer(db, { roomId: found.room.id, nickname, token: playerToken, now: now() });
+  const account = await accountOf(db, sessionToken, now());
+  const avatar = avatarFor(input.avatar, account);
+  const added = await addPlayer(db, { roomId: found.room.id, nickname, avatar, token: playerToken, now: now() });
   if (!added.ok) {
     if (added.reason === "room_not_found") return fail("room-not-found");
     if (added.reason === "not_in_lobby") return fail("room-started");
     if (added.reason === "nickname_taken") return fail("nickname-taken");
     return fail("room-full");
   }
+  await rememberFirstAvatar(db, account, input.avatar);
   return { status: 201, body: { playerToken, nickname: added.player.nickname } };
 }
 
@@ -372,6 +411,7 @@ export async function answerRoomRound(
 // correct answer, the song or any points (decision 004).
 //
 // For the game the reply has:
+//   avatars     – each player's avatar id, by nickname
 //   serverNow   – the server's clock, so a device can work out how far its own clock is off
 //   answered    – the nicknames of the players who have answered the round on screen (not what they chose)
 //   previewUrls – the 5 clip addresses, for every player, so every device loads the clips in advance
@@ -428,6 +468,8 @@ export async function getRoomState(
     status: game.status,
     role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
+    // Each player's avatar id by nickname (issue #44), for the lobby, the game board and the standings.
+    avatars: Object.fromEntries(game.players.map((player) => [player.nickname, player.avatar])),
     // Who has answered the round on screen, for the ticks on the game board (issue #38). Never what they chose.
     answered: game.players
       .filter((player) => currentAnswers.some((a) => a.playerId === player.id))

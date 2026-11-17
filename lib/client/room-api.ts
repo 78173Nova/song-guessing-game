@@ -14,6 +14,7 @@ export type RoomState = {
   status: "lobby" | "playing" | "finished";
   role: "creator" | "player";
   players: string[];
+  avatars?: Record<string, string>; // each player's avatar id by nickname (issue #44); missing = music note
   answered: string[]; // who has answered the round in `round` (not what they chose)
   totalRounds: number;
   serverNow: string;
@@ -51,15 +52,19 @@ export type StateResult =
 
 const authorization = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+// What a player picks on the nickname screen (issue #44).
+export type NicknameChoice = { nickname: string; avatar: string };
+
 // Creating needs the session cookie, which the browser sends by itself.
-export function apiCreateRoom(nickname: string, fetchFn: FetchFn = fetch) {
-  return post<JoinedRoom>("/api/rooms", { nickname }, fetchFn);
+export function apiCreateRoom(choice: NicknameChoice, fetchFn: FetchFn = fetch) {
+  return post<JoinedRoom>("/api/rooms", choice, fetchFn);
 }
 
-export async function apiJoinRoom(code: string, nickname: string, fetchFn: FetchFn = fetch) {
+// The browser also sends the session cookie of an account holder, so the server can save a first avatar.
+export async function apiJoinRoom(code: string, choice: NicknameChoice, fetchFn: FetchFn = fetch) {
   const result = await post<{ playerToken: string; nickname: string }>(
     `/api/rooms/${encodeURIComponent(code)}/join`,
-    { nickname },
+    choice,
     fetchFn,
   );
   return result.ok ? { ok: true as const, data: { code, ...result.data } } : result;
