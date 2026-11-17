@@ -211,6 +211,9 @@ describe("createRoom and lookups", () => {
         earlierGames: [],
         lobbySince: null,
         startingPlayers: null,
+        isPrivate: false,
+        countdownFrom: null, // issue #37: no countdown with only the room creator
+        countdownExtensions: 0,
       },
       creator: {
         id: expect.any(String),

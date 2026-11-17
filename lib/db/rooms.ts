@@ -32,6 +32,11 @@ export type Room = {
   earlierGames: string[]; // the room's finished games before the current one, oldest first (issue #43)
   lobbySince: Date | null; // when the room last went back to the lobby; null = never (issue #43)
   startingPlayers: number | null; // how many players the game started with (issue #39); null in the lobby
+  isPrivate: boolean; // private rooms are not listed and have no lobby countdown (issues #36, #37)
+  // The lobby countdown (issue #37): when the lobby last reached 2 players (null = no countdown running) and how
+  // often the room creator extended it. The end is worked out in lib/game/rooms.ts (countdownEndsAt).
+  countdownFrom: Date | null;
+  countdownExtensions: number;
 };
 
 export type RoomPlayer = {
@@ -70,6 +75,9 @@ type RoomRow = {
   earlier_games: string[];
   lobby_since: Date | string | null;
   starting_players: number | null;
+  is_private: boolean;
+  countdown_from: Date | string | null;
+  countdown_extensions: number;
 };
 
 type PlayerRow = {
@@ -85,7 +93,8 @@ type PlayerRow = {
 };
 
 const ROOM_COLUMNS =
-  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, starting_players, earlier_games, lobby_since";
+  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, starting_players, " +
+  "earlier_games, lobby_since, is_private, countdown_from, countdown_extensions";
 const PLAYER_COLUMNS =
   "id, room_id, nickname, avatar, joined_at, last_seen_at, removed, play_again, account_id IS NOT NULL AS has_account";
 
@@ -108,6 +117,9 @@ const toRoom = (row: RoomRow): Room => ({
   earlierGames: row.earlier_games,
   lobbySince: row.lobby_since === null ? null : new Date(row.lobby_since),
   startingPlayers: row.starting_players,
+  isPrivate: row.is_private,
+  countdownFrom: row.countdown_from === null ? null : new Date(row.countdown_from),
+  countdownExtensions: row.countdown_extensions,
 });
 
 const toPlayer = (row: PlayerRow): RoomPlayer => ({
@@ -395,12 +407,50 @@ export async function kickPlayer(
 export async function startRoom(db: Db, roomId: string, gameId: string): Promise<boolean> {
   const rows = await db.query(
     `UPDATE rooms SET status = 'playing', game_id = $2,
-       starting_players = (SELECT count(*) FROM room_players WHERE room_id = $1 AND removed IS NULL)
+       starting_players = (SELECT count(*) FROM room_players WHERE room_id = $1 AND removed IS NULL),
+       countdown_from = NULL, countdown_extensions = 0
      WHERE id = $1 AND status = 'lobby' AND closed_reason IS NULL
      RETURNING id`,
     [roomId, gameId],
   );
   return rows.length === 1;
+}
+
+// Starts or stops the lobby countdown of a public room (issue #37) after its players changed (join, leave, kick).
+// With 2 or more players it keeps running from when it started, or starts at `now`; with fewer it stops and its
+// extensions are forgotten. Private rooms and started games never change. Safe to call any number of times, and
+// two joins at the same moment keep the earlier start. A room back in the lobby (play again, #43) calls it too.
+export async function syncLobbyCountdown(db: Db, roomId: string, now: Date): Promise<void> {
+  await db.query(
+    `UPDATE rooms r SET
+       countdown_from = CASE WHEN players.n >= 2 THEN COALESCE(r.countdown_from, $2::timestamptz) END,
+       countdown_extensions = CASE WHEN players.n >= 2 THEN r.countdown_extensions ELSE 0 END
+     FROM (SELECT count(*) AS n FROM room_players WHERE room_id = $1 AND removed IS NULL) players
+     WHERE r.id = $1 AND r.status = 'lobby' AND NOT r.is_private AND r.closed_reason IS NULL`,
+    [roomId, now.toISOString()],
+  );
+}
+
+// The room creator taps "Extend +60 s" (issue #37). One statement that checks everything against the stored values:
+// the room is in the lobby with its countdown running, fewer than `max` extensions so far, and at `now` at most
+// `windowSeconds` (but more than 0) are left. So two taps at the same moment count once: after the first, more
+// than 15 s are left. `baseSeconds`/`extendSeconds`: the countdown's length and what one extension adds.
+// Returns the new number of extensions, or null if nothing changed.
+export async function extendCountdown(
+  db: Db,
+  extend: { roomId: string; now: Date; baseSeconds: number; extendSeconds: number; windowSeconds: number; max: number },
+): Promise<number | null> {
+  const rows = await db.query<{ countdown_extensions: number }>(
+    `UPDATE rooms SET countdown_extensions = countdown_extensions + 1
+     WHERE id = $1 AND status = 'lobby' AND closed_reason IS NULL AND countdown_from IS NOT NULL
+       AND countdown_extensions < $6::int
+       AND countdown_from + make_interval(secs => $3::int + countdown_extensions * $4::int) > $2::timestamptz
+       AND countdown_from + make_interval(secs => $3::int + countdown_extensions * $4::int)
+           <= $2::timestamptz + make_interval(secs => $5::int)
+     RETURNING countdown_extensions`,
+    [extend.roomId, extend.now.toISOString(), extend.baseSeconds, extend.extendSeconds, extend.windowSeconds, extend.max],
+  );
+  return rows.length === 1 ? rows[0].countdown_extensions : null;
 }
 
 // Marks the room as finished after the last round. Only a playing room changes. Returns false if nothing changed.

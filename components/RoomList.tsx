@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiListRooms, type ListedRoom, type RoomListFilter } from "@/lib/client/room-api";
-import { describeListedRoom, MODE_LABELS, ROOM_LIST_REFRESH_MS } from "@/lib/client/room-list";
+import { describeListedRoom, listedRoomCountdown, MODE_LABELS, ROOM_LIST_REFRESH_MS } from "@/lib/client/room-list";
 import { isTileSelected, toggleTile } from "@/lib/client/room-settings";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
@@ -20,6 +20,9 @@ export default function RoomList() {
   const [filter, setFilter] = useState<RoomListFilter>(ANY_FILTER);
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [error, setError] = useState("");
+  // This device's clock for the countdowns in the list (issue #37). Set when a list arrives, never while the page
+  // is rendered on the server.
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -28,6 +31,7 @@ export default function RoomList() {
       if (!current) return; // a late reply for older filters
       if (result.ok) {
         setRooms(result.rooms);
+        setNow(Date.now());
         setError("");
       } else {
         setError(result.message); // the last list stays until the next try works
@@ -40,6 +44,14 @@ export default function RoomList() {
       clearInterval(timer);
     };
   }, [filter]);
+
+  // The countdowns in the list tick every second between two list requests.
+  const counting = rooms?.some((room) => (room.countdownEndsAt ?? null) !== null) ?? false;
+  useEffect(() => {
+    if (!counting) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [counting]);
 
   const change = (part: Partial<RoomListFilter>) => setFilter((old) => ({ ...old, ...part }));
   const { genres, decades } = filter;
@@ -90,6 +102,7 @@ export default function RoomList() {
         <ul className={styles.roomList} aria-live="polite">
           {rooms.map((room) => {
             const text = describeListedRoom(room);
+            const countdown = listedRoomCountdown(room, now);
             return (
               <li key={room.code}>
                 <Link href={`/join/${room.code}`} className={styles.roomEntry}>
@@ -100,6 +113,7 @@ export default function RoomList() {
                   <span className={styles.roomEntryDetails}>
                     {text.mode} · {text.genres} · {text.decades} · {text.songs}
                   </span>
+                  {countdown !== null && <span className={styles.roomEntryDetails}>{countdown}</span>}
                 </Link>
               </li>
             );

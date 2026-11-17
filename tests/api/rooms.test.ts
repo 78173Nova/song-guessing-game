@@ -59,8 +59,9 @@ const replace = (code: string, token: string | null, body: unknown) =>
   replaceRoomSong(db, code, bearer(token), json(body), deps);
 
 // Test rooms get the codes 482913, 482914, ... so that no test depends on luck.
-async function newRoom(creator = "Anna"): Promise<RoomKeys> {
-  const result = await create(session, { nickname: creator }, { newCode: () => String(nextCode++) });
+async function newRoom(creator = "Anna", isPrivate = false): Promise<RoomKeys> {
+  const body = isPrivate ? { nickname: creator, private: true } : { nickname: creator };
+  const result = await create(session, body, { newCode: () => String(nextCode++) });
   if (result.status !== 201) throw new Error("Test setup: the room was not created");
   const { code, playerToken } = result.body as { code: string; playerToken: string };
   return { code, creatorToken: playerToken };
@@ -435,7 +436,7 @@ describe("closing rules", () => {
   });
 
   it("closes a lobby for everyone at 30 minutes – the state says 'This room has closed'", async () => {
-    const room = await newRoom("Anna");
+    const room = await newRoom("Anna", true); // private: a public lobby with 2 players would start after 60 s (#37)
     const ben = await joined(room.code, "Ben");
 
     wait(30 * MINUTES - 0.001 - 0.001);
@@ -727,6 +728,8 @@ describe("GET /api/rooms/[code] – room state", () => {
         answered: [],
         away: [],
         kickable: [],
+        // issue #37: a public room with 2 players counts down 60 s from the second join
+        countdown: { endsAt: new Date(clock.getTime() + 60_000).toISOString(), extensions: 0, canExtend: false },
         totalRounds: 5,
         gameNumber: 1,
         playAgain: null,
@@ -760,6 +763,8 @@ describe("GET /api/rooms/[code] – room state", () => {
         answered: [],
         away: [],
         kickable: [],
+        // issue #37: a public room with 2 players counts down 60 s from the second join
+        countdown: { endsAt: new Date(clock.getTime() + 60_000).toISOString(), extensions: 0, canExtend: false },
         totalRounds: 5,
         gameNumber: 1,
         playAgain: null,

@@ -11,6 +11,7 @@ import { answeredInRound } from "@/lib/client/room-board";
 import { roomLayout } from "@/lib/client/room-duel";
 import {
   apiAnswerRoom,
+  apiExtendCountdown,
   apiJoinRoom,
   apiKickPlayer,
   apiLeaveRoom,
@@ -28,6 +29,7 @@ import {
   clipsToLoad,
   couldNotPlay,
   initialRoomView,
+  lobbyCountdown,
   roomReducer,
   roomScreen,
   type RoomScreen,
@@ -148,13 +150,15 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     return () => clearInterval(timer);
   }, [polling, token, refresh]);
 
-  // The local clock, while a game is on.
+  // The local clock, while a game is on or the lobby countdown runs (issue #37).
+  const counting = view.latest?.status === "lobby" && (view.latest.countdown ?? null) !== null;
   const playing = view.latest !== null && view.latest.status !== "lobby";
+  const ticking = playing || counting;
   useEffect(() => {
-    if (!playing) return;
+    if (!ticking) return;
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
-  }, [playing]);
+  }, [ticking]);
 
   const screen = roomScreen(view, now);
 
@@ -202,6 +206,16 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     const result = await apiStartRoom(code, token);
     setSending(false);
     if (!result.ok) setError(result.message);
+    await refresh(token);
+  }
+
+  // "Extend +60 s" (issue #37): the room creator, in the countdown's last 15 s. The server decides.
+  async function extendCountdown() {
+    if (token === null) return;
+    setSending(true);
+    const result = await apiExtendCountdown(code, token);
+    setSending(false);
+    setError(result.ok ? "" : result.message);
     await refresh(token);
   }
 
@@ -326,11 +340,22 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   if (screen.kind === "lobby") {
     const isCreator = state.role === "creator";
     const enoughPlayers = state.players.length >= MIN_PLAYERS_TO_START;
+    const countdown = lobbyCountdown(state, view.offsetMs, now);
     return (
       <>
         <p className={styles.roomCode} aria-label={`Room code ${state.code}`}>
           {state.code}
         </p>
+        {countdown !== null && (
+          <p className={styles.pitch} role="timer" aria-live="off">
+            The game starts in <strong>{countdown.text}</strong>
+          </p>
+        )}
+        {countdown?.canExtend && (
+          <button type="button" className={styles.secondary} onClick={extendCountdown} disabled={sending}>
+            Extend +60 s
+          </button>
+        )}
         <p className={styles.pitch}>
           {isCreator ? "Invite your friends, then start when everyone is in." : "Waiting for the room creator to start…"}
         </p>

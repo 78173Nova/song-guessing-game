@@ -32,6 +32,9 @@ export type RoomState = {
   answered: string[]; // who has answered the round in `round` (not what they chose)
   away?: string[]; // players whose device has not asked for 5 s (issue #40)
   kickable?: string[]; // players the room creator may kick now; always empty for other players
+  // The lobby countdown of a public room with 2+ players (issue #37); null otherwise. canExtend: this viewer is the
+  // room creator and may tap "Extend +60 s" now.
+  countdown?: { endsAt: string; extensions: number; canExtend: boolean } | null;
   totalRounds: number;
   gameNumber?: number; // which of the room's games (1–5) this is, or the next one in the lobby (issue #43)
   // After a game: when the vote on "Play again" ends and who has chosen it. null otherwise and after the 5th game.
@@ -90,8 +93,14 @@ export function apiCreateRoom(
 }
 
 // One room in the "Join a room" list (issue #36): its code, the room creator's nickname, its settings and how many
-// players are in it.
-export type ListedRoom = RoomSettings & { code: string; creator: string; players: number; maxPlayers: number };
+// players are in it. countdownEndsAt: when its lobby countdown ends (issue #37); null while none runs.
+export type ListedRoom = RoomSettings & {
+  code: string;
+  creator: string;
+  players: number;
+  maxPlayers: number;
+  countdownEndsAt?: string | null;
+};
 
 // The list's filters: the Duel/Multiplayer toggle, mode, genre tiles and decade tiles ("any" = no filter).
 export type RoomListFilter = Pick<RoomSettings, "type" | "genres" | "decades"> & { mode: "any" | Mode };
@@ -186,6 +195,15 @@ const withToken = (token: string, fetchFn: FetchFn): FetchFn => (url, init) =>
 
 export async function apiStartRoom(code: string, token: string, fetchFn: FetchFn = fetch) {
   return post<{ totalRounds: number }>(`/api/rooms/${encodeURIComponent(code)}/start`, undefined, withToken(token, fetchFn));
+}
+
+// The room creator taps "Extend +60 s" (issue #37). The server decides whether it counts.
+export async function apiExtendCountdown(code: string, token: string, fetchFn: FetchFn = fetch) {
+  return post<{ endsAt: string; extensions: number }>(
+    `/api/rooms/${encodeURIComponent(code)}/extend`,
+    undefined,
+    withToken(token, fetchFn),
+  );
 }
 
 // The reply only confirms the choice: right or wrong shows in the state once the round has closed.

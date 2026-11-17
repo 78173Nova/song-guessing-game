@@ -147,6 +147,13 @@ CREATE INDEX IF NOT EXISTS rooms_public_lobby ON rooms (created_at) WHERE status
 -- duel layout, even if one of them leaves later. Empty until the game starts.
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starting_players integer CHECK (starting_players >= 1);
 
+-- The lobby countdown of public rooms (issue #37): countdown_from is when the lobby last reached 2 players (empty
+-- with fewer players, in private rooms and once the game has started); the game starts by itself 60 s after it,
+-- plus 60 s for each of the room creator's extensions (at most 5). Worked out from these on every request.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS countdown_from timestamptz;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS countdown_extensions integer NOT NULL DEFAULT 0
+  CHECK (countdown_extensions BETWEEN 0 AND 5);
+
 -- Room games only: true once a device reported that it could not load this round's clip and the server gave the
 -- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting
 -- failures again and again. Solo games leave it false.

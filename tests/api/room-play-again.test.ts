@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   answerRoomRound,
   createNewRoom,
+  extendRoomCountdown,
   getRoomState,
   joinRoom,
   listPublicRooms,
@@ -53,8 +54,8 @@ const answer = (code: string, token: string, body: unknown) => answerRoomRound(d
 const leave = (code: string, token: string) => playerLeavesRoom(db, code, bearer(token), deps);
 const playAgain = (code: string, token: string | null) => playAgainInRoom(db, code, bearer(token), deps);
 
-async function newRoom(creator = "Anna", settings = SETTINGS) {
-  const result = await createNewRoom(db, session, json({ nickname: creator, settings }), {
+async function newRoom(creator = "Anna", settings = SETTINGS, isPrivate = false) {
+  const result = await createNewRoom(db, session, json({ nickname: creator, settings, private: isPrivate }), {
     ...deps,
     newCode: () => String(nextCode++),
   });
@@ -308,7 +309,8 @@ describe("back in the lobby", () => {
   });
 
   it("lets new players join up to the limit; the 30-minute lobby limit counts from the return to the lobby", async () => {
-    const room = await newRoom("Anna");
+    // Private: a public lobby with 2+ players would start by itself after 60 s (issue #37).
+    const room = await newRoom("Anna", SETTINGS, true);
     const ben = await joined(room.code, "Ben");
     wait(29 * 60); // the first lobby almost ran out
     await start(room.code, room.creatorToken);
@@ -324,6 +326,29 @@ describe("back in the lobby", () => {
     expect((await state(room.code, cleo)).status).toBe(200);
     wait(1);
     expect(await state(room.code, cleo)).toMatchObject({ status: 409, body: { error: "room-closed" } });
+  });
+
+  it("runs the lobby countdown again from the return to the lobby, with no extensions (issue #37)", async () => {
+    const room = await newRoom("Anna");
+    const ben = await joined(room.code, "Ben");
+    wait(45);
+    const extended = await extendRoomCountdown(db, room.code, bearer(room.creatorToken), deps);
+    expect(extended).toMatchObject({ status: 200, body: { extensions: 1 } });
+    await start(room.code, room.creatorToken);
+    await playToTheEnd(room.code, [room.creatorToken, ben]);
+    expect((await state(room.code, ben)).body.countdown).toBeNull(); // not during or after a game
+
+    await playAgain(room.code, room.creatorToken);
+    wait(3);
+    const backAt = clock;
+    await playAgain(room.code, ben); // the last choice: back in the lobby now
+    expect((await state(room.code, room.creatorToken)).body.countdown).toEqual({
+      endsAt: new Date(backAt.getTime() + 60_000).toISOString(),
+      extensions: 0,
+      canExtend: false,
+    });
+    wait(60);
+    expect((await state(room.code, ben)).body).toMatchObject({ status: "playing", gameNumber: 2 });
   });
 
   it("with one player left, waits for a second: Start now is refused until someone joins", async () => {

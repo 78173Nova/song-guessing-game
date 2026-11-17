@@ -14,6 +14,7 @@ import {
   createRoom,
   creatorPlayerId,
   endPlayAgainVote,
+  extendCountdown,
   findPlayerByToken,
   findRoomByCreatorToken,
   finishRoom,
@@ -28,6 +29,7 @@ import {
   songsPlayedEarlier,
   startRoom,
   swapRoomRound,
+  syncLobbyCountdown,
   wasRoundSwapped,
   type Room,
   type RoomAnswer,
@@ -51,7 +53,14 @@ import {
 import { listSongsWithPreview, type Song } from "../db/songs";
 import { parseRoundInput } from "../game/answers";
 import {
+  countdownEndsAt,
+  EXTEND_SECONDS,
+  EXTEND_WINDOW_SECONDS,
   FIRST_ROUND_DELAY_SECONDS,
+  isCountdownOver,
+  LOBBY_COUNTDOWN_SECONDS,
+  MAX_EXTENSIONS,
+  whyNoExtension,
   isRoomClosed,
   LOBBY_LIFETIME_MINUTES,
   MIN_PLAYERS_TO_START,
@@ -118,6 +127,9 @@ const ERRORS = {
   "too-late": { status: 409, message: "Too late – the time for this round is over." },
   "already-answered": { status: 409, message: "You have already answered this round." },
   "round-already-started": { status: 409, message: "This round has already started." },
+  "no-countdown": { status: 409, message: "This room has no countdown running." },
+  "too-early-to-extend": { status: 409, message: "The countdown can only be extended in its last 15 seconds." },
+  "no-more-extensions": { status: 409, message: "The countdown has already been extended 5 times." },
   "already-swapped": { status: 409, message: "This round's song has already been swapped once." },
   "not-enough-songs": { status: 503, message: MUSIC_UNAVAILABLE_MESSAGE },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
@@ -318,12 +330,19 @@ export async function listPublicRooms(db: Db, params: URLSearchParams, deps: Dep
   const rooms = lobbies
     .filter(({ room, players }) => players < MAX_PLAYERS_BY_TYPE[room.settings.type])
     .filter(({ room }) => fitsRoomListFilter(room.settings, filter))
+    // A room whose countdown is over starts on its players' next request: it can no longer be joined (issue #37).
+    .filter(({ room }) => {
+      const endsAt = lobbyCountdownEnd(room);
+      return endsAt === null || !isCountdownOver(endsAt, now());
+    })
     .map(({ room, creator, players }) => ({
       code: room.code,
       creator,
       ...room.settings,
       players,
       maxPlayers: MAX_PLAYERS_BY_TYPE[room.settings.type],
+      // When the lobby countdown ends (issue #37); null while it does not run (fewer than 2 players).
+      countdownEndsAt: lobbyCountdownEnd(room)?.toISOString() ?? null,
     }));
   return { status: 200, body: { rooms } };
 }
@@ -363,6 +382,8 @@ export async function joinRoom(
 
   const found = await findOpenRoom(db, code, now());
   if (!found.ok) return found.result;
+  // A lobby countdown that is over starts the game first, so a join after 0 is refused (issue #37).
+  await startIfCountdownOver(db, found.room, now(), deps.random);
 
   const oldToken = readBearerToken(from.authorization ?? null);
   const before = oldToken === null ? null : await findPlayerByToken(db, found.room.id, oldToken);
@@ -390,6 +411,7 @@ export async function joinRoom(
     return fail("room-full");
   }
   await rememberFirstAvatar(db, account, input.avatar);
+  await syncLobbyCountdown(db, found.room.id, now()); // the second player starts the countdown (issue #37)
   if ((await listPlayers(db, found.room.id)).length >= maxPlayers) {
     const started = await startGameNow(db, found.room, now(), deps.random);
     // The join itself worked. If the game cannot start, the room creator sees why on "Start now".
@@ -418,7 +440,26 @@ export async function startRoomGame(
   return startGameNow(db, room, now(), deps.random);
 }
 
-// Starts a room's game with its settings: "Start now", or the join that fills the room.
+// When a room's lobby countdown ends (issue #37), or null if none runs (private, fewer than 2 players, started).
+function lobbyCountdownEnd(room: Room): Date | null {
+  if (room.status !== "lobby" || room.countdownFrom === null) return null;
+  return countdownEndsAt(room.countdownFrom, room.countdownExtensions);
+}
+
+// There is no background timer (decision 008): the first request after the lobby countdown reached 0 starts the
+// game (issue #37). Returns the room as it is now – started, or unchanged.
+async function startIfCountdownOver(db: Db, room: Room, now: Date, random?: () => number): Promise<Room> {
+  const endsAt = lobbyCountdownEnd(room);
+  if (endsAt === null || !isCountdownOver(endsAt, now)) return room;
+  const started = await startGameNow(db, room, now, random);
+  // "room-started" = another request started it at the same moment. Anything else: the lobby stays as it is.
+  if (started.status !== 200 && started.body.error !== "room-started") {
+    console.error("Room API: the countdown could not start the game:", started.body.error);
+  }
+  return (await getRoomByCode(db, room.code)) ?? room;
+}
+
+// Starts a room's game with its settings: "Start now", the join that fills the room, or the countdown's end.
 // A room's next game avoids the songs of its earlier games (issue #43) as long as enough songs match its settings;
 // otherwise it picks from all of them.
 async function startGameNow(db: Db, room: Room, now: Date, random?: () => number): Promise<ApiResult> {
@@ -604,7 +645,7 @@ export async function getRoomState(
   const at = now(); // the moment every rule in this reply is checked against
   const found = await findOpenRoom(db, code, at);
   if (!found.ok) return found.result;
-  const { room } = found;
+  const room = await startIfCountdownOver(db, found.room, at, deps.random);
 
   // The token decides who is asking: one of this room's players, and whether it is the room creator.
   const token = readBearerToken(authorization);
@@ -671,6 +712,9 @@ export async function getRoomState(
     kickable: isCreator
       ? game.players.filter((player) => player.lastSeenAt < kickableIfSeenBefore(at)).map((player) => player.nickname)
       : [],
+    // The lobby countdown of a public room with 2+ players (issue #37), null otherwise. canExtend: the room creator
+    // may tap "Extend +60 s" now.
+    countdown: countdownView(room, isCreator, at),
     totalRounds: game.rounds.length || totalRoundsOf(room.settings),
     // Which of the room's games this is (issue #43): the one being played, or the next one in the lobby.
     gameNumber: gameNumberOf(room),
@@ -757,7 +801,59 @@ export async function getRoomState(
 }
 
 
-// POST /api/rooms/[code]/replace – a player's device could not load a round's clip (issue #41): give that round
+function countdownView(room: Room, isCreator: boolean, now: Date) {
+  const endsAt = lobbyCountdownEnd(room);
+  if (endsAt === null) return null;
+  const extensions = room.countdownExtensions;
+  return {
+    endsAt: endsAt.toISOString(),
+    extensions,
+    canExtend: isCreator && whyNoExtension({ endsAt, extensions }, now) === null,
+  };
+}
+
+// POST /api/rooms/[code]/extend – the room creator taps "Extend +60 s" (issue #37): only in a public lobby whose
+// countdown runs, in its last 15 s, and at most 5 times. Returns the new end and the number of extensions.
+export async function extendRoomCountdown(
+  db: Db,
+  code: string,
+  authorization: string | null,
+  deps: Deps = {},
+): Promise<ApiResult> {
+  const now = deps.now ?? (() => new Date());
+  const at = now();
+  const found = await findRoomAsPlayer(db, code, authorization, at);
+  if (!found.ok) return found.result;
+  if ((await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) === null) return fail("not-creator");
+
+  // Why an extension is refused, worked out from the room as it is stored.
+  const whyNot = (room: Room): ApiResult => {
+    if (room.status !== "lobby") return fail("room-started");
+    const endsAt = lobbyCountdownEnd(room);
+    if (endsAt === null) return fail("no-countdown");
+    return fail(whyNoExtension({ endsAt, extensions: room.countdownExtensions }, at) ?? "too-early-to-extend");
+  };
+
+  const room = await startIfCountdownOver(db, found.room, at, deps.random);
+  if (room.status !== "lobby" || lobbyCountdownEnd(room) === null) return whyNot(room);
+
+  // The database checks the window and the limit again in the same statement, so two taps at once count once.
+  const extensions = await extendCountdown(db, {
+    roomId: room.id,
+    now: at,
+    baseSeconds: LOBBY_COUNTDOWN_SECONDS,
+    extendSeconds: EXTEND_SECONDS,
+    windowSeconds: EXTEND_WINDOW_SECONDS,
+    max: MAX_EXTENSIONS,
+  });
+  if (extensions === null) return whyNot((await getRoomByCode(db, code)) ?? room);
+  return {
+    status: 200,
+    body: { endsAt: countdownEndsAt(room.countdownFrom!, extensions).toISOString(), extensions },
+  };
+}
+
+// POST /api/rooms/[code]/replace –a player's device could not load a round's clip (issue #41): give that round
 // another song that matches the room's settings and is not in the game yet, and every device loads the new clip.
 // Any player of the room may report, but only before the round starts, and only once per round – so nobody can
 // skip songs by reporting failures again and again. A late report moves the round's start back so it starts
@@ -838,6 +934,7 @@ export async function kickRoomPlayer(
   if (!(await kickPlayer(db, { roomId: room.id, playerId: target.id, seenBefore: kickableIfSeenBefore(at) }))) {
     return fail("not-away-long-enough");
   }
+  await syncLobbyCountdown(db, room.id, at); // a lobby down to 1 player stops its countdown (issue #37)
   return { status: 200, body: { nickname: target.nickname } };
 }
 
@@ -858,6 +955,7 @@ export async function playerLeavesRoom(
 
   const result = await leaveRoom(db, { roomId: room.id, playerId: player.id, isCreator });
   if (result === "not-in-room") return fail("wrong-token"); // left at the same moment from another tab
+  await syncLobbyCountdown(db, room.id, now()); // a lobby down to 1 player stops its countdown (issue #37)
   return { status: 200, body: { left: true, roomClosed: result === "room-closed" } };
 }
 
@@ -911,6 +1009,8 @@ async function endVote(db: TransactionDb, room: Room, game: RoomGame, now: Date,
     closeReason,
   });
   if (!ended || closeReason !== null) return;
+  // Back in the lobby: a public room with 2+ players counts down 60 s from now, with no extensions (issue #37).
+  await syncLobbyCountdown(db, room.id, now);
   if (voters.length >= MAX_PLAYERS_BY_TYPE[room.settings.type]) {
     const lobby = await getRoomByCode(db, room.code);
     if (lobby !== null) await startGameNow(db, lobby, now, random);

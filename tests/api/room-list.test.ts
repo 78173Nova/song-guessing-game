@@ -114,6 +114,7 @@ describe("GET /api/rooms – the list of public rooms", () => {
             sets: 2,
             players: 2,
             maxPlayers: 25,
+            countdownEndsAt: new Date(clock.getTime() + 60_000).toISOString(), // issue #37: 60 s from Ben's join
           },
         ],
       },
