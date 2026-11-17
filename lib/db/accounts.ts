@@ -321,3 +321,136 @@ export async function upsertVerifiedAccount(
   if (row.inserted !== null) return { ok: true, outcome: "created", username: row.inserted };
   return { ok: false, reason: "username_taken" };
 }
+
+// What changing a login detail needs about the logged-in account (issue #45): its id, email and password hash.
+// Never sent to the browser.
+export type SessionLogin = { id: string; email: string; passwordHash: string };
+
+// The account of this session token, or null for an unknown or expired session.
+export async function findSessionLogin(db: TransactionDb, token: string, now: Date): Promise<SessionLogin | null> {
+  const rows = await db.query<{ id: string; email: string; password_hash: string }>(
+    `SELECT users.id, users.email, users.password_hash FROM sessions JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = $1 AND sessions.expires_at > $2`,
+    [hashToken(token), now.toISOString()],
+  );
+  return rows.length === 1 ? { id: rows[0].id, email: rows[0].email, passwordHash: rows[0].password_hash } : null;
+}
+
+// Gives an account a new username (issue #45). Two queries in one transaction:
+//   1. Delete an abandoned sign-up that holds this username (same rule as at sign-up), so it is free again.
+//   2. Rename, only if no other account has this username in any case. The account's own username in another
+//      case counts as free. The old username is free straight away.
+// Of two renames to the same username at the same moment, the unique index lets only one win; the other raises
+// a unique violation, which counts as taken too.
+export async function renameAccount(
+  db: TransactionDb,
+  change: { userId: string; email: string; username: string; now: Date },
+): Promise<{ ok: true } | { ok: false; reason: "username_taken" }> {
+  try {
+    const [, renamed] = await db.transaction([
+      { text: deleteAbandonedSql("$1", "$2", "$3"), params: [change.username, change.email, change.now.toISOString()] },
+      {
+        text: `UPDATE users SET username = $2 WHERE id = $1
+                 AND NOT EXISTS (SELECT 1 FROM users other WHERE lower(other.username) = lower($2) AND other.id <> $1)
+               RETURNING id`,
+        params: [change.userId, change.username],
+      },
+    ]);
+    return renamed.length === 1 ? { ok: true } : { ok: false, reason: "username_taken" };
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === UNIQUE_VIOLATION) return { ok: false, reason: "username_taken" };
+    throw error;
+  }
+}
+
+// The Postgres error code of a broken unique index.
+const UNIQUE_VIOLATION = "23505";
+
+// Replaces an account's password hash and ends every session of the account except this one (issue #45), in one
+// query: whoever logged in with the old password is thrown out, this browser stays logged in.
+export async function replacePassword(
+  db: TransactionDb,
+  change: { userId: string; passwordHash: string; keepSession: string },
+): Promise<void> {
+  await db.query(
+    `WITH ended AS (DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $3)
+     UPDATE users SET password_hash = $2 WHERE id = $1`,
+    [change.userId, change.passwordHash, hashToken(change.keepSession)],
+  );
+}
+
+// Takes the email slots of several addresses at once (issue #45: the new address gets the link, the old one the
+// notice): only when none of them got an email in the last 60 s, so either all emails are sent or none. True when
+// every slot was taken. Two requests at the same moment can leave one slot taken and the other not; then both
+// get false and nothing is sent.
+export async function claimEmailSlots(db: TransactionDb, emails: string[], now: Date): Promise<boolean> {
+  const hashes = emails.map(hashEmail);
+  const rows = await db.query(
+    `INSERT INTO email_throttle (email_hash, last_sent_at)
+     SELECT hash, $2 FROM unnest($1::text[]) AS hash
+     WHERE NOT EXISTS (SELECT 1 FROM email_throttle WHERE email_hash = ANY($1::text[]) AND last_sent_at > $3)
+     ON CONFLICT (email_hash) DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at
+     WHERE email_throttle.last_sent_at <= $3
+     RETURNING email_hash`,
+    [hashes, now.toISOString(), throttleCutoff(now)],
+  );
+  return rows.length === hashes.length;
+}
+
+// Stores a link that moves an account to a new email (issue #45). Only the token's SHA-256 hash is stored.
+export async function createEmailChangeToken(
+  db: TransactionDb,
+  link: { userId: string; token: string; newEmail: string; expiresAt: Date },
+): Promise<void> {
+  await db.query(
+    "INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at, new_email) VALUES ($1, $2, 'email', $3, $4)",
+    [hashToken(link.token), link.userId, link.expiresAt.toISOString(), link.newEmail],
+  );
+}
+
+export type ConfirmEmailChangeResult = { ok: true } | { ok: false; reason: "unknown" | "used" | "expired" | "taken" };
+
+// Opens a link from an email change (issue #45). Two queries in one transaction:
+//   1. In one query: use the token (purpose 'email', not used, not expired) unless a verified account has the new
+//      address by now, delete an unverified sign-up with the new address (the person proved they read that inbox,
+//      like signing up again), then give the account the new email. The WHERE clause on the token decides, so of
+//      two clicks at the same moment exactly one changes anything.
+//   2. Read the token, to say why nothing happened: unknown (also a link with another purpose), used, expired,
+//      or taken (a verified account got the new address in the meantime; the link stays unused).
+export async function confirmEmailChangeToken(
+  db: TransactionDb,
+  link: { token: string; now: Date },
+): Promise<ConfirmEmailChangeResult> {
+  const tokenHash = hashToken(link.token);
+  const now = link.now.toISOString();
+  const [changed, found] = await db.transaction([
+    {
+      // Reading "freed" makes that delete happen before the update, so the new address is free.
+      text: `WITH used AS (
+               UPDATE email_tokens t SET used_at = $2
+               WHERE token_hash = $1 AND purpose = 'email' AND used_at IS NULL AND expires_at > $2
+                 AND NOT EXISTS (SELECT 1 FROM users v WHERE v.email = t.new_email AND v.email_verified_at IS NOT NULL)
+               RETURNING user_id, new_email
+             ),
+             freed AS (
+               DELETE FROM users p USING used
+               WHERE p.email = used.new_email AND p.email_verified_at IS NULL AND p.id <> used.user_id
+               RETURNING p.id
+             )
+             UPDATE users SET email = used.new_email FROM used
+             WHERE users.id = used.user_id AND (SELECT count(*) FROM freed) >= 0
+             RETURNING users.id`,
+      params: [tokenHash, now],
+    },
+    {
+      text: "SELECT used_at, expires_at > $2 AS working FROM email_tokens WHERE token_hash = $1 AND purpose = 'email'",
+      params: [tokenHash, now],
+    },
+  ]);
+
+  if (changed.length === 1) return { ok: true };
+  if (found.length === 0) return { ok: false, reason: "unknown" };
+  const token = found[0] as { used_at: string | null; working: boolean };
+  if (token.used_at !== null) return { ok: false, reason: "used" };
+  return { ok: false, reason: token.working ? "taken" : "expired" };
+}

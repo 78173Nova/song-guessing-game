@@ -188,6 +188,15 @@ CREATE TABLE IF NOT EXISTS email_tokens (
   used_at    timestamptz
 );
 
+-- Changing the email (issue #45): a link with purpose 'email' (24 hours) carries the new address, which becomes
+-- the account's email only when the link is opened. Only that purpose has a new address. The purpose rule is
+-- dropped and added again, so databases made before this change get the new purpose too.
+ALTER TABLE email_tokens ADD COLUMN IF NOT EXISTS new_email text
+  CHECK (new_email = lower(new_email) AND char_length(new_email) <= 254 AND new_email LIKE '%@%');
+ALTER TABLE email_tokens DROP CONSTRAINT IF EXISTS email_tokens_purpose_check;
+ALTER TABLE email_tokens ADD CONSTRAINT email_tokens_purpose_check
+  CHECK (purpose IN ('verify', 'reset', 'email') AND (purpose = 'email') = (new_email IS NOT NULL));
+
 -- One row per logged-in browser. The cookie holds a long random token; only its SHA-256 hash is stored here,
 -- so a leaked copy of the database cannot be used to log in. A session lasts 30 days.
 -- Deleting an account deletes its sessions.

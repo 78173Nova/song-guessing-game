@@ -65,3 +65,53 @@ export function resetPasswordMessage(to: string, link: string): Email {
     ].join("\n"),
   };
 }
+
+// Sent to the new address when an account holder changes their email (issue #45).
+export function confirmEmailChangeMessage(to: string, link: string): Email {
+  return {
+    to,
+    subject: "Confirm your new email for the Song Guessing Game",
+    text: [
+      "Hi,",
+      "",
+      "someone (probably you) wants to use this address for their Song Guessing Game account. Confirm it here:",
+      link,
+      "",
+      "The link works once and is valid for 24 hours. The email of the account changes only when you open it.",
+      "If you did not ask for this, you can ignore this email. Nothing was changed.",
+    ].join("\n"),
+  };
+}
+
+// Sent instead of the link when the new address already has an account, so the reply never tells the person who
+// asked whether it has one (issue #45).
+export function emailChangeTakenMessage(to: string): Email {
+  return {
+    to,
+    subject: "Someone tried to use your email address",
+    text: [
+      "Hi,",
+      "",
+      "someone asked to move a Song Guessing Game account to this email address, but you already have an",
+      "account with it. Nothing was changed.",
+      "",
+      "If this was not you, you can ignore this email.",
+    ].join("\n"),
+  };
+}
+
+// Sent to the old address when an account holder asks to change their email (issue #45).
+export function emailChangeNoticeMessage(to: string, newEmail: string, forgotPasswordLink: string): Email {
+  return {
+    to,
+    subject: "Your email is being changed",
+    text: [
+      "Hi,",
+      "",
+      `Your email is being changed to ${newEmail}. It changes once the link we sent to that address is opened.`,
+      "",
+      "If this wasn't you, reset your password:",
+      forgotPasswordLink,
+    ].join("\n"),
+  };
+}
