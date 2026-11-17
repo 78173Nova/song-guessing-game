@@ -719,6 +719,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         status: "lobby",
         role: "creator",
         players: ["Anna", "Ben"],
+        answered: [],
         totalRounds: 5,
         serverNow: clock.toISOString(),
         round: null,
@@ -744,6 +745,7 @@ describe("GET /api/rooms/[code] – room state", () => {
         status: "lobby",
         role: "player",
         players: ["Anna", "Ben"],
+        answered: [],
         totalRounds: 5,
         serverNow: clock.toISOString(),
         round: null,
@@ -955,6 +957,78 @@ describe("GET /api/rooms/[code] – room state", () => {
         body: { error: "room-closed", message: "This room has closed." },
       });
     }
+  });
+});
+
+// The game board (issue #38) puts a tick next to every player who has answered the round on screen. The state
+// says who, never what: the only choice in a reply is the viewer's own (me.answer).
+describe("GET /api/rooms/[code] – who has answered (game board)", () => {
+  // Every place in a reply that holds a chosen option, as a path like "me.answer".
+  function choicePaths(value: unknown, path = ""): string[] {
+    if (typeof value !== "object" || value === null) return [];
+    return Object.entries(value).flatMap(([key, inner]) => {
+      const here = path === "" ? key : `${path}.${key}`;
+      const found = /^(answer|answers|chosenOption|choice)$/.test(key) ? [here] : [];
+      return [...found, ...choicePaths(inner, here)];
+    });
+  }
+
+  it("is empty in the lobby and before round 1 starts", async () => {
+    const room = await newRoom("Anna");
+    await joined(room.code, "Ben");
+    expect((await state(room.code, room.creatorToken)).body.answered).toEqual([]);
+
+    await start(room.code, room.creatorToken);
+    expect((await state(room.code, room.creatorToken)).body.answered).toEqual([]);
+  });
+
+  it("lists who has answered the open round, in player order, the same for every player", async () => {
+    const room = await startedRoom("Anna", "Ben", "Cleo", "Dan");
+    const round = await openRound(room);
+    for (const token of room.tokens) expect((await state(room.code, token)).body.answered).toEqual([]);
+
+    await answer(room.code, room.tokens[2], { round: 1, answer: round.wrong }); // Cleo
+    wait(1);
+    await answer(room.code, room.tokens[0], { round: 1, answer: round.right }); // Anna
+
+    for (const token of room.tokens) {
+      expect((await state(room.code, token)).body.answered).toEqual(["Anna", "Cleo"]);
+    }
+  });
+
+  it("never says what another player chose – while the round is open or after it has closed", async () => {
+    const room = await startedRoom("Anna", "Ben", "Cleo");
+    const round = await openRound(room);
+    await answer(room.code, room.tokens[1], { round: 1, answer: round.wrong }); // Ben
+
+    const cleo = (await state(room.code, room.tokens[2])).body;
+    expect(cleo.answered).toEqual(["Ben"]);
+    expect(choicePaths(cleo)).toEqual(["me.answer"]);
+    expect(cleo.me).toMatchObject({ answer: null });
+
+    wait(1);
+    await answer(room.code, room.tokens[0], { round: 1, answer: round.right }); // Anna
+    await answer(room.code, room.tokens[2], { round: 1, answer: round.right }); // Cleo – the round closes
+    for (const token of room.tokens) {
+      const body = (await state(room.code, token)).body;
+      expect(body.round).toMatchObject({ status: "closed" });
+      expect(body.answered).toEqual(["Anna", "Ben", "Cleo"]);
+      expect(choicePaths(body)).toEqual(["me.answer"]);
+    }
+  });
+
+  it("starts empty again when the next round starts", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    const first = await openRound(room);
+    await answer(room.code, room.tokens[0], { round: 1, answer: first.right });
+    await answer(room.code, room.tokens[1], { round: 1, answer: first.wrong });
+
+    const second = await openRound(room);
+    expect(second.number).toBe(2);
+    expect((await state(room.code, room.tokens[1])).body.answered).toEqual([]);
+
+    await answer(room.code, room.tokens[1], { round: 2, answer: second.right });
+    expect((await state(room.code, room.tokens[0])).body.answered).toEqual(["Ben"]);
   });
 });
 
