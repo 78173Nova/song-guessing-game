@@ -10,13 +10,21 @@ import { ROUND_SECONDS } from "@/lib/client/countdown";
 import {
   apiAnswerRoom,
   apiJoinRoom,
+  apiReportClip,
   apiRoomState,
   apiStartRoom,
   forgetRoomToken,
   loadRoomToken,
   saveRoomToken,
 } from "@/lib/client/room-api";
-import { initialRoomView, roomReducer, roomScreen, type RoomScreen } from "@/lib/client/room-game";
+import {
+  clipsToLoad,
+  couldNotPlay,
+  initialRoomView,
+  roomReducer,
+  roomScreen,
+  type RoomScreen,
+} from "@/lib/client/room-game";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import styles from "./Landing.module.css";
 import game from "./SoloGame.module.css";
@@ -42,7 +50,17 @@ export default function Room({ code }: { code: string }) {
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState(""); // e.g. "can't reach the server" while polling
   const [now, setNow] = useState(() => Date.now());
-  const clips = useRoomClips(view.latest?.previewUrls ?? null);
+  // A clip that will not load: ask the server to swap the song (once per round), or give up on this device.
+  const reportClip = useCallback(
+    async (round: number) => {
+      if (token === null) return null;
+      const result = await apiReportClip(code, token, round);
+      return result.ok ? result.data.previewUrl : null;
+    },
+    [code, token],
+  );
+  const clipFailed = useCallback((round: number, url: string) => dispatch({ type: "clip-failed", round, url }), []);
+  const clips = useRoomClips(view.latest?.previewUrls ?? null, reportClip, clipFailed);
 
   // Numbers each state request, so the reducer can ignore a reply that arrives after a newer one.
   const requestCount = useRef(0);
@@ -237,6 +255,11 @@ export default function Room({ code }: { code: string }) {
         onAnswer={sendAnswer}
         onContinue={(round) => dispatch({ type: "continued", round })}
       />
+      {screen.kind === "round" && couldNotPlay(view, screen.number) && (
+        <p className={game.center} role="status">
+          {"Couldn't play the clip – you can still answer."}
+        </p>
+      )}
       {clips.blocked && screen.kind === "round" && (
         <button type="button" className={game.secondary} onClick={() => play(screen.number, screen.startsAt)}>
           ▶ Tap to hear the music
@@ -382,11 +405,25 @@ function GameScreen({
 }
 
 // The clips of a room game on this device: one audio player per round, loaded in advance as soon as the clip
-// addresses arrive, and played when roomScreen says the round has started.
-function useRoomClips(previewUrls: string[] | null) {
+// addresses arrive, and played when roomScreen says the round has started. A clip that will not load is reported
+// with `report` (the server swaps the song once per round, issue #41); when even that fails, `onFailed` is told.
+// When a song is swapped, only that round's clip is loaded again.
+function useRoomClips(
+  previewUrls: string[] | null,
+  report: (round: number) => Promise<string | null>,
+  onFailed: (round: number, url: string) => void,
+) {
   const playersRef = useRef<HTMLAudioElement[]>([]);
-  const loadingRef = useRef<string | null>(null); // the clip list that is being loaded
+  const startedRef = useRef<(string | null)[]>([]); // the clip each round's player was last asked to load
+  const queueRef = useRef<Promise<void>>(Promise.resolve()); // clips load one after another, in round order
+  const supportedRef = useRef<boolean | null>(null); // can this browser play the previews? null = not checked yet
   const readyRef = useRef<boolean[]>([]); // which clips have loaded
+  const reportRef = useRef(report);
+  const onFailedRef = useRef(onFailed);
+  useEffect(() => {
+    reportRef.current = report;
+    onFailedRef.current = onFailed;
+  }, [report, onFailed]);
   // The round whose clip should be playing now. If its clip is still loading, it starts as soon as it is ready.
   const wantedRef = useRef<{ number: number; startsAt: number } | null>(null);
   const [blocked, setBlocked] = useState(false); // the browser refused to start a clip without a tap
@@ -410,28 +447,41 @@ function useRoomClips(previewUrls: string[] | null) {
     }
   }, [players]);
 
-  // Load every clip in advance, one after another, like the solo game (load → try once more → give up).
-  // Swapping a song whose clip will not load comes with "Song swap in rooms" (#41).
+  // Load every clip in advance, one after another, like the solo game (load → try once more → swap the song →
+  // give up). After a swap only the changed clip loads again, so the clip that is playing is not interrupted.
   const key = previewUrls?.join(" ") ?? null;
   useEffect(() => {
-    if (previewUrls === null || key === null || loadingRef.current === key) return;
-    loadingRef.current = key;
-    if (!canPlayPreviews((type) => new Audio().canPlayType(type))) {
-      queueMicrotask(() => setProblem(UNSUPPORTED_BROWSER_MESSAGE));
-      return;
+    if (previewUrls === null || key === null) return;
+    if (supportedRef.current === null) {
+      supportedRef.current = canPlayPreviews((type) => new Audio().canPlayType(type));
+      if (!supportedRef.current) queueMicrotask(() => setProblem(UNSUPPORTED_BROWSER_MESSAGE));
     }
+    if (!supportedRef.current) return;
     const list = players(previewUrls.length);
-    readyRef.current = previewUrls.map(() => false);
-    (async () => {
-      for (let index = 0; index < previewUrls.length; index++) {
-        if (loadingRef.current !== key) return;
-        const result = await prepareClip(previewUrls[index], (url) => loadClip(list[index], url), async () => null);
-        readyRef.current[index] = result.ok;
+    for (const index of clipsToLoad(startedRef.current, previewUrls)) {
+      const url = previewUrls[index];
+      startedRef.current[index] = url;
+      readyRef.current[index] = false;
+      queueRef.current = queueRef.current.then(async () => {
+        if (startedRef.current[index] !== url) return; // swapped again before its turn came
+        let tried = url;
+        const swap = async () => {
+          const next = await reportRef.current(index + 1);
+          if (next !== null && startedRef.current[index] === tried) startedRef.current[index] = tried = next;
+          return next;
+        };
+        const result = await prepareClip(url, (clip) => loadClip(list[index], clip), swap);
+        if (startedRef.current[index] !== tried) return; // another device swapped the song meanwhile
+        if (!result.ok) {
+          onFailedRef.current(index + 1, tried);
+          return;
+        }
+        readyRef.current[index] = true;
         // Its round already started while it was loading: start it now, part-way through.
         const wanted = wantedRef.current;
-        if (result.ok && wanted?.number === index + 1) startClip(list[index], wanted.startsAt, setBlocked);
-      }
-    })();
+        if (wanted?.number === index + 1) startClip(list[index], wanted.startsAt, setBlocked);
+      });
+    }
   }, [previewUrls, key, players]);
 
   // Round `number` has started: stop every other clip and start its own, or wait for it to finish loading.

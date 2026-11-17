@@ -958,51 +958,113 @@ describe("GET /api/rooms/[code] – room state", () => {
   });
 });
 
-describe("POST /api/rooms/[code]/replace", () => {
-  it("gives a waiting round another song and the creator's clip list shows the new clip", async () => {
+describe("POST /api/rooms/[code]/replace – a device could not load a clip (issue #41)", () => {
+  it("any player can swap a waiting round's song, and every device's clip list shows the new clip", async () => {
     const room = await startedRoom("Anna", "Ben");
     const before = await roundsOf(room.code);
 
-    const result = await replace(room.code, room.creatorToken, { round: 3 });
+    const result = await replace(room.code, room.tokens[1], { round: 3 }); // Ben, not the creator
 
     const after = await roundsOf(room.code);
     expect(before.map((r) => r.songId)).not.toContain(after[2].songId);
     expect(after[2].status).toBe("waiting");
     expect(result).toEqual({ status: 200, body: { round: 3, previewUrl: after[2].song.previewUrl } });
     expect(after.filter((_, i) => i !== 2)).toEqual(before.filter((_, i) => i !== 2));
-    expect((await state(room.code, room.tokens[1])).body.previewUrls).toEqual(after.map((r) => r.song.previewUrl));
-  });
-
-  it("rejects another player's token and another room's creator token, and changes nothing", async () => {
-    const room = await startedRoom("Anna", "Ben");
-    const other = await newRoom("Zoe");
-    const before = await roundsOf(room.code);
-
-    for (const token of [null, room.tokens[1], other.creatorToken]) {
-      expect(await replace(room.code, token, { round: 3 })).toMatchObject({ status: 403, body: { error: "wrong-token" } });
+    for (const token of room.tokens) {
+      expect((await state(room.code, token)).body.previewUrls).toEqual(after.map((r) => r.song.previewUrl));
     }
-    expect(await roundsOf(room.code)).toEqual(before);
   });
 
-  it("rejects a round that is scheduled or has started", async () => {
+  it("refuses a second report for the same round and keeps the first replacement", async () => {
     const room = await startedRoom("Anna", "Ben");
-    // Round 1 is scheduled by Start: every device may already have loaded its clip.
-    expect(await replace(room.code, room.creatorToken, { round: 1 })).toMatchObject({
+    expect((await replace(room.code, room.tokens[1], { round: 3 })).status).toBe(200);
+    const afterFirst = await roundsOf(room.code);
+
+    for (const token of room.tokens) {
+      expect(await replace(room.code, token, { round: 3 })).toEqual({
+        status: 409,
+        body: { error: "already-swapped", message: "This round's song has already been swapped once." },
+      });
+    }
+    expect(await roundsOf(room.code)).toEqual(afterFirst);
+    // Another round still has its own one swap.
+    expect((await replace(room.code, room.tokens[0], { round: 4 })).status).toBe(200);
+  });
+
+  it("swaps a scheduled round before its start: the new options show and the start time stays when there is time", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    const round = await openRound(room);
+    await answer(room.code, room.tokens[0], { round: 1, answer: round.right });
+    await answer(room.code, room.tokens[1], { round: 1, answer: round.right });
+    const scheduled = (await state(room.code, room.tokens[1])).body.nextRound as NextRound;
+    expect(scheduled).toMatchObject({ number: 2, startsAt: plus(clock, 8) });
+
+    wait(1); // 7 s before round 2 starts: enough time to load the new clip
+    expect((await replace(room.code, room.tokens[1], { round: 2 })).status).toBe(200);
+
+    const swapped = (await roundsOf(room.code))[1];
+    const body = (await state(room.code, room.tokens[0])).body;
+    expect(body.nextRound).toEqual({ number: 2, startsAt: scheduled.startsAt, options: swapped.options });
+    expect((body.previewUrls as string[])[1]).toBe(swapped.song.previewUrl);
+  });
+
+  it("a late report moves the round's start back so it starts 5 s after the report – a shift of at most 5 s", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    const roundOneStart = new Date(((await state(room.code, room.tokens[0])).body.nextRound as NextRound).startsAt);
+
+    clock = new Date(roundOneStart.getTime() - 1000); // 1 s before round 1 starts
+    expect((await replace(room.code, room.tokens[1], { round: 1 })).status).toBe(200);
+
+    const body = (await state(room.code, room.tokens[0])).body;
+    expect(body.nextRound).toMatchObject({ number: 1, startsAt: plus(roundOneStart, 4) });
+    // Answers before the new start time are refused, so nobody answers the old song.
+    wait(1.5);
+    expect(await answer(room.code, room.tokens[0], { round: 1, answer: 0 })).toMatchObject({
       status: 409,
-      body: { error: "round-already-started" },
+      body: { error: "round-not-open" },
     });
+  });
+
+  it("never shifts the start by more than 5 s, even right before the start", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    const roundOneStart = new Date(((await state(room.code, room.tokens[0])).body.nextRound as NextRound).startsAt);
+
+    clock = new Date(roundOneStart.getTime() - 1); // 1 ms before round 1 starts
+    expect((await replace(room.code, room.tokens[0], { round: 1 })).status).toBe(200);
+
+    const next = (await state(room.code, room.tokens[0])).body.nextRound as NextRound;
+    const shiftMs = Date.parse(next.startsAt) - roundOneStart.getTime();
+    expect(shiftMs).toBeGreaterThan(0);
+    expect(shiftMs).toBeLessThanOrEqual(5000);
+  });
+
+  it("refuses a round that has started (open) or closed, and changes nothing", async () => {
+    const room = await startedRoom("Anna", "Ben");
     await openRound(room);
-    expect(await replace(room.code, room.creatorToken, { round: 1 })).toMatchObject({
+    const before = await roundsOf(room.code);
+    expect(await replace(room.code, room.tokens[1], { round: 1 })).toMatchObject({
       status: 409,
       body: { error: "round-already-started" },
     });
+    expect(await roundsOf(room.code)).toEqual(before);
 
     wait(16);
     await state(room.code, room.creatorToken); // closes round 1
-    expect(await replace(room.code, room.creatorToken, { round: 1 })).toMatchObject({
+    expect(await replace(room.code, room.tokens[1], { round: 1 })).toMatchObject({
       status: 409,
       body: { error: "round-already-started" },
     });
+  });
+
+  it("rejects a missing token and tokens from another room, and changes nothing", async () => {
+    const room = await startedRoom("Anna", "Ben");
+    const other = await startedRoom("Zoe", "Yan");
+    const before = await roundsOf(room.code);
+
+    for (const token of [null, "f".repeat(64), other.creatorToken, other.tokens[1]]) {
+      expect(await replace(room.code, token, { round: 3 })).toMatchObject({ status: 403, body: { error: "wrong-token" } });
+    }
+    expect(await roundsOf(room.code)).toEqual(before);
   });
 
   it("rejects the lobby, a round out of range and a body that is not valid", async () => {
@@ -1010,9 +1072,9 @@ describe("POST /api/rooms/[code]/replace", () => {
     expect(await replace(lobby.code, lobby.creatorToken, { round: 1 })).toMatchObject({ status: 409, body: { error: "not-started" } });
 
     const room = await startedRoom("Anna", "Ben");
-    expect(await replace(room.code, room.creatorToken, { round: 6 })).toMatchObject({ status: 400, body: { error: "round-out-of-range" } });
-    for (const body of ["not json", { round: "2" }, { round: 0 }, {}]) {
-      expect(await replace(room.code, room.creatorToken, body)).toMatchObject({ status: 400, body: { error: "malformed" } });
+    expect(await replace(room.code, room.tokens[1], { round: 6 })).toMatchObject({ status: 400, body: { error: "round-out-of-range" } });
+    for (const body of ["not json", { round: "2" }, { round: 0 }, { round: 1.5 }, {}, [], null]) {
+      expect(await replace(room.code, room.tokens[1], body)).toMatchObject({ status: 400, body: { error: "malformed" } });
     }
   });
 
@@ -1022,7 +1084,7 @@ describe("POST /api/rooms/[code]/replace", () => {
     session = await loggedInSession(db, START);
     const room = await startedRoom("Anna", "Ben");
 
-    expect(await replace(room.code, room.creatorToken, { round: 2 })).toMatchObject({
+    expect(await replace(room.code, room.tokens[1], { round: 2 })).toMatchObject({
       status: 503,
       body: { error: "not-enough-songs" },
     });
