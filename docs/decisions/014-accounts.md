@@ -134,7 +134,8 @@ Spec: `specs/004-accounts-landing.md`. Terms (account, username, guest, nickname
 - ~~Changing the password while logged in (without the email) is not built; use "Forgot password?".~~ Built in
   issue #45 (see the update below).
 - "Looks like an email" does not prove the address exists; only opening the link does.
-- Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.
+- ~~Without Brevo (until #25) emails are only printed, so sign-up works only on a laptop with access to the terminal.~~
+  Brevo is built in issue #25 (see the update below).
 
 ## How it could change
 - Brevo delivery (#25) extends `lib/accounts/`, `lib/email/`, `lib/db/accounts.ts` and `lib/api/accounts.ts`.
@@ -226,3 +227,43 @@ current password (same as log in). Deleting an account is still not built.
 ### How it could change
 Cancelling older links when the password changes would need one more `DELETE` in the same query; a limit on
 password guesses would cover log in and these routes together.
+
+## Update 17 Nov 2026: email delivery through Brevo (issue #25)
+
+### Decision
+- **Brevo sends the emails.** `lib/email/brevo.ts` is the only place that talks to Brevo: a plain `fetch` to its
+  transactional email endpoint (`POST https://api.brevo.com/v3/smtp/email`) with a 5-second timeout. It returns
+  `{ ok: false }` instead of throwing; the log gets the status code only, never the key, the address or the link.
+- **Which sender:** `getEmailSender` in `lib/email/sender.ts` uses Brevo when `BREVO_API_KEY` and `EMAIL_FROM` are
+  set. Without a key, local development prints each email to the terminal (as before). On Vercel (which sets
+  `VERCEL`) a missing key, or a key without `EMAIL_FROM`, is an error in the log and the email fails – never a
+  silent print.
+- **A failed email gets its own reply:** sign-up, "Send the email again", "Forgot password?" and changing the email
+  reply 503 `email-failed`, "We couldn't send the email right now. Please try again in a minute." The pages show
+  that message. A sign-up whose email failed keeps the account (not verified); "Send the email again" works a
+  minute later. Changing the email sends the notice to the old address only after the email to the new address
+  has gone out.
+- **Links** come from `APP_URL`, then Vercel's `VERCEL_URL`, then `http://localhost:3000`, never from the request's
+  `Host` header (already so since #24, now tested).
+
+### Why
+- A plain `fetch` needs no new package and works like the iTunes module (timeout, result instead of exception).
+- A print on Vercel would look like success while nobody gets the email.
+
+### Alternatives
+- Brevo's npm package: one more dependency for one HTTP call. SMTP (nodemailer): a package and a connection that is
+  slower to open on Vercel.
+- Retrying a failed email on the server: the request would wait up to 10 seconds; the person can try again instead.
+
+### Limits
+- Brevo's free plan sends **300 emails per day**. A sender address at Gmail (or another free provider) can land in
+  spam; a team address on an own domain is better.
+- While Brevo is down, "Send the email again" and "Forgot password?" reply 503 for an account that would get an
+  email and 200 for one that would not, so in that moment the reply reveals whether an address has an account.
+- The one-email-per-minute slot is taken before sending, so after a failed email the person waits a minute.
+- **Human step:** someone must create the Brevo account, verify the sender address and set `BREVO_API_KEY`,
+  `EMAIL_FROM` and `APP_URL` in the Vercel settings and in their own `.env.local`. Sending a real email on the
+  Vercel preview can only be checked after that.
+
+### How it could change
+Another email service would only replace `lib/email/brevo.ts`; the accounts API only knows the `EmailSender` type.

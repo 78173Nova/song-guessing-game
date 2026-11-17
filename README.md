@@ -54,6 +54,9 @@ npm run dev                     # open http://localhost:3000 in Chrome, Safari o
 | Variable | What it is |
 |---|---|
 | `DATABASE_URL` | Connection string of a Neon Postgres database. Locally: the `dev` branch. Never commit it. |
+| `BREVO_API_KEY` | Optional locally. Key of the team's Brevo account, used to send the account emails. Without it, local development prints each email (with its link) to the terminal; on Vercel it is required. Never commit it. |
+| `EMAIL_FROM` | The sender address verified in Brevo, e.g. a team address. Needed together with `BREVO_API_KEY`. |
+| `APP_URL` | The address of the site, used for links in emails and the room share link, e.g. `http://localhost:3000`. Without it, Vercel's own `VERCEL_URL` is used, then `http://localhost:3000`. |
 | `TEAM_ACCOUNTS` | Optional. Team accounts as `email\|username\|password;…`. `npm run db:team-accounts` creates them already verified, or gives an existing one its password back. Never commit it. |
 
 ## Tests and checks

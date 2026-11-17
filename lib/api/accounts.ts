@@ -106,6 +106,8 @@ const ERRORS = {
   },
   ...PLAYER_INPUT_ERRORS,
   "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
+  // The email service (Brevo) gave an error or did not answer in time (issue #25).
+  "email-failed": { status: 503, message: "We couldn't send the email right now. Please try again in a minute." },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
 
@@ -193,14 +195,16 @@ export async function signUp(db: TransactionDb, rawBody: string | null, deps: Ac
     // reply stays the same, so the page never reveals that the email is registered.
     // Like every email, it is sent only if that address got none in the last minute.
     if (created.reason === "email_verified" && (await claimEmailSlot(db, email, now))) {
-      await sendEmail(alreadyHaveAccountMessage(email, `${appUrl()}/forgot-password`));
+      const sent = await sendEmail(alreadyHaveAccountMessage(email, `${appUrl()}/forgot-password`));
+      if (!sent.ok) return fail("email-failed");
     }
     return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
   }
 
-  // Delivery problems are handled with the real email service (issue #25).
+  // When the email service fails, the account stays (not verified); "Send the email again" works a minute later.
   if (await claimEmailSlot(db, email, now)) {
-    await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+    const sent = await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+    if (!sent.ok) return fail("email-failed");
   }
   return { status: 200, body: { message: CHECK_INBOX_MESSAGE } };
 }
@@ -233,7 +237,8 @@ export async function resendVerification(
       purpose: "verify",
       expiresAt: new Date(now.getTime() + VERIFY_LINK_LIFETIME_MS),
     });
-    await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+    const sent = await sendEmail(verifyEmailMessage(email, linkWithToken("/verify-email", verifyToken)));
+    if (!sent.ok) return fail("email-failed");
   }
   return { status: 200, body: { message: RESENT_MESSAGE } };
 }
@@ -343,8 +348,8 @@ export async function forgotPassword(
       purpose: "reset",
       expiresAt: new Date(now.getTime() + RESET_LINK_LIFETIME_MS),
     });
-    // Delivery problems are handled with the real email service (issue #25).
-    await sendEmail(resetPasswordMessage(email, linkWithToken("/reset-password", resetToken)));
+    const sent = await sendEmail(resetPasswordMessage(email, linkWithToken("/reset-password", resetToken)));
+    if (!sent.ok) return fail("email-failed");
   }
   return { status: 200, body: { message: IF_EXISTS_MESSAGE } };
 }
@@ -513,8 +518,9 @@ export async function changeEmail(
 
   if (!(await claimEmailSlots(db, [account.email, newEmail], now))) return fail("too-soon");
   const owner = await findAccountForLogin(db, "email", newEmail);
+  let sent;
   if (owner?.verified) {
-    await sendEmail(emailChangeTakenMessage(newEmail));
+    sent = await sendEmail(emailChangeTakenMessage(newEmail));
   } else {
     const token = makeToken();
     await createEmailChangeToken(db, {
@@ -523,9 +529,12 @@ export async function changeEmail(
       newEmail,
       expiresAt: new Date(now.getTime() + VERIFY_LINK_LIFETIME_MS),
     });
-    await sendEmail(confirmEmailChangeMessage(newEmail, linkWithToken("/confirm-email", token)));
+    sent = await sendEmail(confirmEmailChangeMessage(newEmail, linkWithToken("/confirm-email", token)));
   }
-  await sendEmail(emailChangeNoticeMessage(account.email, newEmail, `${appUrl()}/forgot-password`));
+  // The notice to the old address is only sent once the email to the new address has gone out.
+  if (!sent.ok) return fail("email-failed");
+  const notice = await sendEmail(emailChangeNoticeMessage(account.email, newEmail, `${appUrl()}/forgot-password`));
+  if (!notice.ok) return fail("email-failed");
   return { status: 200, body: { message: EMAIL_CHANGE_SENT_MESSAGE } };
 }
 
