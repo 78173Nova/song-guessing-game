@@ -8,6 +8,7 @@ import Link from "next/link";
 import { apiAccountSettings } from "@/lib/client/account-api";
 import { canPlayPreviews, prepareClip, UNSUPPORTED_BROWSER_MESSAGE } from "@/lib/client/clip-loader";
 import { answeredInRound } from "@/lib/client/room-board";
+import { roomLayout } from "@/lib/client/room-duel";
 import {
   apiAnswerRoom,
   apiJoinRoom,
@@ -39,6 +40,7 @@ import { MAX_PLAYERS_BY_TYPE, totalRoundsOf } from "@/lib/game/room-settings";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
 import RoomBoard from "./RoomBoard";
+import RoomDuel from "./RoomDuel";
 import SharePopup from "./SharePopup";
 import styles from "./Landing.module.css";
 import game from "./SoloGame.module.css";
@@ -463,19 +465,25 @@ function GameScreen({
     case "round": {
       const answered = screen.answer !== null;
       const over = screen.secondsLeft === 0;
+      // Only the part above the answers differs between the two layouts (issue #39).
+      const top = {
+        players: state.players,
+        away: state.away ?? [],
+        avatars: state.avatars ?? {},
+        me: state.me.nickname,
+        answered: answeredInRound(state, screen.number),
+        iAnswered: answered,
+        number: screen.number,
+        totalRounds: screen.totalRounds,
+        secondsLeft: screen.secondsLeft,
+      };
       return (
         <section>
-          <RoomBoard
-            players={state.players}
-            away={state.away ?? []}
-            avatars={state.avatars ?? {}}
-            me={state.me.nickname}
-            answered={answeredInRound(state, screen.number)}
-            iAnswered={answered}
-            number={screen.number}
-            totalRounds={screen.totalRounds}
-            secondsLeft={screen.secondsLeft}
-          />
+          {roomLayout(state) === "duel" ? (
+            <RoomDuel {...top} standings={state.standings} />
+          ) : (
+            <RoomBoard {...top} />
+          )}
           {screen.questionType && <p className={game.center}>{QUESTION_LABELS[screen.questionType]}</p>}
           <div className={game.options}>
             {screen.options.map((title, index) => (
