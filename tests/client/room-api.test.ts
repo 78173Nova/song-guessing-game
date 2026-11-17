@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE } from "@/lib/client/game-api";
-import { apiAnswerRoom, apiCreateRoom, apiJoinRoom, apiRoomState, apiStartRoom } from "@/lib/client/room-api";
+import {
+  apiAnswerRoom,
+  apiCreateRoom,
+  apiJoinRoom,
+  apiReportClip,
+  apiRoomState,
+  apiStartRoom,
+} from "@/lib/client/room-api";
 
 const TOKEN = "ab".repeat(32);
 
@@ -120,6 +127,26 @@ describe("room API calls from the browser", () => {
       ok: false,
       reason: "error",
       message: GENERIC_ERROR_MESSAGE,
+    });
+  });
+
+  it("reports a clip that will not load with the round and the token, and returns the new clip", async () => {
+    const fetchFn = reply(200, { round: 3, previewUrl: "https://audio.example.com/new.m4a" });
+
+    expect(await apiReportClip("482913", TOKEN, 3, fetchFn)).toEqual({
+      ok: true,
+      data: { round: 3, previewUrl: "https://audio.example.com/new.m4a" },
+    });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("/api/rooms/482913/replace");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ round: 3 });
+    expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer ${TOKEN}`);
+
+    const refused = reply(409, { error: "already-swapped", message: "This round's song has already been swapped once." });
+    expect(await apiReportClip("482913", TOKEN, 3, refused)).toEqual({
+      ok: false,
+      message: "This round's song has already been swapped once.",
     });
   });
 });

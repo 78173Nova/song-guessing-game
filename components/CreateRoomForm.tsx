@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiWhoIsLoggedIn } from "@/lib/client/account-api";
 import { apiCreateRoom, saveRoomToken } from "@/lib/client/room-api";
+import { markShareOnArrival } from "@/lib/client/share";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import styles from "./Landing.module.css";
 
@@ -30,6 +31,7 @@ export default function CreateRoomForm() {
     const result = await apiCreateRoom(nickname);
     if (result.ok) {
       saveRoomToken(result.data.code, result.data.playerToken);
+      markShareOnArrival(result.data.code); // the lobby opens the share pop-up once
       router.push(`/join/${result.data.code}`);
       return;
     }

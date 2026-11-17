@@ -82,6 +82,17 @@ export async function apiAnswerRoom(code: string, token: string, round: number, 
   );
 }
 
+// This device could not load a round's clip (issue #41): ask the server to swap that round's song. The reply has
+// the new clip. The server allows one swap per round and only before the round starts, so a refusal means the
+// round plays with the clip it has.
+export async function apiReportClip(code: string, token: string, round: number, fetchFn: FetchFn = fetch) {
+  return post<{ round: number; previewUrl: string }>(
+    `/api/rooms/${encodeURIComponent(code)}/replace`,
+    { round },
+    withToken(token, fetchFn),
+  );
+}
+
 // Without a token the server still says whether the room exists and is open (404 / 409 before 403), so the
 // join page can show "This room has closed" before anyone types a nickname.
 export async function apiRoomState(code: string, token: string | null, fetchFn: FetchFn = fetch): Promise<StateResult> {

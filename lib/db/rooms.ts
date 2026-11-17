@@ -2,6 +2,7 @@
 // Tokens come in as the raw value from the request and are hashed here, so a raw token can never
 // reach the database (decision 012).
 import { createHash } from "node:crypto";
+import type { NewRound } from "../game/rounds";
 import type { Db, TransactionDb } from "./client";
 
 // At most this many players per room, the room creator included (issue #32; spec 002 had 50).
@@ -285,4 +286,37 @@ export async function closeRoomRound(db: Db, gameId: string, roundNumber: number
     [gameId, roundNumber, now.toISOString()],
   );
   return rows.length === 1;
+}
+
+// Gives a round of a room game another song and options, because a device could not load its clip (issue #41).
+// Only changes a round that has not started at `now` (waiting, or scheduled with a start time still to come) and
+// has not been swapped before: one swap per round, safe against two reports at the same moment. A scheduled round
+// starts no earlier than `earliestStart`, so every device has time to load the new clip. The database refuses a
+// song that is already in the game (UNIQUE game_id + song_id). Returns false if nothing changed.
+export async function swapRoomRound(
+  db: Db,
+  gameId: string,
+  round: NewRound,
+  now: Date,
+  earliestStart: Date,
+): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE rounds SET song_id = $3, options = $4, correct_option = $5, swapped = true,
+       started_at = CASE WHEN status = 'open' THEN GREATEST(started_at, $7::timestamptz) ELSE started_at END
+     WHERE game_id = $1 AND round_number = $2 AND NOT swapped
+       AND (status = 'waiting' OR (status = 'open' AND started_at > $6::timestamptz))
+       AND EXISTS (SELECT 1 FROM rooms WHERE rooms.game_id = rounds.game_id)
+     RETURNING round_number`,
+    [gameId, round.roundNumber, round.songId, round.options, round.correctOption, now.toISOString(), earliestStart.toISOString()],
+  );
+  return rows.length === 1;
+}
+
+// Has this round of a game already had its one swap?
+export async function wasRoundSwapped(db: Db, gameId: string, roundNumber: number): Promise<boolean> {
+  const rows = await db.query<{ swapped: boolean }>(
+    "SELECT swapped FROM rounds WHERE game_id = $1 AND round_number = $2",
+    [gameId, roundNumber],
+  );
+  return rows[0]?.swapped === true;
 }

@@ -6,7 +6,7 @@
 // is the token right (403), is the input valid (400), is this the right moment (409).
 import { randomBytes, randomInt } from "node:crypto";
 import type { Db, TransactionDb } from "../db/client";
-import { createGame, getGameRounds, markRoundSent, replaceRound, type StoredRound } from "../db/games";
+import { createGame, getGameRounds, markRoundSent, type StoredRound } from "../db/games";
 import {
   addPlayer,
   closeRoomRound,
@@ -19,6 +19,8 @@ import {
   listRoomAnswers,
   saveRoomAnswer,
   startRoom,
+  swapRoomRound,
+  wasRoundSwapped,
   type Room,
   type RoomAnswer,
   type RoomPlayer,
@@ -40,6 +42,7 @@ import {
   readBearerToken,
   roundClosedAt,
   secondsLeft,
+  SWAP_LOAD_SECONDS,
 } from "../game/rooms";
 import { buildReplacementRound, buildRounds, ROUNDS_PER_GAME } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
@@ -72,6 +75,7 @@ const ERRORS = {
   "too-late": { status: 409, message: "Too late – the time for this round is over." },
   "already-answered": { status: 409, message: "You have already answered this round." },
   "round-already-started": { status: 409, message: "This round has already started." },
+  "already-swapped": { status: 409, message: "This round's song has already been swapped once." },
   "not-enough-songs": { status: 503, message: MUSIC_UNAVAILABLE_MESSAGE },
   "server-error": { status: 500, message: "Something went wrong on the server. Please try again." },
 } as const;
@@ -149,7 +153,7 @@ function readNickname(rawBody: string): Found<{ nickname: string }> {
 // POST /api/rooms – an account holder creates a room with { nickname } and becomes its room creator: the first
 // player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
 // creator's player token and the nickname as it was stored. The token is returned only this once: the database
-// keeps just its hash (decision 012). It is also the room's creator key for Start, Next and Replace.
+// keeps just its hash (decision 012). It is also the room's creator key for Start.
 // For now every room has the same settings: Multiplayer, title mode, any genre and decade, one set of 5 rounds.
 export async function createNewRoom(
   db: TransactionDb,
@@ -221,7 +225,7 @@ export async function startRoomGame(
   if (room.status !== "lobby") return fail("room-started");
   if ((await listPlayers(db, room.id)).length < MIN_PLAYERS_TO_START) return fail("not-enough-players");
 
-  const songs = await listSongsWithPreview(db);
+  const songs = await songsForRoom(db, room);
   const built = buildRounds(songs, deps.random);
   if (!built.ok) return fail("not-enough-songs");
 
@@ -480,8 +484,18 @@ export async function getRoomState(
   return { status: 200, body };
 }
 
-// POST /api/rooms/[code]/replace – the creator's page could not load a round's clip: give that round another
-// song. The same rules as the solo route (only rounds that have not started), but only for the creator's token.
+// The songs a room game may use: matching the room's settings, each with a clip. For now every room has the same
+// settings (any genre and decade, title mode), so that is every song with a clip. Room settings (#34) narrow this.
+async function songsForRoom(db: Db, room: Room) {
+  void room; // the settings will come from the room
+  return listSongsWithPreview(db);
+}
+
+// POST /api/rooms/[code]/replace – a player's device could not load a round's clip (issue #41): give that round
+// another song that matches the room's settings and is not in the game yet, and every device loads the new clip.
+// Any player of the room may report, but only before the round starts, and only once per round – so nobody can
+// skip songs by reporting failures again and again. A late report moves the round's start back so it starts
+// SWAP_LOAD_SECONDS after the report (at most that much later than planned).
 export async function replaceRoomSong(
   db: Db,
   code: string,
@@ -490,7 +504,7 @@ export async function replaceRoomSong(
   deps: Deps = {},
 ): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
-  const found = await findRoomAsCreator(db, code, authorization, now());
+  const found = await findRoomAsPlayer(db, code, authorization, now());
   if (!found.ok) return found.result;
   const { room } = found;
 
@@ -503,14 +517,20 @@ export async function replaceRoomSong(
   const gameId = room.gameId!;
   const rounds = (await getGameRounds(db, gameId)) ?? [];
   if (input.round > rounds.length) return fail("round-out-of-range");
-  if (rounds[input.round - 1].status !== "waiting") return fail("round-already-started");
 
-  const songs = await listSongsWithPreview(db);
+  // Why a swap is refused: this round already had its swap, or it has started.
+  const at = now();
+  const whyNot = async (): Promise<ApiResult> =>
+    fail((await wasRoundSwapped(db, gameId, input.round)) ? "already-swapped" : "round-already-started");
+  if (hasStarted(rounds[input.round - 1], at)) return fail("round-already-started");
+
+  const songs = await songsForRoom(db, room);
   const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, deps.random);
   if (!built.ok) return fail("not-enough-songs");
 
-  // Only succeeds if the round is still waiting.
-  if (!(await replaceRound(db, gameId, built.round))) return fail("round-already-started");
+  // Only succeeds if the round has not started and has not been swapped – even with two reports at once.
+  const earliestStart = new Date(at.getTime() + SWAP_LOAD_SECONDS * 1000);
+  if (!(await swapRoomRound(db, gameId, built.round, at, earliestStart))) return whyNot();
 
   const previewUrl = songs.find((s) => s.id === built.round.songId)!.previewUrl;
   return { status: 200, body: { round: input.round, previewUrl } };
