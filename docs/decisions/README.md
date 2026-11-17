@@ -27,5 +27,5 @@ Rules:
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
 | 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, built (room core, away/kick/leave, several games per room, public rooms and the lobby countdown; updated 17 Nov 2026) |
 | 013 | [Game modes: title, artist, year, mixed](013-game-modes.md) | decided, partly built |
-| 014 | [Accounts](014-accounts.md) | decided, mostly built (sign-up, verification, login, password reset, avatars and Account settings, changing username/email/password; updated 17 Nov 2026; Brevo email #25 open) |
+| 014 | [Accounts](014-accounts.md) | decided, mostly built (sign-up, verification, login, password reset, avatars and Account settings, changing username/email/password; updated 17 Nov 2026; Brevo email delivery #25) |
 | 015 | [Room games: server-paced rounds, clips on every device](015-room-games.md) | decided, built (issue #33; updated 17 Nov 2026: room settings and sets, song swap, QR code, several games per room) |
