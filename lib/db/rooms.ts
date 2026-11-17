@@ -28,6 +28,7 @@ export type Room = {
   createdAt: Date; // the room expires 3 hours after this (rule in lib/game/rooms.ts)
   settings: RoomSettings; // fixed when the room is created (issue #34)
   closedReason: ClosedReason | null; // set when the room closed early (issue #40)
+  startingPlayers: number | null; // how many players the game started with (issue #39); null in the lobby
 };
 
 export type RoomPlayer = {
@@ -61,6 +62,7 @@ type RoomRow = {
   songs_per_set: number;
   sets: number;
   closed_reason: ClosedReason | null;
+  starting_players: number | null;
 };
 
 type PlayerRow = {
@@ -74,7 +76,7 @@ type PlayerRow = {
 };
 
 const ROOM_COLUMNS =
-  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason";
+  "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, starting_players";
 const PLAYER_COLUMNS = "id, room_id, nickname, avatar, joined_at, last_seen_at, removed";
 
 const toRoom = (row: RoomRow): Room => ({
@@ -93,6 +95,7 @@ const toRoom = (row: RoomRow): Room => ({
     sets: row.sets as RoomSettings["sets"],
   },
   closedReason: row.closed_reason,
+  startingPlayers: row.starting_players,
 });
 
 const toPlayer = (row: PlayerRow): RoomPlayer => ({
@@ -328,11 +331,13 @@ export async function kickPlayer(
   return rows.length === 1;
 }
 
-// Starts the room's game. Only a room in the lobby changes, so two Start taps at the same moment
+// Starts the room's game and records how many players it starts with (issue #39) in the same statement, so a
+// join or leave cannot slip in between. Only a room in the lobby changes, so two Start taps at the same moment
 // cannot both count. Returns false if nothing changed.
 export async function startRoom(db: Db, roomId: string, gameId: string): Promise<boolean> {
   const rows = await db.query(
-    `UPDATE rooms SET status = 'playing', game_id = $2
+    `UPDATE rooms SET status = 'playing', game_id = $2,
+       starting_players = (SELECT count(*) FROM room_players WHERE room_id = $1 AND removed IS NULL)
      WHERE id = $1 AND status = 'lobby' AND closed_reason IS NULL
      RETURNING id`,
     [roomId, gameId],
