@@ -12,6 +12,13 @@
   flex: 1;
 }
 
+.back {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  opacity: 0.8;
+}
+
 .heading {
   font-size: 1.75rem;
   text-align: center;

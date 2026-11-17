@@ -46,7 +46,7 @@ You need Node.js 24 (LTS) and npm.
 npm install
 cp .env.example .env.local      # then put the database connection string into .env.local
 npm run db:seed                 # creates the tables, loads the songs, looks up their previews (≈2 min the first time)
-npm run dev                     # open http://localhost:3000 in Chrome, Safari or Firefox
+npm run dev                     # open http://localhost:3000 in Chrome, Safari or Firefox (solo game: /solo)
 ```
 
 ### Environment variables
