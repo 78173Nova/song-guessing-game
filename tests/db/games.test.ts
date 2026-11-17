@@ -45,6 +45,7 @@ describe("createGame / getGameRounds", () => {
       song: {
         title: songs[0].title,
         artist: songs[0].artist,
+        year: 2000,
         previewUrl: songs[0].previewUrl,
         artworkUrl: songs[0].artworkUrl,
         storeUrl: songs[0].storeUrl,

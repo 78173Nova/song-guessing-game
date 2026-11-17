@@ -4,6 +4,7 @@
 //
 // Flow: start → creating → first-clip (loading the first song) → get-ready (3-2-1) → starting →
 // round → reveal → starting the next round (or clip-loading if its clip is not ready yet) → ... → results.
+import type { QuestionType } from "../game/modes";
 import { MUSIC_LOAD_MESSAGE } from "./clip-loader";
 
 export type RoundInfo = {
@@ -11,6 +12,8 @@ export type RoundInfo = {
   totalRounds: number;
   previewUrl: string;
   options: string[];
+  // What the round asks. Always sent by the server; optional so older round data still fits.
+  questionType?: QuestionType;
 };
 
 export type AnswerResult = {
@@ -18,7 +21,7 @@ export type AnswerResult = {
   points: number;
   totalScore: number;
   correctOption: number;
-  song: { title: string; artist: string; artworkUrl: string | null; storeUrl: string | null };
+  song: { title: string; artist: string; year?: number; artworkUrl: string | null; storeUrl: string | null };
 };
 
 export type Answer = number | "skip" | "timeout";
@@ -39,7 +42,7 @@ type Clips = { gameId: string; previewUrls: string[]; ready: boolean[] };
 type InGame = Clips & Progress;
 
 export type GameState =
-  | { screen: "start" }
+  | { screen: "start"; message?: string } // message: why the last start was refused (too few songs)
   | { screen: "creating" }
   | ({ screen: "first-clip" } & InGame)
   | ({ screen: "get-ready" } & InGame)
@@ -65,6 +68,7 @@ export type GameAction =
   | { type: "answer-result"; result: AnswerResult }
   | { type: "next" }
   | { type: "failed"; message: string }
+  | { type: "start-refused"; message: string }
   | { type: "reset" };
 
 export const initialState: GameState = { screen: "start" };
@@ -105,6 +109,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "start":
       return { screen: "creating" };
+
+    // Too few songs match the filters: back to the start screen, which shows why.
+    case "start-refused":
+      if (state.screen !== "creating") return state;
+      return { screen: "start", message: action.message };
 
     case "game-created":
       if (state.screen !== "creating") return state;

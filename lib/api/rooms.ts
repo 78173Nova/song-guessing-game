@@ -6,7 +6,7 @@
 // is the token right (403), is the input valid (400), is this the right moment (409).
 import { randomBytes, randomInt } from "node:crypto";
 import type { Db, TransactionDb } from "../db/client";
-import { createGame, getGameRounds, markRoundSent, type StoredRound } from "../db/games";
+import { createGame, getGameRounds, getQuestionTypes, markRoundSent, type StoredRound } from "../db/games";
 import {
   addPlayer,
   closeRoomRound,
@@ -26,7 +26,19 @@ import {
   type RoomPlayer,
   type RoomStatus,
 } from "../db/rooms";
-import { listSongsWithPreview } from "../db/songs";
+import type { QuestionType } from "../game/modes";
+import {
+  endsSet,
+  MAX_PLAYERS_BY_TYPE,
+  matchingSongs,
+  parseRoomSettings,
+  parseSongChoiceQuery,
+  setOfRound,
+  tooFewRoomSongsMessage,
+  totalRoundsOf,
+  type RoomSettings,
+} from "../game/room-settings";
+import { listSongsWithPreview, type Song } from "../db/songs";
 import { parseRoundInput } from "../game/answers";
 import {
   FIRST_ROUND_DELAY_SECONDS,
@@ -44,7 +56,7 @@ import {
   secondsLeft,
   SWAP_LOAD_SECONDS,
 } from "../game/rooms";
-import { buildReplacementRound, buildRounds, ROUNDS_PER_GAME } from "../game/rounds";
+import { buildReplacementRound, buildRounds } from "../game/rounds";
 import { ANSWER_TIME_SECONDS, scoreAnswer } from "../game/scoring";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 import { looksLikeToken } from "../accounts/rules";
@@ -60,6 +72,7 @@ const MAX_CODE_DRAWS = 10;
 const ERRORS = {
   malformed: { status: 400, message: "The request is not valid." },
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
+  "invalid-settings": { status: 400, message: "Please choose valid room settings." },
   "invalid-option": { status: 400, message: "Please choose one of the four answers." },
   "round-out-of-range": { status: 400, message: "This round does not exist in this game." },
   "wrong-token": { status: 403, message: "This device is not part of this room. Please join again." },
@@ -150,11 +163,41 @@ function readNickname(rawBody: string): Found<{ nickname: string }> {
   return { ok: true, nickname };
 }
 
-// POST /api/rooms – an account holder creates a room with { nickname } and becomes its room creator: the first
+// Reads { nickname, settings? } from the body of "create a room". Only these two fields are allowed. Without
+// settings the room gets the default ones (DEFAULT_ROOM_SETTINGS).
+function readCreateInput(rawBody: string): Found<{ nickname: string; settings?: RoomSettings }> {
+  const input = readNickname(rawBody);
+  if (!input.ok) return input;
+  const { body } = readJson(rawBody) as { ok: true; body: Record<string, unknown> };
+  if (Object.keys(body).some((field) => field !== "nickname" && field !== "settings")) {
+    return { ok: false, result: fail("malformed") };
+  }
+  if (!("settings" in body)) return { ok: true, nickname: input.nickname };
+  const settings = parseRoomSettings(body.settings);
+  if (settings === null) return { ok: false, result: fail("invalid-settings") };
+  return { ok: true, nickname: input.nickname, settings };
+}
+
+// 422 with the number of matching songs: the room creator can fix it by choosing other settings.
+function tooFewSongs(matching: number, message = tooFewRoomSongsMessage(matching)): ApiResult {
+  return { status: 422, body: { error: "too-few-songs", matching, message } };
+}
+
+// The playable songs that match the room's genres and decades.
+async function songsFor(db: Db, settings: RoomSettings): Promise<Song[]> {
+  return matchingSongs(await listSongsWithPreview(db), settings);
+}
+
+// Builds the rounds of a game with these settings: sets × songs per set different songs in the room's mode.
+function buildRoomRounds(songs: Song[], settings: RoomSettings, now: Date, random?: () => number) {
+  return buildRounds(songs, random, { mode: settings.mode, currentYear: now.getFullYear(), rounds: totalRoundsOf(settings) });
+}
+
+// POST /api/rooms – an account holder creates a room with { nickname, settings } and becomes its room creator: the first
 // player in its lobby (issue #32). Needs the session cookie of a logged-in account. Returns the code, the
 // creator's player token and the nickname as it was stored. The token is returned only this once: the database
 // keeps just its hash (decision 012). It is also the room's creator key for Start.
-// For now every room has the same settings: Multiplayer, title mode, any genre and decade, one set of 5 rounds.
+// The settings (issue #34) are fixed from now on. Too few matching songs are refused with 422 and their count.
 export async function createNewRoom(
   db: TransactionDb,
   sessionToken: string | undefined,
@@ -167,13 +210,30 @@ export async function createNewRoom(
   if (!looksLikeToken(sessionToken) || (await findSessionUsername(db, sessionToken, now())) === null) {
     return fail("log-in-needed");
   }
-  const input = readNickname(rawBody);
+  const input = readCreateInput(rawBody);
   if (!input.ok) return input.result;
+  if (input.settings !== undefined) {
+    const songs = await songsFor(db, input.settings);
+    if (songs.length < totalRoundsOf(input.settings)) return tooFewSongs(songs.length);
+    // Enough songs, but e.g. not 4 different artists for artist mode: the game could not be built.
+    if (!buildRoomRounds(songs, input.settings, now()).ok) {
+      return tooFewSongs(
+        songs.length,
+        "These songs have too few different titles or artists for this mode. Choose more genres/decades or another mode.",
+      );
+    }
+  }
 
   const playerToken = randomToken();
   // Codes are never reused, so a drawn code can be taken. Then we draw again.
   for (let draw = 1; draw <= MAX_CODE_DRAWS; draw++) {
-    const created = await createRoom(db, { code: newCode(), creatorToken: playerToken, nickname: input.nickname, now: now() });
+    const created = await createRoom(db, {
+      code: newCode(),
+      creatorToken: playerToken,
+      nickname: input.nickname,
+      now: now(),
+      settings: input.settings,
+    });
     if (created !== null) {
       return { status: 201, body: { code: created.room.code, playerToken, nickname: created.creator.nickname } };
     }
@@ -182,8 +242,17 @@ export async function createNewRoom(
   return fail("server-error");
 }
 
+// GET /api/rooms/matching-songs?genres=pop,rock&decades=1980 – how many playable songs match one of the genres
+// and one of the decades ("any" for every one). The create form shows it while the creator chooses.
+export async function countMatchingSongs(db: Db, params: URLSearchParams): Promise<ApiResult> {
+  const choice = parseSongChoiceQuery(params);
+  if (choice === null) return fail("invalid-settings");
+  return { status: 200, body: { count: matchingSongs(await listSongsWithPreview(db), choice).length } };
+}
+
 // POST /api/rooms/[code]/join – adds a player to a room that is still in the lobby. Returns the player
-// token (only this once) and the nickname as it was stored.
+// token (only this once) and the nickname as it was stored. The player who fills the last seat (2 in a Duel room,
+// 25 in a Multiplayer room) starts the game: a full room starts by itself (issue #34).
 export async function joinRoom(db: TransactionDb, code: string, rawBody: string, deps: Deps = {}): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
@@ -197,12 +266,18 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
-  const added = await addPlayer(db, { roomId: found.room.id, nickname, token: playerToken, now: now() });
+  const maxPlayers = MAX_PLAYERS_BY_TYPE[found.room.settings.type];
+  const added = await addPlayer(db, { roomId: found.room.id, nickname, token: playerToken, now: now(), maxPlayers });
   if (!added.ok) {
     if (added.reason === "room_not_found") return fail("room-not-found");
     if (added.reason === "not_in_lobby") return fail("room-started");
     if (added.reason === "nickname_taken") return fail("nickname-taken");
     return fail("room-full");
+  }
+  if ((await listPlayers(db, found.room.id)).length >= maxPlayers) {
+    const started = await startGameNow(db, found.room, now(), deps.random);
+    // The join itself worked. If the game cannot start, the room creator sees why on "Start now".
+    if (started.status !== 200) console.error("Room API: a full room could not start:", started.body.error);
   }
   return { status: 201, body: { playerToken, nickname: added.player.nickname } };
 }
@@ -224,14 +299,18 @@ export async function startRoomGame(
 
   if (room.status !== "lobby") return fail("room-started");
   if ((await listPlayers(db, room.id)).length < MIN_PLAYERS_TO_START) return fail("not-enough-players");
+  return startGameNow(db, room, now(), deps.random);
+}
 
-  const songs = await songsForRoom(db, room);
-  const built = buildRounds(songs, deps.random);
+// Starts a room's game with its settings: "Start now", or the join that fills the room.
+async function startGameNow(db: Db, room: Room, now: Date, random?: () => number): Promise<ApiResult> {
+  const songs = await songsFor(db, room.settings);
+  const built = buildRoomRounds(songs, room.settings, now, random);
   if (!built.ok) return fail("not-enough-songs");
 
-  const gameId = await createGame(db, built.rounds);
+  const gameId = await createGame(db, built.rounds, room.settings.mode);
   // Round 1 is scheduled before the room counts as started, so a playing room always has a round coming.
-  await markRoundSent(db, gameId, 1, new Date(now().getTime() + FIRST_ROUND_DELAY_SECONDS * 1000));
+  await markRoundSent(db, gameId, 1, new Date(now.getTime() + FIRST_ROUND_DELAY_SECONDS * 1000));
   // Only succeeds if the room is still in the lobby – protects against two Start taps at once.
   if (!(await startRoom(db, room.id, gameId))) return fail("room-started");
 
@@ -240,15 +319,22 @@ export async function startRoomGame(
 }
 
 // Everything about a started room's game that the rules need.
-type RoomGame = { status: RoomStatus; rounds: StoredRound[]; players: RoomPlayer[]; answers: RoomAnswer[] };
+type RoomGame = {
+  status: RoomStatus;
+  rounds: StoredRound[];
+  questionTypes: QuestionType[]; // what each round asks, in round order
+  players: RoomPlayer[];
+  answers: RoomAnswer[];
+};
 
 async function loadRoomGame(db: Db, room: Room): Promise<RoomGame> {
-  const [rounds, players, answers] = await Promise.all([
+  const [rounds, questionTypes, players, answers] = await Promise.all([
     getGameRounds(db, room.gameId!),
+    getQuestionTypes(db, room.gameId!),
     listPlayers(db, room.id),
     listRoomAnswers(db, room.gameId!),
   ]);
-  return { status: room.status, rounds: rounds ?? [], players, answers };
+  return { status: room.status, rounds: rounds ?? [], questionTypes: questionTypes ?? [], players, answers };
 }
 
 // Has this round's start time come? A round in the database is "open" from the moment it is scheduled, but
@@ -259,7 +345,8 @@ const hasStarted = (round: StoredRound, now: Date) =>
 // There is no background timer (decision 008) and nobody taps Next (issue #33). Instead, every state request
 // first brings the game up to date, worked out from the stored times:
 // Looks at the first round that has not closed yet:
-//   - waiting (the round before it has closed): schedule it to start 8 seconds after that close.
+//   - waiting (the round before it has closed): schedule it to start 8 seconds after that close, or 23 seconds
+//     after it when that round ended a set (set summary and standings first, issue #34).
 //   - open, started, and everyone has answered or its 15 seconds are over: close it at the moment it closed
 //     (the last answer, or the end of the 15 seconds).
 // Then it looks again: if nobody asked for a while, several rounds can be due at once. When every round is
@@ -284,7 +371,7 @@ async function bringUpToDate(db: Db, room: Room, loaded: RoomGame, now: Date): P
       // Round 1 is scheduled by Start, so there is always a closed round before a waiting one here.
       const previousClose = rounds[index - 1]?.answeredAt;
       if (!previousClose) break;
-      const startsAt = nextRoundStartsAt(previousClose);
+      const startsAt = nextRoundStartsAt(previousClose, endsSet(index, room.settings.songsPerSet));
       if (!(await markRoundSent(db, room.gameId!, round.roundNumber, startsAt))) await reload();
       else rounds[index] = { ...round, status: "open", startedAt: startsAt };
       continue;
@@ -401,11 +488,12 @@ export async function getRoomState(
 
   const game: RoomGame =
     room.status === "lobby"
-      ? { status: "lobby", rounds: [], players: await listPlayers(db, room.id), answers: [] }
+      ? { status: "lobby", rounds: [], questionTypes: [], players: await listPlayers(db, room.id), answers: [] }
       : await bringUpToDate(db, room, await loadRoomGame(db, room), at);
 
   // The round on screen: the latest one that has started. null before round 1's start time.
   const current = game.rounds.findLast((round) => hasStarted(round, at)) ?? null;
+  const questionTypeOf = (round: StoredRound) => game.questionTypes[round.roundNumber - 1] ?? "title";
   const isOpen = current?.status === "open";
   // A round that is scheduled but has not started yet (at most one).
   const upcoming = game.rounds.find((round) => round.status === "open" && !hasStarted(round, at)) ?? null;
@@ -428,11 +516,12 @@ export async function getRoomState(
     status: game.status,
     role: isCreator ? "creator" : "player",
     players: game.players.map((player) => player.nickname),
+    settings: room.settings,
     // Who has answered the round on screen, for the ticks on the game board (issue #38). Never what they chose.
     answered: game.players
       .filter((player) => currentAnswers.some((a) => a.playerId === player.id))
       .map((player) => player.nickname),
-    totalRounds: game.rounds.length || ROUNDS_PER_GAME,
+    totalRounds: game.rounds.length || totalRoundsOf(room.settings),
     // Read again just before replying: the database calls above take time, and the device compares this with
     // the moment the reply arrives.
     serverNow: now().toISOString(),
@@ -441,7 +530,12 @@ export async function getRoomState(
     nextRound:
       upcoming === null
         ? null
-        : { number: upcoming.roundNumber, startsAt: upcoming.startedAt!.toISOString(), options: upcoming.options },
+        : {
+            number: upcoming.roundNumber,
+            startsAt: upcoming.startedAt!.toISOString(),
+            options: upcoming.options,
+            questionType: questionTypeOf(upcoming),
+          },
     round:
       current === null
         ? null
@@ -451,6 +545,7 @@ export async function getRoomState(
             startsAt: current.startedAt!.toISOString(),
             endsAt: new Date(current.startedAt!.getTime() + ANSWER_TIME_SECONDS * 1000).toISOString(),
             options: current.options,
+            questionType: questionTypeOf(current),
             secondsLeft: isOpen ? secondsLeft(current.startedAt!, at) : 0,
             answeredCount: currentAnswers.length,
             // Only once the round has closed:
@@ -479,17 +574,27 @@ export async function getRoomState(
     answer: myAnswer?.chosenOption ?? null, // the player's own choice – they know it anyway
     correct: revealed ? myAnswer?.chosenOption === current.correctOption : null,
     points: revealed ? (myAnswer?.points ?? 0) : null,
+    // The set summary (issue #34): every closed round with this player's result. The page shows one set's part
+    // after each set, and all of it at the end.
+    summary: game.rounds
+      .filter((round) => round.status === "answered")
+      .map((round) => {
+        const answer = game.answers.find((a) => a.roundNumber === round.roundNumber && a.playerId === me.id);
+        return {
+          round: round.roundNumber,
+          set: setOfRound(round.roundNumber, room.settings.songsPerSet),
+          title: round.song.title,
+          artist: round.song.artist,
+          storeUrl: round.song.storeUrl,
+          correct: answer !== undefined && answer.chosenOption === round.correctOption,
+          points: answer?.points ?? 0,
+        };
+      }),
   };
   body.standings = ranking.map(({ rank, nickname, score }) => ({ rank, nickname, score }));
   return { status: 200, body };
 }
 
-// The songs a room game may use: matching the room's settings, each with a clip. For now every room has the same
-// settings (any genre and decade, title mode), so that is every song with a clip. Room settings (#34) narrow this.
-async function songsForRoom(db: Db, room: Room) {
-  void room; // the settings will come from the room
-  return listSongsWithPreview(db);
-}
 
 // POST /api/rooms/[code]/replace – a player's device could not load a round's clip (issue #41): give that round
 // another song that matches the room's settings and is not in the game yet, and every device loads the new clip.
@@ -524,8 +629,13 @@ export async function replaceRoomSong(
     fail((await wasRoundSwapped(db, gameId, input.round)) ? "already-swapped" : "round-already-started");
   if (hasStarted(rounds[input.round - 1], at)) return fail("round-already-started");
 
-  const songs = await songsForRoom(db, room);
-  const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, deps.random);
+  // The new song matches the room's genres and decades and keeps the round's question type (issue #34).
+  const songs = await songsFor(db, room.settings);
+  const questionType = ((await getQuestionTypes(db, gameId)) ?? [])[input.round - 1];
+  const built = buildReplacementRound(songs, rounds.map((r) => r.songId), input.round, deps.random, {
+    questionType,
+    currentYear: at.getFullYear(),
+  });
   if (!built.ok) return fail("not-enough-songs");
 
   // Only succeeds if the round has not started and has not been swapped – even with two reports at once.
