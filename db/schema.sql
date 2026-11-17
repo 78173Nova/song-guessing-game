@@ -73,6 +73,18 @@ CREATE TABLE IF NOT EXISTS room_players (
 -- A nickname may only exist once per room, ignoring upper/lower case ("Anna" = "anna").
 CREATE UNIQUE INDEX IF NOT EXISTS room_players_nickname_unique ON room_players (room_id, lower(nickname));
 
+-- Away, kick and leave (issue #40, decision 012).
+-- last_seen_at: the last time this player's device asked for the room state (set at the join too). A player is
+-- away 5 s after it; the room creator can kick them once they have been away for more than 60 s.
+-- removed: empty while the player is in the room. 'left' = left during or after the game, 'kicked' = the room
+-- creator removed them. The row stays, so their token gets a clear message and a kicked nickname cannot come back.
+-- A player who leaves the lobby is deleted instead, so their seat and nickname are free again.
+ALTER TABLE room_players ADD COLUMN IF NOT EXISTS last_seen_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE room_players ADD COLUMN IF NOT EXISTS removed text CHECK (removed IN ('left', 'kicked'));
+-- Why a room closed early: the room creator left the lobby, or every player has left. Empty = not closed early
+-- (the 30-minute and 3-hour limits are worked out from created_at).
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS closed_reason text CHECK (closed_reason IN ('creator-left', 'everyone-left'));
+
 -- Room games only: true once a device reported that it could not load this round's clip and the server gave the
 -- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting
 -- failures again and again. Solo games leave it false.

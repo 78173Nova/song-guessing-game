@@ -15,8 +15,11 @@ import {
   findRoomByCreatorToken,
   finishRoom,
   getRoomByCode,
+  kickPlayer,
+  leaveRoom,
   listPlayers,
   listRoomAnswers,
+  markPlayerSeen,
   saveRoomAnswer,
   startRoom,
   swapRoomRound,
@@ -35,6 +38,8 @@ import {
   isRoundClosed,
   isTimeUp,
   isValidRoomCode,
+  isAway,
+  kickableIfSeenBefore,
   nextRoundStartsAt,
   parseNickname,
   parseRoomAnswerInput,
@@ -65,6 +70,12 @@ const ERRORS = {
   "wrong-token": { status: 403, message: "This device is not part of this room. Please join again." },
   "room-not-found": { status: 404, message: "There is no room with this code." },
   "room-closed": { status: 409, message: "This room has closed." },
+  "room-closed-by-creator": { status: 409, message: "The room creator closed the room." },
+  kicked: { status: 403, message: "The room creator removed you from this room." },
+  left: { status: 403, message: "You have left this room." },
+  "not-creator": { status: 403, message: "Only the room creator can do this." },
+  "player-not-found": { status: 404, message: "There is no player with this nickname in this room." },
+  "not-away-long-enough": { status: 409, message: "A player can only be kicked after being away for more than 60 seconds." },
   "room-started": { status: 409, message: "This game has already started." },
   "room-full": { status: 409, message: "This room is full." },
   "nickname-taken": { status: 409, message: "This nickname is already taken in this room." },
@@ -104,7 +115,8 @@ async function findOpenRoom(db: Db, code: string, now: Date): Promise<Found<{ ro
   if (!isValidRoomCode(code)) return { ok: false, result: fail("room-not-found") };
   const room = await getRoomByCode(db, code);
   if (room === null) return { ok: false, result: fail("room-not-found") };
-  if (isRoomClosed(room, now)) return { ok: false, result: fail("room-closed") };
+  if (room.closedReason === "creator-left") return { ok: false, result: fail("room-closed-by-creator") };
+  if (room.closedReason !== null || isRoomClosed(room, now)) return { ok: false, result: fail("room-closed") };
   return { ok: true, room };
 }
 
@@ -136,6 +148,7 @@ async function findRoomAsPlayer(
   const token = readBearerToken(authorization);
   const player = token === null ? null : await findPlayerByToken(db, found.room.id, token);
   if (player === null) return { ok: false, result: fail("wrong-token") };
+  if (player.removed !== null) return { ok: false, result: fail(player.removed) };
   return { ok: true, room: found.room, player };
 }
 
@@ -184,7 +197,15 @@ export async function createNewRoom(
 
 // POST /api/rooms/[code]/join – adds a player to a room that is still in the lobby. Returns the player
 // token (only this once) and the nickname as it was stored.
-export async function joinRoom(db: TransactionDb, code: string, rawBody: string, deps: Deps = {}): Promise<ApiResult> {
+// A tab that was kicked from this room still has its old token and sends it along (issue #40): then the join is
+// refused, so a kicked player cannot simply come back under another nickname from the same tab.
+export async function joinRoom(
+  db: TransactionDb,
+  code: string,
+  rawBody: string,
+  deps: Deps = {},
+  authorization: string | null = null,
+): Promise<ApiResult> {
   const now = deps.now ?? (() => new Date());
   if (!isValidRoomCode(code)) return fail("room-not-found");
 
@@ -194,6 +215,10 @@ export async function joinRoom(db: TransactionDb, code: string, rawBody: string,
 
   const found = await findOpenRoom(db, code, now());
   if (!found.ok) return found.result;
+
+  const oldToken = readBearerToken(authorization);
+  const before = oldToken === null ? null : await findPlayerByToken(db, found.room.id, oldToken);
+  if (before?.removed === "kicked") return fail("kicked");
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
@@ -239,7 +264,8 @@ export async function startRoomGame(
   return { status: 200, body: { totalRounds: built.rounds.length, previewUrls } };
 }
 
-// Everything about a started room's game that the rules need.
+// Everything about a started room's game that the rules need. Players who have left or were kicked are not in it,
+// and neither are their answers (issue #40): they are gone from the standings, and a round no longer waits for them.
 type RoomGame = { status: RoomStatus; rounds: StoredRound[]; players: RoomPlayer[]; answers: RoomAnswer[] };
 
 async function loadRoomGame(db: Db, room: Room): Promise<RoomGame> {
@@ -248,7 +274,8 @@ async function loadRoomGame(db: Db, room: Room): Promise<RoomGame> {
     listPlayers(db, room.id),
     listRoomAnswers(db, room.gameId!),
   ]);
-  return { status: room.status, rounds: rounds ?? [], players, answers };
+  const inRoom = (answer: RoomAnswer) => players.some((player) => player.id === answer.playerId);
+  return { status: room.status, rounds: rounds ?? [], players, answers: answers.filter(inRoom) };
 }
 
 // Has this round's start time come? A round in the database is "open" from the moment it is scheduled, but
@@ -397,7 +424,10 @@ export async function getRoomState(
   // Someone without a seat can only join in the lobby. Once the game has started, say so, so the room page
   // does not offer a nickname form that can only be refused.
   if (token === null || me === null) return fail(room.status === "lobby" ? "wrong-token" : "room-started");
+  if (me.removed !== null) return fail(me.removed);
   const isCreator = (await findRoomByCreatorToken(db, code, token)) !== null;
+  // This request shows that the player's device is here (issue #40: away after 5 s without one).
+  await markPlayerSeen(db, me.id, at);
 
   const game: RoomGame =
     room.status === "lobby"
@@ -432,6 +462,12 @@ export async function getRoomState(
     answered: game.players
       .filter((player) => currentAnswers.some((a) => a.playerId === player.id))
       .map((player) => player.nickname),
+    // Players whose device has not asked for 5 s, for the loading symbol on their nickname (issue #40).
+    away: game.players.filter((player) => isAway(player.lastSeenAt, at)).map((player) => player.nickname),
+    // The players the room creator may kick now (away for more than 60 s). Empty for everyone else.
+    kickable: isCreator
+      ? game.players.filter((player) => player.lastSeenAt < kickableIfSeenBefore(at)).map((player) => player.nickname)
+      : [],
     totalRounds: game.rounds.length || ROUNDS_PER_GAME,
     // Read again just before replying: the database calls above take time, and the device compares this with
     // the moment the reply arrives.
@@ -534,4 +570,56 @@ export async function replaceRoomSong(
 
   const previewUrl = songs.find((s) => s.id === built.round.songId)!.previewUrl;
   return { status: 200, body: { round: input.round, previewUrl } };
+}
+
+// POST /api/rooms/[code]/kick – the room creator removes a player who has been away for more than 60 s
+// (issue #40), in the lobby or during the game. Body: { nickname }. The page asks "Are you sure you want to kick
+// <nickname>?" first. The kicked player loses their seat for good and disappears from the standings.
+// Once the room creator has left a game, their token no longer works, so nobody can kick.
+export async function kickRoomPlayer(
+  db: Db,
+  code: string,
+  authorization: string | null,
+  rawBody: string,
+  deps: Deps = {},
+): Promise<ApiResult> {
+  const now = deps.now ?? (() => new Date());
+  const at = now();
+  const found = await findRoomAsPlayer(db, code, authorization, at);
+  if (!found.ok) return found.result;
+  const { room, player: me } = found;
+  if ((await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) === null) return fail("not-creator");
+
+  const input = readNickname(rawBody);
+  if (!input.ok) return input.result;
+  const target = (await listPlayers(db, room.id)).find(
+    (player) => player.nickname.toLowerCase() === input.nickname.toLowerCase() && player.id !== me.id,
+  );
+  if (target === undefined) return fail("player-not-found");
+
+  // Only changes the player if they are still in the room and still away long enough at this moment.
+  if (!(await kickPlayer(db, { roomId: room.id, playerId: target.id, seenBefore: kickableIfSeenBefore(at) }))) {
+    return fail("not-away-long-enough");
+  }
+  return { status: 200, body: { nickname: target.nickname } };
+}
+
+// POST /api/rooms/[code]/leave – a player taps Leave (issue #40). In the lobby the seat frees up, and the
+// room creator leaving closes the room for everyone. Once the game has started, the player is gone for good
+// and removed from the standings; the game goes on without them, and the room closes when nobody is left.
+export async function playerLeavesRoom(
+  db: TransactionDb,
+  code: string,
+  authorization: string | null,
+  deps: Deps = {},
+): Promise<ApiResult> {
+  const now = deps.now ?? (() => new Date());
+  const found = await findRoomAsPlayer(db, code, authorization, now());
+  if (!found.ok) return found.result;
+  const { room, player } = found;
+  const isCreator = (await findRoomByCreatorToken(db, code, readBearerToken(authorization)!)) !== null;
+
+  const result = await leaveRoom(db, { roomId: room.id, playerId: player.id, isCreator });
+  if (result === "not-in-room") return fail("wrong-token"); // left at the same moment from another tab
+  return { status: 200, body: { left: true, roomClosed: result === "room-closed" } };
 }

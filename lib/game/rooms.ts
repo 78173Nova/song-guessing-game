@@ -112,3 +112,18 @@ export function rankByScore<Player extends { score: number }>(players: Player[])
     rank: 1 + sorted.filter((other) => other.score > player.score).length,
   }));
 }
+
+// Away and kick (issue #40). Every device asks for the room state every 1–2 seconds, so a player whose device
+// has not asked for AWAY_SECONDS is away (closed the tab, lost the connection, phone locked). Exactly 5 s counts
+// as away. The room creator can kick a player who has been away for more than KICK_AFTER_AWAY_SECONDS.
+export const AWAY_SECONDS = 5;
+export const KICK_AFTER_AWAY_SECONDS = 60;
+
+export function isAway(lastSeenAt: Date, now: Date): boolean {
+  return now.getTime() - lastSeenAt.getTime() >= AWAY_SECONDS * 1000;
+}
+
+// The latest last-seen time a player may have and still be kicked at `now`: more than 60 s away.
+export function kickableIfSeenBefore(now: Date): Date {
+  return new Date(now.getTime() - (AWAY_SECONDS + KICK_AFTER_AWAY_SECONDS) * 1000);
+}
