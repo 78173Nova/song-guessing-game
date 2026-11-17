@@ -4,6 +4,7 @@
 // says who. Where each nickname sits is worked out in lib/client/room-board.ts.
 import { ROUND_SECONDS } from "@/lib/client/countdown";
 import { BOARD, boardSeats, SEAT, SONG_RADIUS } from "@/lib/client/room-board";
+import { avatarEmoji } from "@/lib/game/avatars";
 import styles from "./RoomBoard.module.css";
 
 // Board units as a share of the board's width or height, for CSS.
@@ -13,6 +14,7 @@ const down = (units: number) => `${(units / BOARD.height) * 100}%`;
 export default function RoomBoard({
   players,
   away,
+  avatars,
   me,
   answered,
   iAnswered,
@@ -22,6 +24,7 @@ export default function RoomBoard({
 }: {
   players: string[];
   away: string[]; // players whose device has not asked for 5 s: a loading symbol on their nickname (issue #40)
+  avatars: Record<string, string>; // each player's avatar id by nickname (issue #44)
   me: string;
   answered: string[]; // who has answered the round on screen
   iAnswered: boolean; // the viewer's own tap counts at once, before the next reply
@@ -49,6 +52,7 @@ export default function RoomBoard({
                   ⏳{" "}
                 </span>
               )}
+              <span className={styles.avatar} aria-hidden="true">{avatarEmoji(avatars[seat.nickname])}</span>
               <span className={styles.name}>{seat.nickname}</span>
             </li>
           ))}
@@ -79,6 +83,7 @@ export default function RoomBoard({
       </div>
       <p className={styles.me}>
         {iAnswered && <span aria-label="you have answered">✓ </span>}
+        <span className={styles.avatar} aria-hidden="true">{avatarEmoji(avatars[me])}</span>
         {me}
       </p>
     </div>

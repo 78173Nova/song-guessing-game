@@ -28,15 +28,15 @@ const ROOM: ListedRoom = {
 describe("creating a public or private room", () => {
   it("sends private: true only when private is chosen", async () => {
     const fetchFn = reply(201, { code: "482913", playerToken: "ab".repeat(32), nickname: "Anna" });
-    await apiCreateRoom("Anna", fetchFn, SETTINGS, true);
-    await apiCreateRoom("Anna", fetchFn, SETTINGS, false);
-    await apiCreateRoom("Anna", fetchFn, SETTINGS);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS, true);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS, false);
+    await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn, SETTINGS);
 
     const bodies = fetchFn.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
     expect(bodies).toEqual([
-      { nickname: "Anna", settings: SETTINGS, private: true },
-      { nickname: "Anna", settings: SETTINGS },
-      { nickname: "Anna", settings: SETTINGS },
+      { nickname: "Anna", avatar: "fox", settings: SETTINGS, private: true },
+      { nickname: "Anna", avatar: "fox", settings: SETTINGS },
+      { nickname: "Anna", avatar: "fox", settings: SETTINGS },
     ]);
   });
 });

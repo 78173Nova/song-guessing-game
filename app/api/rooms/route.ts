@@ -1,4 +1,4 @@
-// POST /api/rooms – an account holder creates a room with { nickname, settings?, private? }.
+// POST /api/rooms – an account holder creates a room with { nickname, avatar?, settings?, private? }.
 // GET /api/rooms?type=multiplayer&mode=any&genres=any&decades=any – the "Join a room" list of public rooms (issue #36).
 // The steps live in lib/api/rooms.ts. The session cookie says who is logged in; only an account holder can create a room.
 import type { NextRequest } from "next/server";

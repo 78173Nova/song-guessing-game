@@ -159,3 +159,16 @@ newer one from "Send the email again") is deleted when someone else signs up wit
 account is created with it. Until then, signing up reserves the username. The team accounts script prints the
 username that is really stored when an email already had an account with another username; log in with the
 email in that case.
+
+Update 17 Nov 2026 (avatars and Account settings, issue #44): every player has an **avatar** from a fixed set of
+16 emoji (`lib/game/avatars.ts`; the server stores and sends an id such as `fox`, no uploads, no package). An
+account keeps an avatar and a **usual nickname** (`users.avatar`, `users.usual_nickname`, both empty until chosen);
+`GET/POST /api/accounts/settings` reads and changes them, only for the account of the session cookie (401 otherwise),
+with the same nickname rule as in rooms ("" or null removes the usual nickname) and only ids of the set as avatar.
+The page **Account settings** (`/account`) is linked from "Logged in as <username>". Creating or joining a room takes
+`{ nickname, avatar? }`; an unknown avatar is refused (400 `invalid-avatar`). The first room of an account without
+an avatar saves the picked one (once; later picks on the nickname screen apply to that room only). With no avatar in
+the request the account's saved one is used, else the music note. Joining reads the session cookie only for this;
+guests join as before. The room state adds `avatars` (avatar id by nickname). Why emoji: they need no image files,
+look the same size everywhere and a screen reader can skip them (the nickname says who it is). Limit: the database
+checks only the form of an avatar id (lower-case letters); the exact list is checked in the code.

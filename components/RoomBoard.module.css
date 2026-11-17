@@ -108,3 +108,9 @@
   font-size: 1.5rem;
   font-weight: 700;
 }
+
+/* The avatar before a nickname (issue #44). It stays inside the label; a long nickname shortens instead. */
+.avatar {
+  flex-shrink: 0;
+  margin-right: 0.25em;
+}

@@ -28,32 +28,33 @@ const lobby = {
 };
 
 describe("room API calls from the browser", () => {
-  it("creates a room with the nickname as JSON", async () => {
+  it("creates a room with the nickname and avatar as JSON", async () => {
     const fetchFn = reply(201, { code: "482913", playerToken: TOKEN, nickname: "Anna" });
 
-    expect(await apiCreateRoom("Anna", fetchFn)).toEqual({
+    expect(await apiCreateRoom({ nickname: "Anna", avatar: "fox" }, fetchFn)).toEqual({
       ok: true,
       data: { code: "482913", playerToken: TOKEN, nickname: "Anna" },
     });
     const [url, init] = fetchFn.mock.calls[0];
     expect(url).toBe("/api/rooms");
     expect(init?.method).toBe("POST");
-    expect(JSON.parse(String(init?.body))).toEqual({ nickname: "Anna" });
+    expect(JSON.parse(String(init?.body))).toEqual({ nickname: "Anna", avatar: "fox" });
   });
 
   it("joins a room and returns the code with the token", async () => {
     const fetchFn = reply(201, { playerToken: TOKEN, nickname: "Ben" });
 
-    expect(await apiJoinRoom("482913", "Ben", fetchFn)).toEqual({
+    expect(await apiJoinRoom("482913", { nickname: "Ben", avatar: "owl" }, fetchFn)).toEqual({
       ok: true,
       data: { code: "482913", playerToken: TOKEN, nickname: "Ben" },
     });
     expect(fetchFn.mock.calls[0][0]).toBe("/api/rooms/482913/join");
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({ nickname: "Ben", avatar: "owl" });
   });
 
   it("passes on the server's message when a join is refused", async () => {
     const fetchFn = reply(409, { error: "room-full", message: "This room is full." });
-    expect(await apiJoinRoom("482913", "Ben", fetchFn)).toEqual({ ok: false, message: "This room is full." });
+    expect(await apiJoinRoom("482913", { nickname: "Ben", avatar: "owl" }, fetchFn)).toEqual({ ok: false, message: "This room is full." });
   });
 
   it("starts with the token in the Authorization header", async () => {
@@ -178,7 +179,7 @@ describe("room API calls from the browser", () => {
   it("sends the tab's old token along when joining again, so a kicked player is refused", async () => {
     const fetchFn = reply(403, { error: "kicked", message: "The room creator removed you from this room." });
 
-    expect(await apiJoinRoom("482913", "Benny", fetchFn, TOKEN)).toEqual({
+    expect(await apiJoinRoom("482913", { nickname: "Benny", avatar: "owl" }, fetchFn, TOKEN)).toEqual({
       ok: false,
       message: "The room creator removed you from this room.",
     });
