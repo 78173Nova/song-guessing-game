@@ -176,3 +176,44 @@ const TEAM_ACCOUNT_ERRORS = {
   "invalid-username": "has a username that is not 3–20 letters, digits or _",
   "invalid-password": "has a password that is not 8–128 characters without spaces",
 } as const;
+
+// Checks a new username on the Account settings page: { username }, same rule as at sign-up (issue #45).
+export function parseUsernameInput(
+  body: unknown,
+): { ok: true; username: string } | { ok: false; error: "malformed" | "invalid-username" } {
+  if (typeof body !== "object" || body === null) return { ok: false, error: "malformed" };
+  const { username } = body as Record<string, unknown>;
+  if (typeof username !== "string") return { ok: false, error: "malformed" };
+  if (!USERNAME_PATTERN.test(username)) return { ok: false, error: "invalid-username" };
+  return { ok: true, username };
+}
+
+// Checks a password change on the Account settings page: { currentPassword, newPassword }. The new password follows
+// the sign-up rule (8–128 characters, no spaces). A current password longer than any real one is refused here, so
+// a huge value never reaches scrypt.
+export function parsePasswordChangeInput(
+  body: unknown,
+):
+  | { ok: true; currentPassword: string; newPassword: string }
+  | { ok: false; error: "malformed" | "invalid-password" } {
+  if (typeof body !== "object" || body === null) return { ok: false, error: "malformed" };
+  const { currentPassword, newPassword } = body as Record<string, unknown>;
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") return { ok: false, error: "malformed" };
+  if ([...currentPassword].length > MAX_PASSWORD_LENGTH) return { ok: false, error: "malformed" };
+  if (!isValidPassword(newPassword)) return { ok: false, error: "invalid-password" };
+  return { ok: true, currentPassword, newPassword };
+}
+
+// Checks an email change on the Account settings page: { email, password }. The new email comes back trimmed and
+// lowercase. A password longer than any real one is refused here, so a huge value never reaches scrypt.
+export function parseEmailChangeInput(
+  body: unknown,
+): { ok: true; email: string; password: string } | { ok: false; error: "malformed" | "invalid-email" } {
+  if (typeof body !== "object" || body === null) return { ok: false, error: "malformed" };
+  const { password } = body as Record<string, unknown>;
+  if (typeof password !== "string" || [...password].length > MAX_PASSWORD_LENGTH) {
+    return { ok: false, error: "malformed" };
+  }
+  const parsed = parseEmailInput(body);
+  return parsed.ok ? { ok: true, email: parsed.email, password } : parsed;
+}

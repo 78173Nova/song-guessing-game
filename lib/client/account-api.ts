@@ -76,3 +76,21 @@ export async function apiAccountSettings(fetchFn: FetchFn = fetch): Promise<Acco
 export function apiSaveAccountSettings(form: { avatar: string; nickname: string }, fetchFn: FetchFn = fetch) {
   return post<AccountSettings>("/api/accounts/settings", form, fetchFn);
 }
+
+// Changing the login details on the Account settings page (issue #45). The server checks everything again.
+export function apiChangeUsername(username: string, fetchFn: FetchFn = fetch) {
+  return post<{ username: string }>("/api/accounts/username", { username }, fetchFn);
+}
+
+export function apiChangeEmail(form: { email: string; password: string }, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/email", form, fetchFn);
+}
+
+export function apiChangePassword(form: { currentPassword: string; newPassword: string }, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/password", form, fetchFn);
+}
+
+// Opens the link sent to the new address of an email change.
+export function apiConfirmEmailChange(token: string, fetchFn: FetchFn = fetch) {
+  return post<{ message: string }>("/api/accounts/confirm-email", { token }, fetchFn);
+}

@@ -7,11 +7,14 @@ import {
   createToken,
   hashPassword,
   looksLikeToken,
+  parseEmailChangeInput,
   parseEmailInput,
   parseLoginInput,
+  parsePasswordChangeInput,
   parseResetPasswordInput,
   parseSignupInput,
   parseTokenInput,
+  parseUsernameInput,
   RESET_LINK_LIFETIME_MS,
   SESSION_LIFETIME_MS,
   VERIFY_LINK_LIFETIME_MS,
@@ -19,15 +22,21 @@ import {
 import type { TransactionDb } from "../db/client";
 import {
   claimEmailSlot,
+  claimEmailSlots,
+  confirmEmailChangeToken,
+  createEmailChangeToken,
   createEmailToken,
   createPendingAccount,
   createSession,
   deleteSession,
   findAccountForLogin,
   findSessionAccount,
+  findSessionLogin,
   findSessionUsername,
   findUnverifiedUserId,
   redeemEmailToken,
+  renameAccount,
+  replacePassword,
   saveAccountSettings as storeAccountSettings,
 } from "../db/accounts";
 import { isAvatar } from "../game/avatars";
@@ -35,6 +44,9 @@ import { parseNickname } from "../game/rooms";
 import {
   alreadyHaveAccountMessage,
   appUrl,
+  confirmEmailChangeMessage,
+  emailChangeNoticeMessage,
+  emailChangeTakenMessage,
   linkWithToken,
   resetPasswordMessage,
   verifyEmailMessage,
@@ -86,6 +98,12 @@ const ERRORS = {
     message: 'This link has expired. Please log in and choose "Send the email again" to get a new one.',
   },
   "log-in-needed": { status: 401, message: "Please log in first." },
+  "wrong-password": { status: 403, message: "Your current password is not right." },
+  "same-email": { status: 400, message: "That is already your email." },
+  "email-taken": {
+    status: 409,
+    message: "This address already has an account, so your email was not changed.",
+  },
   "invalid-avatar": { status: 400, message: "Please choose one of the avatars." },
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },
   "too-soon": { status: 429, message: "Please wait a minute before asking for another email" },
@@ -415,4 +433,141 @@ export async function saveAccountSettings(
 
   await storeAccountSettings(db, account.id, { avatar: body.avatar, nickname });
   return settingsReply({ username: account.username, avatar: body.avatar, nickname });
+}
+
+// The login details of the account of a session cookie (issue #45), or null for a missing, unknown or expired
+// session.
+async function sessionLogin(db: TransactionDb, sessionToken: string | undefined, now: Date) {
+  return looksLikeToken(sessionToken) ? findSessionLogin(db, sessionToken, now) : null;
+}
+
+// Reads a small JSON object; null when it is missing, too long, not JSON or not an object.
+function readJsonObject(rawBody: string | null): Record<string, unknown> | null {
+  const json = readJson(rawBody);
+  if (!json.ok || typeof json.body !== "object" || json.body === null || Array.isArray(json.body)) return null;
+  return json.body as Record<string, unknown>;
+}
+
+// POST /api/accounts/username – { username } → gives the logged-in account a new username, same rules as at
+// sign-up (3–20 letters, digits or _, unique ignoring case). The old username is free straight away.
+export async function changeUsername(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  rawBody: string | null,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now } = resolveDeps(deps);
+  const account = await sessionLogin(db, sessionToken, now);
+  if (account === null) return fail("log-in-needed");
+
+  const body = readJsonObject(rawBody);
+  if (body === null) return fail("malformed");
+  const parsed = parseUsernameInput(body);
+  if (!parsed.ok) return fail(parsed.error);
+
+  const renamed = await renameAccount(db, { userId: account.id, email: account.email, username: parsed.username, now });
+  if (!renamed.ok) return fail("username-taken");
+  return { status: 200, body: { username: parsed.username } };
+}
+
+const PASSWORD_CHANGED_HERE_MESSAGE = "Your password is changed. Other browsers are logged out; this one stays logged in.";
+
+// POST /api/accounts/password – { currentPassword, newPassword } → replaces the logged-in account's password. Needs
+// the current password; the new one follows the sign-up rule (8–128 characters, no spaces). Ends every other
+// session of the account; this browser stays logged in.
+export async function changePassword(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  rawBody: string | null,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now } = resolveDeps(deps);
+  const account = await sessionLogin(db, sessionToken, now);
+  if (account === null || sessionToken === undefined) return fail("log-in-needed");
+
+  const parsed = parsePasswordChangeInput(readJsonObject(rawBody));
+  if (!parsed.ok) return fail(parsed.error);
+  if (!(await checkPassword(parsed.currentPassword, account.passwordHash))) return fail("wrong-password");
+
+  await replacePassword(db, {
+    userId: account.id,
+    passwordHash: await hashPassword(parsed.newPassword),
+    keepSession: sessionToken,
+  });
+  return { status: 200, body: { message: PASSWORD_CHANGED_HERE_MESSAGE } };
+}
+
+const EMAIL_CHANGE_SENT_MESSAGE =
+  "Check the inbox of your new address: your email changes when you open the link we sent there.";
+
+// POST /api/accounts/email – { email, password } → starts moving the logged-in account to a new email. Needs the
+// current password. The new address gets a 24-hour link (the email changes only when it is opened), the old one a
+// notice. Both emails go through the one-email-per-minute limit together. When the new address already has a
+// verified account, it gets a short "you already have an account" email instead of the link, and the reply is the
+// same, so the reply never reveals whether an address has an account.
+export async function changeEmail(
+  db: TransactionDb,
+  sessionToken: string | undefined,
+  rawBody: string | null,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now, sendEmail, makeToken } = resolveDeps(deps);
+  const account = await sessionLogin(db, sessionToken, now);
+  if (account === null) return fail("log-in-needed");
+
+  const parsed = parseEmailChangeInput(readJsonObject(rawBody));
+  if (!parsed.ok) return fail(parsed.error);
+  const { email: newEmail, password } = parsed;
+  if (!(await checkPassword(password, account.passwordHash))) return fail("wrong-password");
+  if (newEmail === account.email) return fail("same-email");
+
+  if (!(await claimEmailSlots(db, [account.email, newEmail], now))) return fail("too-soon");
+  const owner = await findAccountForLogin(db, "email", newEmail);
+  if (owner?.verified) {
+    await sendEmail(emailChangeTakenMessage(newEmail));
+  } else {
+    const token = makeToken();
+    await createEmailChangeToken(db, {
+      userId: account.id,
+      token,
+      newEmail,
+      expiresAt: new Date(now.getTime() + VERIFY_LINK_LIFETIME_MS),
+    });
+    await sendEmail(confirmEmailChangeMessage(newEmail, linkWithToken("/confirm-email", token)));
+  }
+  await sendEmail(emailChangeNoticeMessage(account.email, newEmail, `${appUrl()}/forgot-password`));
+  return { status: 200, body: { message: EMAIL_CHANGE_SENT_MESSAGE } };
+}
+
+const EMAIL_CHANGED_MESSAGE = "Your email is changed – log in with the new address from now on.";
+
+// The confirm page's own messages for links that do not work.
+const EMAIL_LINK_MESSAGES = {
+  "link-unknown": "This link is not valid. Please use the newest link we sent you.",
+  "link-used": "This link was already used. If your email was changed, log in with the new address.",
+  "link-expired": "This link has expired. Please change your email again on the Account settings page.",
+} as const;
+
+// POST /api/accounts/confirm-email – opens the link sent to the new address: { token } → the account's email
+// becomes the new address. Works once and for 24 hours. If a verified account got that address in the meantime,
+// nothing changes (409 email-taken); only the person who reads that inbox sees this.
+export async function confirmEmailChange(
+  db: TransactionDb,
+  rawBody: string | null,
+  deps: AccountDeps = {},
+): Promise<ApiResult> {
+  const { now } = resolveDeps(deps);
+
+  const json = readJson(rawBody);
+  if (!json.ok) return fail("malformed");
+  const parsed = parseTokenInput(json.body);
+  if (!parsed.ok) return fail("malformed");
+
+  const result = await confirmEmailChangeToken(db, { token: parsed.token, now });
+  if (!result.ok) {
+    if (result.reason === "taken") return fail("email-taken");
+    const error = `link-${result.reason}` as const;
+    return fail(error, EMAIL_LINK_MESSAGES[error]);
+  }
+  return { status: 200, body: { message: EMAIL_CHANGED_MESSAGE } };
 }
