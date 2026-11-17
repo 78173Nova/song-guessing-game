@@ -67,3 +67,17 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
   `NEXT_ROUND_DELAY_SECONDS`).
 - Sets and set summaries (#34) would add a pause with the standings after each set by giving the first round
   of the next set a later start time.
+
+## Update 17 Nov 2026: QR code in the share pop-up (#42)
+- **Decision:** the share pop-up shows a QR code of the join link, drawn on the device with the `qrcode` package
+  (1.5.4, plus `@types/qrcode` 1.5.6 for TypeScript). It turns the link into an SVG picture, shown with a plain `<img>`.
+- **Why:** players in the same place can join by pointing their phone camera at the screen instead of typing a link.
+  A QR code has error correction and masking rules that are too much to write and test ourselves; `qrcode` is the
+  most used package for it, has no outside service and `npm audit` reports 0 vulnerabilities with it.
+- **Alternatives:** an online QR service (an `<img>` pointing to another site) – needs no package, but sends every
+  room link to a third party and fails without that site; writing the QR encoder ourselves – too much code.
+- **Limits:** the package adds about 25 small packages to `node_modules` (mostly for its command-line tool, which we
+  do not use). Scanning with a real phone is checked by hand; the tests only check that the picture is the QR code of
+  the right link.
+- **How it could change:** the drawing sits in `roomJoinQrCode` in `lib/client/share.ts`; another package would only
+  change that function.

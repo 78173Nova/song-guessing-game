@@ -67,3 +67,13 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* The QR code of the join link (#42): black on white with its quiet zone, whatever the theme, so phones can read it. */
+.qr {
+  display: block;
+  width: min(14rem, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 12px;
+  background: #fff;
+}
