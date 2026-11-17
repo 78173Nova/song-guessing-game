@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/lib/db/client";
-import { listSongs, upsertSongs, type Song } from "@/lib/db/songs";
+import { listSongs, setCatalogue, upsertSongs, type Song } from "@/lib/db/songs";
 import { MUSIC_UNAVAILABLE_MESSAGE, type PreviewLookup } from "@/lib/music/itunes";
 import { fillMissingPreviews, getPreview, verifyCachedPreviews } from "@/lib/music/preview";
 import { createTestDb } from "../helpers/test-db";
@@ -151,5 +151,33 @@ describe("verifyCachedPreviews", () => {
     await fillMissingPreviews(db, { lookup, wait, now: () => NOW });
     expect(lookup.mock.calls.map((c) => c[0].title)).toEqual(["Broken", "Never Cached"]);
     expect((await songByTitle("Broken")).previewUrl).toBe("https://audio.example.com/Broken.m4a");
+  });
+});
+
+describe("retired songs in the seed", () => {
+  it("fillMissingPreviews does not look up retired songs on iTunes", async () => {
+    await upsertSongs(db, [
+      { title: "Kept", artist: "A", year: 2000, genre: "pop" },
+      { title: "Retired", artist: "B", year: 2000, genre: "pop" },
+    ]);
+    await setCatalogue(db, [{ title: "Kept", artist: "A", year: 2000, genre: "pop" }]);
+    const lookup = vi.fn(async (song: { title: string }) => found(song.title));
+
+    const summary = await fillMissingPreviews(db, { lookup, wait: async () => {}, now: () => NOW });
+
+    expect(lookup.mock.calls.map((c) => c[0].title)).toEqual(["Kept"]);
+    expect(summary).toEqual({ found: 1, failed: [] });
+  });
+
+  it("verifyCachedPreviews does not check the clips of retired songs", async () => {
+    await addCachedSong("Kept");
+    await addCachedSong("Retired");
+    await setCatalogue(db, [{ title: "Kept", artist: "Cached Artist", year: 2000, genre: "pop" }]);
+    const check = vi.fn(async () => "ok" as const);
+
+    const summary = await verifyCachedPreviews(db, { check, wait: async () => {} });
+
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(summary).toEqual({ checked: 1, broken: [] });
   });
 });
