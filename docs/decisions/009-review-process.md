@@ -78,3 +78,15 @@ group-chat notice. Anyone may change the schema. The notice for test and `CLAUDE
 Why: waiting for one person slowed the team down, and everyone works with the same rules and tools.
 Limit: two branches changing the schema at the same time can conflict in the shared `dev` database
 without git noticing (see decision 003).
+
+## Update 17 Nov 2026: more automatic checks
+- **Type check in CI** (`npm run typecheck`). Vitest runs tests without checking types, so a type error in a
+  test only showed up in the build (commit 451c0c3). Now it is reported on its own, and agents run it with the tests.
+- **Folder rules in lint** (`eslint.config.mjs`). "Only `lib/db` has SQL", "`lib/game` and `lib/accounts` have no
+  database or network", "the server goes online only through `lib/music` and `lib/email`" and "browser code never
+  imports server code" were written in `CLAUDE.md` only; now `npm run lint` fails when code breaks them.
+- **LF line endings for everyone** (`.gitattributes`). Git on Windows checked files out with `\r\n`, which broke
+  the schema loader once (commit b00a5fa).
+Why: each check replaces a rule someone had to remember, and each one answers a mistake that already happened
+or a rule that matters for security. Limit: lint sees imports and calls, not everything – e.g. it cannot tell
+whether a value sent to the browser contains the correct answer; that stays a review question.

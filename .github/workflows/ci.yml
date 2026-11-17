@@ -22,5 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # Vitest does not check types, so a type error in a test would only show up in the build.
+      - run: npm run typecheck
       - run: npm test
       - run: npm run build

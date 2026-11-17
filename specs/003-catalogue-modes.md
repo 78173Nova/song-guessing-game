@@ -69,7 +69,7 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] `recentGames` is optional: a list of at most 3 game IDs in UUID format, anything else is rejected. Unknown IDs
       are ignored, and the reply is the same as without them
 - [ ] `/next` still never contains the correct answer: no correct position, no year, no artist in title mode, and so on
-- [ ] Schema change (anyone may change it, CLAUDE.md rule 9; tell the team in the group chat): added with
+- [ ] Schema change (anyone may change it, decision 009; tell the team in the group chat): added with
       `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, because `CREATE TABLE IF NOT EXISTS` would skip existing tables:
   - `games.mode` – text, required, default `title`, one of `title` / `artist` / `year` / `mixed`
   - `games.genre` – text, empty = any
