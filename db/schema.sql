@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS songs (
   preview_cached_at timestamptz  -- when the three URLs above were looked up, empty = not looked up yet
 );
 
+-- Is the song still in db/songs.ts? The seed sets this (true = listed, false = removed from the list).
+-- Removed songs are never deleted, because old rounds point to them, but the game only plays songs with true.
+-- Added with ALTER TABLE so it also reaches songs tables created before this column existed.
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS in_catalogue boolean NOT NULL DEFAULT true;
+
 -- The same song may only exist once, ignoring upper/lower case ("Queen" = "queen").
 CREATE UNIQUE INDEX IF NOT EXISTS songs_artist_title_unique ON songs (lower(artist), lower(title));
 
@@ -30,7 +35,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   game_id        uuid        NOT NULL REFERENCES games (id) ON DELETE CASCADE,
   round_number   integer     NOT NULL CHECK (round_number >= 1),  -- how many rounds is decided in lib/game
   song_id        integer     NOT NULL REFERENCES songs (id),      -- the correct song
-  options        text[]      NOT NULL CHECK (cardinality(options) = 4),  -- titles in the order shown
+  options        text[]      NOT NULL CHECK (cardinality(options) = 4),  -- titles, artists or years in the order shown
   correct_option smallint    NOT NULL CHECK (correct_option BETWEEN 0 AND 3),  -- never sent before answering
   status         text        NOT NULL DEFAULT 'waiting'
                              CHECK (status IN ('waiting', 'open', 'answered', 'skipped')),
@@ -42,6 +47,22 @@ CREATE TABLE IF NOT EXISTS rounds (
   UNIQUE (game_id, song_id),                                         -- no song twice in a game
   CHECK (status = 'waiting' OR started_at IS NOT NULL)               -- sent before answered
 );
+
+-- Game modes (spec 003, decision 013). Added with ALTER TABLE because CREATE TABLE IF NOT EXISTS skips tables
+-- that already exist. mode: what the player chose (mixed = a random question type per round).
+-- question_type: what one round asks, so a replaced round keeps it. Existing games and rounds become title.
+ALTER TABLE games  ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'title'
+  CHECK (mode IN ('title', 'artist', 'year', 'mixed'));
+ALTER TABLE rounds ADD COLUMN IF NOT EXISTS question_type text NOT NULL DEFAULT 'title'
+  CHECK (question_type IN ('title', 'artist', 'year'));
+
+-- Filters (spec 003, decision 013): the genre and decade the player chose, so /replace only picks a song that
+-- matches them. Empty = Any. The genre list must match lib/game/genres.ts. The decade is the first year of
+-- the decade (1980 = the 1980s), the songs table has no decade column (decision 005).
+ALTER TABLE games ADD COLUMN IF NOT EXISTS genre text
+  CHECK (genre IN ('pop', 'rock', 'hip-hop', 'r&b', 'dance', 'country'));
+ALTER TABLE games ADD COLUMN IF NOT EXISTS decade integer
+  CHECK (decade BETWEEN 1960 AND 2020 AND decade % 10 = 0);
 
 -- ---------------------------------------------------------------------------------------------
 -- Rooms: several players in one shared game (spec 002, decision 012). Agreed with Niklas on 11 Nov 2026.
@@ -61,7 +82,22 @@ CREATE TABLE IF NOT EXISTS rooms (
   CHECK (status = 'lobby' OR game_id IS NOT NULL)     -- a started room always has its game
 );
 
--- The players of a room. The limit of 50 per room is enforced in lib/db/rooms.ts (addPlayer), not here.
+-- Room settings (issue #34): chosen by the room creator when creating the room, never changed afterwards.
+-- Added with ALTER TABLE because CREATE TABLE IF NOT EXISTS skips tables that already exist; older rooms get the
+-- defaults (Multiplayer, title mode, any genre and decade, 1 set of 5 songs).
+-- genres / decades: an empty list = Any. The lists must match lib/game/genres.ts and lib/game/filters.ts.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS room_type text NOT NULL DEFAULT 'multiplayer'
+  CHECK (room_type IN ('duel', 'multiplayer'));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'title'
+  CHECK (mode IN ('title', 'artist', 'year', 'mixed'));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS genres text[] NOT NULL DEFAULT '{}'
+  CHECK (genres <@ ARRAY['pop', 'rock', 'hip-hop', 'r&b', 'dance', 'country']::text[]);
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS decades integer[] NOT NULL DEFAULT '{}'
+  CHECK (decades <@ ARRAY[1960, 1970, 1980, 1990, 2000, 2010, 2020]);
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS songs_per_set integer NOT NULL DEFAULT 5 CHECK (songs_per_set IN (3, 5, 10));
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS sets integer NOT NULL DEFAULT 1 CHECK (sets IN (1, 2, 3));
+
+-- The players of a room. The limit per room is enforced in lib/db/rooms.ts (addPlayer), not here.
 CREATE TABLE IF NOT EXISTS room_players (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id    uuid        NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,

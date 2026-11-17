@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { TransactionDb } from "@/lib/db/client";
+import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
 import { createGame, getGameRounds, markRoundSent } from "@/lib/db/games";
 import {
   addPlayer,
@@ -205,6 +206,7 @@ describe("createRoom and lookups", () => {
         status: "lobby",
         gameId: null,
         createdAt: NOW,
+        settings: DEFAULT_ROOM_SETTINGS,
         closedReason: null,
       },
       creator: {

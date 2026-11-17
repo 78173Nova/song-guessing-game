@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/rooms";
 import type { TransactionDb } from "@/lib/db/client";
 import { getGameRounds } from "@/lib/db/games";
+import { DEFAULT_ROOM_SETTINGS } from "@/lib/game/room-settings";
 import { loggedInSession } from "../helpers/session";
 import { addTestSongs } from "../helpers/songs";
 import { createTestDb } from "../helpers/test-db";
@@ -192,14 +193,18 @@ describe("kick", () => {
     expect((await state(code, anna)).body.players).toEqual(["Anna", "Cleo"]);
   });
 
-  it("frees the seat in the lobby: a full room takes a new player after a kick", async () => {
+  // A full room starts by itself (#34), so a freed seat shows as one more join before the room is full.
+  it("frees the seat in the lobby: the room fills up one player later", async () => {
     const room = await lobby("Anna", "Ben");
-    for (let i = 3; i <= 25; i++) await joined(room.code, `P${i}`);
-    expect((await joinRoom(db, room.code, json({ nickname: "Late" }), deps)).status).toBe(409);
+    for (let i = 3; i <= 24; i++) await joined(room.code, `P${i}`); // 24 of 25 seats taken
     wait(66);
     await state(room.code, room.creatorToken);
     expect((await kick(room.code, room.creatorToken, { nickname: "Ben" })).status).toBe(200);
-    expect((await joinRoom(db, room.code, json({ nickname: "Late" }), deps)).status).toBe(201);
+
+    await joined(room.code, "Late");
+    expect((await state(room.code, room.creatorToken)).body.status).toBe("lobby"); // 24 again, Ben's seat is free
+    await joined(room.code, "Later");
+    expect((await state(room.code, room.creatorToken)).body.status).toBe("playing");
   });
 
   it("during the game: the kicked player disappears from the standings and the round no longer waits for them", async () => {
@@ -233,12 +238,15 @@ describe("leave", () => {
     expect((await joinRoom(db, room.code, json({ nickname: "Ben" }), deps)).status).toBe(201);
   });
 
-  it("in the lobby: a full room has a free seat again", async () => {
+  it("in the lobby: the seat counts as free again – the room fills up one player later", async () => {
     const room = await lobby("Anna", "Ben");
-    for (let i = 3; i <= 25; i++) await joined(room.code, `P${i}`);
-    expect((await joinRoom(db, room.code, json({ nickname: "Late" }), deps)).status).toBe(409);
+    for (let i = 3; i <= 24; i++) await joined(room.code, `P${i}`); // 24 of 25 seats taken
     await leave(room.code, room.tokens[1]);
-    expect((await joinRoom(db, room.code, json({ nickname: "Late" }), deps)).status).toBe(201);
+
+    await joined(room.code, "Late");
+    expect((await state(room.code, room.creatorToken)).body.status).toBe("lobby");
+    await joined(room.code, "Later");
+    expect((await state(room.code, room.creatorToken)).body.status).toBe("playing");
   });
 
   it("the room creator leaving the lobby closes the room for everyone", async () => {
@@ -325,5 +333,26 @@ describe("leave", () => {
     await leave(room.code, room.tokens[1]);
     expect(await leave(room.code, room.tokens[1])).toMatchObject({ status: 403, body: { error: "left" } });
     expect((await leave("999999", room.tokens[0])).status).toBe(404);
+  });
+});
+
+describe("Duel room", () => {
+  it("when one player leaves the game, the other – here the guest after the room creator left – plays on alone to the end", async () => {
+    const created = await createNewRoom(
+      db,
+      session,
+      json({ nickname: "Anna", settings: { ...DEFAULT_ROOM_SETTINGS, type: "duel" } }),
+      { ...deps, newCode: () => String(nextCode++) },
+    );
+    const { code, playerToken: anna } = created.body as { code: string; playerToken: string };
+    const ben = await joined(code, "Ben"); // the second seat starts the Duel by itself
+    expect((await state(code, ben)).body.status).toBe("playing");
+
+    expect(await leave(code, anna)).toEqual({ status: 200, body: { left: true, roomClosed: false } });
+    for (let n = 1; n <= 5; n++) {
+      const round = await openRound(code, ben);
+      expect((await answer(code, ben, { round: n, answer: round.right })).status).toBe(200);
+    }
+    expect((await state(code, ben)).body).toMatchObject({ status: "finished", players: ["Ben"] });
   });
 });
