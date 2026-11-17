@@ -204,7 +204,7 @@ describe("room creator handover", () => {
     for (const nickname of ["Ben", "Cleo", "Dan"]) {
       wait(0.001);
       const login = nickname === "Cleo" ? undefined : await loggedInSession(db, clock, `${nickname.toLowerCase()}_test`);
-      const result = await joinRoom(db, room.code, json({ nickname }), deps, null, login);
+      const result = await joinRoom(db, room.code, json({ nickname }), deps, { sessionToken: login });
       tokens[nickname] = (result.body as { playerToken: string }).playerToken;
     }
     await start(room.code, tokens.Anna);

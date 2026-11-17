@@ -2,6 +2,7 @@
 // Tokens come in as the raw value from the request and are hashed here, so a raw token can never
 // reach the database (decision 012).
 import { createHash } from "node:crypto";
+import { DEFAULT_AVATAR } from "../game/avatars";
 import type { Decade } from "../game/filters";
 import type { Genre } from "../game/genres";
 import type { Mode } from "../game/modes";
@@ -36,6 +37,7 @@ export type RoomPlayer = {
   id: string;
   roomId: string;
   nickname: string;
+  avatar: string; // an id from lib/game/avatars.ts (issue #44)
   joinedAt: Date;
   lastSeenAt: Date; // the last state request from their device (or the join)
   removed: RemovedReason | null; // null = still in the room
@@ -72,6 +74,7 @@ type PlayerRow = {
   id: string;
   room_id: string;
   nickname: string;
+  avatar: string;
   joined_at: Date | string;
   last_seen_at: Date | string;
   removed: RemovedReason | null;
@@ -82,7 +85,7 @@ type PlayerRow = {
 const ROOM_COLUMNS =
   "id, code, status, game_id, created_at, room_type, mode, genres, decades, songs_per_set, sets, closed_reason, earlier_games, lobby_since";
 const PLAYER_COLUMNS =
-  "id, room_id, nickname, joined_at, last_seen_at, removed, play_again, account_id IS NOT NULL AS has_account";
+  "id, room_id, nickname, avatar, joined_at, last_seen_at, removed, play_again, account_id IS NOT NULL AS has_account";
 
 const toRoom = (row: RoomRow): Room => ({
   id: row.id,
@@ -108,6 +111,7 @@ const toPlayer = (row: PlayerRow): RoomPlayer => ({
   id: row.id,
   roomId: row.room_id,
   nickname: row.nickname,
+  avatar: row.avatar,
   joinedAt: new Date(row.joined_at),
   lastSeenAt: new Date(row.last_seen_at),
   removed: row.removed,
@@ -128,21 +132,29 @@ export function hashToken(token: string): string {
 // caller can try again with a different code. Without settings the room gets the default ones.
 export async function createRoom(
   db: Db,
-  room: { code: string; creatorToken: string; nickname: string; now: Date; settings?: RoomSettings; accountId?: string },
+  room: {
+    code: string;
+    creatorToken: string;
+    nickname: string;
+    avatar?: string;
+    now: Date;
+    settings?: RoomSettings;
+    accountId?: string;
+  },
 ): Promise<{ room: Room; creator: RoomPlayer } | null> {
   const settings = room.settings ?? DEFAULT_ROOM_SETTINGS;
-  const rows = await db.query<RoomRow & { player_id: string; nickname: string; joined_at: Date | string }>(
+  const rows = await db.query<RoomRow & { player_id: string; nickname: string; avatar: string; joined_at: Date | string }>(
     `WITH new_room AS (
        INSERT INTO rooms (code, host_token_hash, created_at, room_type, mode, genres, decades, songs_per_set, sets)
        VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10)
        ON CONFLICT (code) DO NOTHING
        RETURNING ${ROOM_COLUMNS}
      ), creator AS (
-       INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at, account_id)
-       SELECT id, $4, $2, $3, $3, $11::uuid FROM new_room
-       RETURNING id, nickname, joined_at
+       INSERT INTO room_players (room_id, nickname, avatar, token_hash, joined_at, last_seen_at, account_id)
+       SELECT id, $4, $11, $2, $3, $3, $12::uuid FROM new_room
+       RETURNING id, nickname, avatar, joined_at
      )
-     SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.joined_at
+     SELECT new_room.*, creator.id AS player_id, creator.nickname, creator.avatar, creator.joined_at
      FROM new_room, creator`,
     [
       room.code,
@@ -155,6 +167,7 @@ export async function createRoom(
       settings.decades === "any" ? [] : settings.decades,
       settings.songsPerSet,
       settings.sets,
+      room.avatar ?? DEFAULT_AVATAR,
       room.accountId ?? null,
     ],
   );
@@ -167,6 +180,7 @@ export async function createRoom(
       id: row.player_id,
       room_id: created.id,
       nickname: row.nickname,
+      avatar: row.avatar,
       joined_at: row.joined_at,
       last_seen_at: row.joined_at,
       removed: null,
@@ -208,13 +222,21 @@ export type AddPlayerResult =
 // The lock has to be its own query: one query only sees the data as it was when it began.
 export async function addPlayer(
   db: TransactionDb,
-  join: { roomId: string; nickname: string; token: string; now: Date; maxPlayers?: number; accountId?: string | null },
+  join: {
+    roomId: string;
+    nickname: string;
+    avatar?: string;
+    token: string;
+    now: Date;
+    maxPlayers?: number;
+    accountId?: string | null;
+  },
 ): Promise<AddPlayerResult> {
   const [, inserted, check] = await db.transaction([
     { text: "SELECT id FROM rooms WHERE id = $1 FOR UPDATE", params: [join.roomId] },
     {
-      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at, account_id)
-             SELECT r.id, $2::text, $3::text, $4::timestamptz, $4::timestamptz, $6::uuid
+      text: `INSERT INTO room_players (room_id, nickname, token_hash, joined_at, last_seen_at, avatar, account_id)
+             SELECT r.id, $2::text, $3::text, $4::timestamptz, $4::timestamptz, $6::text, $7::uuid
              FROM rooms r
              WHERE r.id = $1 AND r.status = 'lobby'
                AND (SELECT count(*) FROM room_players p WHERE p.room_id = r.id AND p.removed IS NULL) < $5::int
@@ -226,6 +248,7 @@ export async function addPlayer(
         hashToken(join.token),
         join.now.toISOString(),
         join.maxPlayers ?? MAX_PLAYERS,
+        join.avatar ?? DEFAULT_AVATAR,
         join.accountId ?? null,
       ],
     },

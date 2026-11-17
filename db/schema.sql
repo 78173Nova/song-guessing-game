@@ -106,6 +106,10 @@ CREATE TABLE IF NOT EXISTS room_players (
   joined_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- The avatar each player shows in this room (issue #44), an id from lib/game/avatars.ts. Players who joined
+-- before avatars existed get the music note.
+ALTER TABLE room_players ADD COLUMN IF NOT EXISTS avatar text NOT NULL DEFAULT 'note' CHECK (avatar ~ '^[a-z]{1,20}$');
+
 -- A nickname may only exist once per room, ignoring upper/lower case ("Anna" = "anna").
 CREATE UNIQUE INDEX IF NOT EXISTS room_players_nickname_unique ON room_players (room_id, lower(nickname));
 
@@ -174,6 +178,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- The one-email-per-minute limit moved to email_throttle (below). Removes the old column from databases that
 -- already have it.
 ALTER TABLE users DROP COLUMN IF EXISTS last_email_sent_at;
+
+-- Account settings (issue #44): the avatar (an id from the fixed set in lib/game/avatars.ts, which checks the
+-- exact list) and the usual nickname that the nickname screen suggests. Both stay empty until chosen.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar text CHECK (avatar ~ '^[a-z]{1,20}$');
+ALTER TABLE users ADD COLUMN IF NOT EXISTS usual_nickname text CHECK (char_length(usual_nickname) BETWEEN 1 AND 20);
 
 -- A username may only exist once, ignoring upper/lower case ("Jasper" = "jasper").
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (lower(username));

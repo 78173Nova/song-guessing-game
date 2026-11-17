@@ -47,7 +47,7 @@ const kick = (code: string, token: string | null, body: unknown) => kickRoomPlay
 const leave = (code: string, token: string | null) => playerLeavesRoom(db, code, bearer(token), deps);
 // A join that also sends the token this tab had before (a kicked player trying again).
 const rejoin = (code: string, nickname: string, oldToken: string) =>
-  joinRoom(db, code, json({ nickname }), deps, bearer(oldToken));
+  joinRoom(db, code, json({ nickname }), deps, { authorization: bearer(oldToken) });
 
 async function newRoom(creator = "Anna") {
   const result = await createNewRoom(db, session, json({ nickname: creator }), { ...deps, newCode: () => String(nextCode++) });

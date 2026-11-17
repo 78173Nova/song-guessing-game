@@ -129,13 +129,37 @@ export async function findSessionUsername(db: TransactionDb, token: string, now:
   return rows.length === 1 ? rows[0].username : null;
 }
 
-// The account id of a session that has not expired, or null (issue #43: room players remember who has an account).
-export async function findSessionUserId(db: TransactionDb, token: string, now: Date): Promise<string | null> {
-  const rows = await db.query<{ user_id: string }>(
-    "SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > $2",
+// The logged-in account with its settings (issue #44): avatar and usual nickname are null until chosen.
+export type SessionAccount = { id: string; username: string; avatar: string | null; nickname: string | null };
+
+// The account of this session token with its settings, or null for an unknown or expired session.
+export async function findSessionAccount(db: TransactionDb, token: string, now: Date): Promise<SessionAccount | null> {
+  const rows = await db.query<SessionAccount>(
+    `SELECT users.id, users.username, users.avatar, users.usual_nickname AS nickname
+     FROM sessions JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = $1 AND sessions.expires_at > $2`,
     [hashToken(token), now.toISOString()],
   );
-  return rows.length === 1 ? rows[0].user_id : null;
+  return rows.length === 1 ? rows[0] : null;
+}
+
+// Saves an account's avatar and usual nickname (null = no usual nickname). Both are checked before they get here.
+export async function saveAccountSettings(
+  db: TransactionDb,
+  userId: string,
+  settings: { avatar: string; nickname: string | null },
+): Promise<void> {
+  await db.query("UPDATE users SET avatar = $2, usual_nickname = $3 WHERE id = $1", [
+    userId,
+    settings.avatar,
+    settings.nickname,
+  ]);
+}
+
+// An account holder's first room: saves the avatar they picked, but only if the account has none yet, so it is
+// asked once and a later room never changes it (Account settings does).
+export async function saveFirstAvatar(db: TransactionDb, userId: string, avatar: string): Promise<void> {
+  await db.query("UPDATE users SET avatar = $2 WHERE id = $1 AND avatar IS NULL", [userId, avatar]);
 }
 
 // Ends one session (log out). Nothing happens if it does not exist.

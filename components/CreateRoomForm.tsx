@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiWhoIsLoggedIn } from "@/lib/client/account-api";
+import { apiAccountSettings } from "@/lib/client/account-api";
+import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { apiCreateRoom, apiMatchingSongs, saveRoomToken } from "@/lib/client/room-api";
 import { isTileSelected, toggleTile, type TileChoice } from "@/lib/client/room-settings";
 import { DECADES, type Decade } from "@/lib/game/filters";
@@ -17,7 +18,9 @@ import {
   type RoomSettings,
 } from "@/lib/game/room-settings";
 import { markShareOnArrival } from "@/lib/client/share";
+import { avatarEmoji } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
+import AvatarPicker from "./AvatarPicker";
 import styles from "./Landing.module.css";
 
 const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
@@ -25,19 +28,30 @@ const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", ye
 // "Create a room": an account holder picks a nickname and the room settings (issue #34) and becomes the room
 // creator, a player like everyone else. The settings cannot be changed afterwards. A guest is sent to log in and
 // comes back here afterwards. The server checks the login and every setting again when creating.
+// The usual nickname (else the username) and the saved avatar are filled in (issue #44); an account without an
+// avatar picks one here once, and the server saves it.
 export default function CreateRoomForm() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState<boolean | undefined>(undefined);
   const [nickname, setNickname] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [askAvatar, setAskAvatar] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
   const [matching, setMatching] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    apiWhoIsLoggedIn().then((username) => {
-      if (username === null) router.replace("/login?next=/create");
-      else setLoggedIn(true);
+    apiAccountSettings().then((account) => {
+      if (account === null) {
+        router.replace("/login?next=/create");
+        return;
+      }
+      const start = nicknameScreenStart(account);
+      setNickname(start.nickname);
+      setAvatar(start.avatar);
+      setAskAvatar(start.askAvatar);
+      setLoggedIn(true);
     });
   }, [router]);
 
@@ -62,7 +76,7 @@ export default function CreateRoomForm() {
     event.preventDefault();
     setSending(true);
     setError("");
-    const result = await apiCreateRoom(nickname, fetch, settings);
+    const result = await apiCreateRoom({ nickname, avatar }, fetch, settings);
     if (result.ok) {
       saveRoomToken(result.data.code, result.data.playerToken);
       markShareOnArrival(result.data.code); // the lobby opens the share pop-up once
@@ -89,6 +103,16 @@ export default function CreateRoomForm() {
         onChange={(event) => setNickname(event.target.value)}
         required
       />
+      {askAvatar ? (
+        <AvatarPicker value={avatar} onChange={setAvatar} legend="Choose your avatar (we keep it for next time)" />
+      ) : (
+        <p className={styles.hint}>
+          Your avatar: <span aria-hidden="true">{avatarEmoji(avatar)}</span>{" "}
+          <button type="button" className={styles.linkButton} onClick={() => setAskAvatar(true)}>
+            Change for this room
+          </button>
+        </p>
+      )}
 
       <p className={styles.hint}>These settings cannot be changed once the room is created.</p>
 

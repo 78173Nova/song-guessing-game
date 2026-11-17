@@ -208,14 +208,19 @@ describe("createRoom and lookups", () => {
         createdAt: NOW,
         settings: DEFAULT_ROOM_SETTINGS,
         closedReason: null,
+        earlierGames: [],
+        lobbySince: null,
       },
       creator: {
         id: expect.any(String),
         roomId: created!.room.id,
         nickname: CREATOR,
+        avatar: "note",
         joinedAt: NOW,
         lastSeenAt: NOW,
         removed: null,
+        playAgain: false,
+        hasAccount: false,
       },
     });
     expect(await listPlayers(db, created!.room.id)).toEqual([created!.creator]);
@@ -269,7 +274,17 @@ describe("addPlayer", () => {
 
     expect(result).toEqual({
       ok: true,
-      player: { id: expect.any(String), roomId: room.id, nickname: "Anna", joinedAt: LATER, lastSeenAt: LATER, removed: null },
+      player: {
+        id: expect.any(String),
+        roomId: room.id,
+        nickname: "Anna",
+        avatar: "note",
+        joinedAt: LATER,
+        lastSeenAt: LATER,
+        removed: null,
+        playAgain: false,
+        hasAccount: false,
+      },
     });
     const [row] = await db.query<Record<string, unknown>>("SELECT * FROM room_players WHERE nickname = 'Anna'");
     expect(row.token_hash).toBe(hashToken("anna-token"));
