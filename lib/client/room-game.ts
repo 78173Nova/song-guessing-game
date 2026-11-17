@@ -20,13 +20,15 @@ export type RoomView = {
   tapped: { round: number; option: number } | null; // sent, not yet in the server's state
   resultSeen: { round: number; at: number } | null; // local time this device first saw the round closed
   continued: number | null; // the round whose result the player skipped
+  failedClips: { round: number; url: string }[]; // clips this device could not load, even after a swap (#41)
 };
 
 export type RoomAction =
   | { type: "polled"; request: number; state: RoomState; receivedAt: number }
   | { type: "answered"; round: number; option: number }
   | { type: "answer-refused"; round: number }
-  | { type: "continued"; round: number };
+  | { type: "continued"; round: number }
+  | { type: "clip-failed"; round: number; url: string };
 
 export type RoomScreen =
   | { kind: "loading" }
@@ -62,6 +64,7 @@ export const initialRoomView: RoomView = {
   tapped: null,
   resultSeen: null,
   continued: null,
+  failedClips: [],
 };
 
 export function roomReducer(view: RoomView, action: RoomAction): RoomView {
@@ -99,6 +102,9 @@ export function roomReducer(view: RoomView, action: RoomAction): RoomView {
 
     case "continued":
       return { ...view, continued: action.round };
+
+    case "clip-failed":
+      return { ...view, failedClips: [...view.failedClips, { round: action.round, url: action.url }] };
   }
 }
 
@@ -155,4 +161,19 @@ export function roomScreen(view: RoomView, localNow: number): RoomScreen {
   }
   if (state.status === "finished") return { kind: "final", standings: state.standings, me: state.me.nickname };
   return { kind: "next-starting", number: next?.number ?? round.number + 1 };
+}
+
+// Could this device not load the clip of round `number`? Then the round plays without music here and the page
+// says "Couldn't play the clip"; the player can still answer. A failure counts only for the clip the round has now:
+// if the song was swapped since (by this or another device), the new clip gets its own try.
+export function couldNotPlay(view: RoomView, number: number): boolean {
+  const url = view.latest?.previewUrls?.[number - 1];
+  return url !== undefined && view.failedClips.some((failed) => failed.round === number && failed.url === url);
+}
+
+// Which clips this device still has to load: the rounds whose clip address differs from the one it already
+// started loading (`started`, by round). At first that is every clip; after a song swap only the swapped round,
+// so a clip that is playing is never interrupted.
+export function clipsToLoad(started: (string | null)[], urls: string[]): number[] {
+  return urls.flatMap((url, index) => (started[index] === url ? [] : [index]));
 }

@@ -71,6 +71,9 @@ export const RESULT_SECONDS = 5;
 // … and the next round starts this long after the close: the result, then a few seconds of
 // "Next round starting…", so a device that polls a little late still sees the start time before it comes.
 export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 3;
+// When a round's song is swapped (issue #41), every device needs this long to load the new clip. A round that would
+// start sooner starts this long after the swap instead – so it starts at most this much later than planned.
+export const SWAP_LOAD_SECONDS = 5;
 
 // The moment a closed round closed: when the last player answered if everyone did, otherwise at the end of
 // its 15 seconds. Worked out from the stored times, so every request gets the same moment – and with it the
