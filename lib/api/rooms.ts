@@ -30,6 +30,7 @@ import {
   startRoom,
   swapRoomRound,
   syncLobbyCountdown,
+  wasAccountKicked,
   wasRoundSwapped,
   type Room,
   type RoomAnswer,
@@ -362,9 +363,10 @@ export type JoinFrom = { authorization?: string | null; sessionToken?: string };
 // POST /api/rooms/[code]/join – adds a player to a room that is still in the lobby. Returns the player
 // token (only this once) and the nickname as it was stored. The player who fills the last seat (2 in a Duel room,
 // 25 in a Multiplayer room) starts the game: a full room starts by itself (issue #34).
-// `from.authorization`: a tab that was kicked from this room still has its old token and sends it along (issue #40):
-// then the join is refused, so a kicked player cannot simply come back under another nickname from the same tab.
-// `from.sessionToken`: guests and account holders can join; the session cookie (if any) only decides the avatar: an
+// `from.authorization`: a tab that was kicked from this room still has its old token and sends it along (issue #40),
+// and a kicked account holder is recognised by the session cookie: then the join is refused, so a kicked player
+// cannot simply come back under another nickname.
+// `from.sessionToken`: guests and account holders can join; the session cookie (if any) also decides the avatar: an
 // account holder's saved one when none is picked, and a first pick is saved to the account (issue #44).
 export async function joinRoom(
   db: TransactionDb,
@@ -388,11 +390,14 @@ export async function joinRoom(
   const oldToken = readBearerToken(from.authorization ?? null);
   const before = oldToken === null ? null : await findPlayerByToken(db, found.room.id, oldToken);
   if (before?.removed === "kicked") return fail("kicked");
+  // An account holder is also recognised by their account, from any tab or browser. A guest who comes back
+  // without the old token cannot be recognised (decision 012).
+  const account = await accountOf(db, from.sessionToken, now());
+  if (account !== null && (await wasAccountKicked(db, found.room.id, account.id))) return fail("kicked");
 
   // addPlayer checks "lobby", "free seat" and "nickname free" itself, safely against joins at the same moment.
   const playerToken = randomToken();
   const maxPlayers = MAX_PLAYERS_BY_TYPE[found.room.settings.type];
-  const account = await accountOf(db, from.sessionToken, now());
   const avatar = avatarFor(input.avatar, account);
   // An account holder can take over the room creator role after a game (issue #43).
   const added = await addPlayer(db, {

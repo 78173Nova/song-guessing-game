@@ -208,6 +208,8 @@ for Start and Replace. Why, alternatives and limits: decision 015.
   "Are you sure you want to kick <nickname>?". The state lists them in `kickable`, for the creator only. The row
   stays, marked `removed = 'kicked'`: the token is refused ("The room creator removed you from this room"), the
   nickname stays taken, and a join that sends the kicked token along is refused. Their points leave the standings.
+  A kicked player who joined logged in is also recognised by their account (`room_players.account_id`): a join
+  from that account is refused too, from any tab or browser (code review, 17 Nov 2026).
 - **Leave:** `POST /api/rooms/[code]/leave`, for anyone at any time. In the lobby the row is deleted, so the seat
   and nickname are free again; if it is the room creator, the room closes for everyone instead
   (`rooms.closed_reason = 'creator-left'`, "The room creator closed the room"). Once the game has started, the row
@@ -231,10 +233,16 @@ for Start and Replace. Why, alternatives and limits: decision 015.
   anyway, so nothing needs the creator.
 
 ### Limits
-- Players have no accounts, so a kicked player in a new tab or another browser can join a lobby again under a
-  new nickname. The rule stops the easy way back (same tab, same nickname).
+- A guest has no account, so a kicked guest in a new tab or another browser (no old token, no account) cannot be
+  recognised and can join a lobby again under a new nickname. The rule stops the easy way back (same tab, same
+  nickname) for everyone, and every way back for an account holder who stays logged in.
 - A player whose device stops asking still counts for "everyone has answered", so a round with an away player
   runs its full 15 seconds.
+
+### How it could change
+- Kicked guests could be recognised by something that outlives the tab (a cookie or `localStorage` id), at the
+  cost of mixing up two people who share a browser.
+- The 5 s and 60 s are constants in `lib/game/rooms.ts`; changing them changes every device at once.
 
 ## Update 17 Nov 2026: several games per room and the creator handover (issue #43)
 
@@ -250,23 +258,24 @@ for Start and Replace. Why, alternatives and limits: decision 015.
   `rooms.earlier_games` and `game_id` is empty again. The 30-minute lobby limit counts from `rooms.lobby_since`
   (the return to the lobby); the 3-hour limit still counts from `created_at`.
 - **Creator handover.** If the room creator did not choose "Play again", the role passes at random (the `random`
-  the tests control) to an **account holder** who did, preferring one who is not away at that moment. The new
+  the tests control) to an **account holder** who did, preferring one who was there in the last round (answered it)
+  and is not away when the vote ends. The new
   creator's token hash is copied into `rooms.host_token_hash` (as planned in the update of 16 Nov). A player is an
   account holder if they were logged in when joining (`room_players.account_id`; the creator always is). If no
   account holder chose "Play again", the room closes for everyone (`closed_reason = 'no-account-holder'`, "No
   account holder is left to run the room").
 - **Back in the lobby** everything works as before: new players can join up to the limit, "Start now" needs 2
   players (with 1 player left the lobby waits for a second), and a full lobby starts by itself – also a Duel where
-  both players chose "Play again". If nobody chose "Play again", nothing changes: the room stays finished with its
-  final standings, as before. The room has status `lobby` again, so a public room is in the "Join a room" list again (#36); the list
+  both players chose "Play again". If nobody chose "Play again", everyone is removed and the room closes with "No
+  account holder is left to run the room" (code review, 17 Nov 2026; before, the room stayed finished). The room has status `lobby` again, so a public room is in the "Join a room" list again (#36); the list
   counts its 30 minutes from `lobby_since` too.
 
 ### Why
 - **Account holders only:** the creator role is the reason creating a room needs an account (decision 014); a
   guest who inherits it would get around that rule.
 - **Not away first:** a creator who is gone cannot press "Start now" or kick; preferring someone whose device is
-  still asking keeps the room usable. We only store the latest request time, so "not away" means "at the moment
-  the vote ends", not a history of the last round.
+  still asking keeps the room usable. We only store the latest request time, so "was there in the last round"
+  is read from the answers: a player who answered the last round was there.
 - **5 games:** keeps one room inside its 3-hour lifetime and bounds what one room stores.
 
 ### Alternatives
@@ -277,7 +286,14 @@ for Start and Replace. Why, alternatives and limits: decision 015.
 - When the 60 s run out, the vote ends on the next request; until then the room stays "finished" (devices ask every
   second, so this is at most a second late).
 - A guest who joined while logged out is not an account holder, even if they log in later in the same tab.
-## Update 2026-11-17: public rooms and the "Join a room" list (issue #36)
+- A player who was there in the last round but did not answer it counts as away for the handover; this only changes
+  who is preferred, never who can get the role.
+
+### How it could change
+- The 5-game limit and the 60 s vote are constants in `lib/game/rooms.ts`.
+- A real presence history (e.g. the last request time per round) would make "away in the last round" exact.
+
+## Update 17 Nov 2026: public rooms and the "Join a room" list (issue #36)
 
 ### Decision
 Rooms are public unless the creator chooses private at creation (`rooms.is_private`, never changed). `GET /api/rooms`
@@ -297,7 +313,11 @@ every filter). The page asks again every 5 s.
 ### Limits
 - A room can appear up to 5 s after it filled or started; joining it then gets the normal "full"/"started" message.
 
-## Update 2026-11-17: lobby countdown for public rooms (issue #37)
+### How it could change
+- More filters (e.g. a nickname search) are one more check in `fitsRoomListFilter`; paging is only needed with
+  many more rooms.
+
+## Update 17 Nov 2026: lobby countdown for public rooms (issue #37)
 
 ### Decision
 - A public room starts by itself 60 s after its lobby reaches 2 players. In the last 15 s the room creator can tap
@@ -317,4 +337,10 @@ every filter). The page asks again every 5 s.
 
 ### Limits
 - The game starts on the first request after 0; with every lobby page asking each second, that is at most ~1 s late.
-- The list shows the countdown on the viewer's device clock, which may be a few seconds off.
+- The list reply carries `serverNow`, and the list corrects its countdowns by how far the device clock is off, like
+  the room page does (code review, 17 Nov 2026). The request's travel time is not corrected, so it can be a fraction
+  of a second off.
+
+### How it could change
+- The 60 s, the 15-s window and the 5 extensions are constants in `lib/game/rooms.ts`; a different countdown per
+  room would be one more room setting.

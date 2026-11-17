@@ -194,6 +194,27 @@ describe("kick", () => {
     expect((await state(code, anna)).body.players).toEqual(["Anna", "Cleo"]);
   });
 
+  it("a kicked account holder cannot come back from another tab: their account is recognised", async () => {
+    const room = await newRoom("Anna", true);
+    const benSession = await loggedInSession(db, clock, "ben_test");
+    const joinAs = (nickname: string, sessionToken?: string) =>
+      joinRoom(db, room.code, json({ nickname }), deps, { sessionToken });
+    await joinAs("Ben", benSession);
+    wait(66);
+    await state(room.code, room.creatorToken);
+    expect((await kick(room.code, room.creatorToken, { nickname: "Ben" })).status).toBe(200);
+
+    // A new tab: no old token, but the same login.
+    expect(await joinAs("Benny", benSession)).toMatchObject({ status: 403, body: { error: "kicked" } });
+    // Another account and a guest can still join.
+    const cleoSession = await loggedInSession(db, clock, "cleo_test");
+    expect((await joinAs("Cleo", cleoSession)).status).toBe(201);
+    expect((await joinAs("Dan")).status).toBe(201);
+    // Ben's account is only refused in the room he was kicked from.
+    const other = await newRoom("Anna", true);
+    expect((await joinRoom(db, other.code, json({ nickname: "Ben" }), deps, { sessionToken: benSession })).status).toBe(201);
+  });
+
   // A full room starts by itself (#34), so a freed seat shows as one more join before the room is full.
   it("frees the seat in the lobby: the room fills up one player later", async () => {
     // Private: a public lobby with 2+ players would start after 60 s (issue #37).

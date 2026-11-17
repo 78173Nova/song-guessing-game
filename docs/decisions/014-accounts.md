@@ -161,7 +161,10 @@ account is created with it. Until then, signing up reserves the username. The te
 username that is really stored when an email already had an account with another username; log in with the
 email in that case.
 
-Update 17 Nov 2026 (avatars and Account settings, issue #44): every player has an **avatar** from a fixed set of
+## Update 17 Nov 2026: avatars and Account settings (issue #44)
+
+### Decision
+Every player has an **avatar** from a fixed set of
 16 emoji (`lib/game/avatars.ts`; the server stores and sends an id such as `fox`, no uploads, no package). An
 account keeps an avatar and a **usual nickname** (`users.avatar`, `users.usual_nickname`, both empty until chosen);
 `GET/POST /api/accounts/settings` reads and changes them, only for the account of the session cookie (401 otherwise),
@@ -170,12 +173,25 @@ The page **Account settings** (`/account`) is linked from "Logged in as <usernam
 `{ nickname, avatar? }`; an unknown avatar is refused (400 `invalid-avatar`). The first room of an account without
 an avatar saves the picked one (once; later picks on the nickname screen apply to that room only). With no avatar in
 the request the account's saved one is used, else the music note. Joining reads the session cookie only for this;
-guests join as before. The room state adds `avatars` (avatar id by nickname). Why emoji: they need no image files,
-look the same size everywhere and a screen reader can skip them (the nickname says who it is). Limit: the database
-checks only the form of an avatar id (lower-case letters); the exact list is checked in the code.
+guests join as before. The room state adds `avatars` (avatar id by nickname).
 
-Update 17 Nov 2026 (changing username, email and password, issue #45): the Account settings page also changes the
-login details, each only for the account of the session cookie (401 otherwise):
+### Why
+Emoji need no image files, look the same size everywhere and a screen reader can skip them (the nickname says who
+it is).
+
+### Alternatives
+Uploaded pictures would be more personal, but need storage, size checks and moderation.
+
+### Limits
+The database checks only the form of an avatar id (lower-case letters); the exact list is checked in the code.
+
+### How it could change
+More avatars are one more entry in `lib/game/avatars.ts`; nothing else changes.
+
+## Update 17 Nov 2026: changing username, email and password (issue #45)
+
+### Decision
+The Account settings page also changes the login details, each only for the account of the session cookie (401 otherwise):
 - **Username** (`POST /api/accounts/username`, `{ username }`): same rule as at sign-up, unique ignoring case (409
   "This username is taken", also for a sign-up that is not verified yet; an abandoned sign-up frees it as at sign-up).
   The account's own username in another case is allowed. The old username is free straight away.
@@ -192,10 +208,21 @@ login details, each only for the account of the session cookie (401 otherwise):
 - **Password** (`POST /api/accounts/password`, `{ currentPassword, newPassword }`): needs the current password (403
   `wrong-password`), same rule as at sign-up (8–128 characters, no spaces), and in one query replaces the hash and
   **ends every other session**; this browser stays logged in.
-Why: the current password stops someone at an unlocked computer from taking over the account; the email changes only
+
+### Why
+The current password stops someone at an unlocked computer from taking over the account; the email changes only
 after the link, so a typo cannot lock anyone out; the notice tells the real owner in time. Why 403 and not 401 for a
 wrong current password: 401 means "log in first", and the person is logged in.
-Limits: if a verified account takes the new address between the request and the click, the link answers 409
+
+### Alternatives
+Changing the email at once (without a link) is simpler, but a typo would lock the person out of their account.
+
+### Limits
+If a verified account takes the new address between the request and the click, the link answers 409
 `email-taken` (only the reader of that inbox sees it) and stays unused. Changing the password or email does not cancel
 links that were already sent (reset, email change); each still works once until it runs out. No limit on guessing the
 current password (same as log in). Deleting an account is still not built.
+
+### How it could change
+Cancelling older links when the password changes would need one more `DELETE` in the same query; a limit on
+password guesses would cover log in and these routes together.

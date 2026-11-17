@@ -319,6 +319,15 @@ export async function findPlayerByToken(db: Db, roomId: string, token: string): 
   return rows.length === 1 ? toPlayer(rows[0]) : null;
 }
 
+// Was a player of this account kicked from this room (issue #40)? Then the account may not join it again.
+export async function wasAccountKicked(db: Db, roomId: string, accountId: string): Promise<boolean> {
+  const rows = await db.query(
+    "SELECT 1 FROM room_players WHERE room_id = $1 AND account_id = $2 AND removed = 'kicked'",
+    [roomId, accountId],
+  );
+  return rows.length > 0;
+}
+
 // All players still in a room (not left, not kicked) in the order they joined.
 export async function listPlayers(db: Db, roomId: string): Promise<RoomPlayer[]> {
   const rows = await db.query<PlayerRow>(
