@@ -235,3 +235,23 @@ for Start and Replace. Why, alternatives and limits: decision 015.
   new nickname. The rule stops the easy way back (same tab, same nickname).
 - A player whose device stops asking still counts for "everyone has answered", so a round with an away player
   runs its full 15 seconds.
+
+## Update 2026-11-17: public rooms and the "Join a room" list (issue #36)
+
+### Decision
+Rooms are public unless the creator chooses private at creation (`rooms.is_private`, never changed). `GET /api/rooms`
+lists public rooms in the lobby that are not full and not closed, filtered by type (required), mode and
+genres/decades ("any" or a list; a room shares at least one genre and one decade, and a room set to Any fits
+every filter). The page asks again every 5 s.
+
+### Why
+- Strangers can find a game without a code; private rooms keep the old "code, link or QR code" way only.
+- The server applies every listing rule and checks every filter value, so a changed request cannot show private,
+  started or full rooms.
+
+### Alternatives
+- **Live updates (WebSocket/SSE):** faster, but rooms already poll, and Vercel functions do not keep connections.
+- **Changing public/private later:** more states to explain; the issue fixes it at creation.
+
+### Limits
+- A room can appear up to 5 s after it filled or started; joining it then gets the normal "full"/"started" message.

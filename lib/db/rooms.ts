@@ -114,13 +114,13 @@ export function hashToken(token: string): string {
 // caller can try again with a different code. Without settings the room gets the default ones.
 export async function createRoom(
   db: Db,
-  room: { code: string; creatorToken: string; nickname: string; now: Date; settings?: RoomSettings },
+  room: { code: string; creatorToken: string; nickname: string; now: Date; settings?: RoomSettings; isPrivate?: boolean },
 ): Promise<{ room: Room; creator: RoomPlayer } | null> {
   const settings = room.settings ?? DEFAULT_ROOM_SETTINGS;
   const rows = await db.query<RoomRow & { player_id: string; nickname: string; joined_at: Date | string }>(
     `WITH new_room AS (
-       INSERT INTO rooms (code, host_token_hash, created_at, room_type, mode, genres, decades, songs_per_set, sets)
-       VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10)
+       INSERT INTO rooms (code, host_token_hash, created_at, room_type, mode, genres, decades, songs_per_set, sets, is_private)
+       VALUES ($1, $2, $3, $5, $6, $7::text[], $8::int[], $9, $10, $11)
        ON CONFLICT (code) DO NOTHING
        RETURNING ${ROOM_COLUMNS}
      ), creator AS (
@@ -141,6 +141,7 @@ export async function createRoom(
       settings.decades === "any" ? [] : settings.decades,
       settings.songsPerSet,
       settings.sets,
+      room.isPrivate ?? false,
     ],
   );
   if (rows.length !== 1) return null;
@@ -157,6 +158,28 @@ export async function createRoom(
       removed: null,
     }),
   };
+}
+
+// A public room in the lobby for the "Join a room" list (issue #36): the room, its creator's nickname and how many
+// players are in it now.
+export type ListedRoom = { room: Room; creator: string; players: number };
+
+// The public rooms that are still in the lobby, were created after `createdAfter` (older lobbies have closed) and
+// have not closed early. Oldest first. Full rooms are included: the caller knows each room type's limit.
+export async function listPublicLobbies(db: Db, createdAfter: Date): Promise<ListedRoom[]> {
+  const rows = await db.query<RoomRow & { creator: string; players: number | string }>(
+    `SELECT ${ROOM_COLUMNS.split(", ").map((column) => `r.${column}`).join(", ")},
+            (SELECT p.nickname FROM room_players p
+              WHERE p.room_id = r.id AND p.token_hash = r.host_token_hash AND p.removed IS NULL) AS creator,
+            (SELECT count(*) FROM room_players p WHERE p.room_id = r.id AND p.removed IS NULL) AS players
+     FROM rooms r
+     WHERE r.status = 'lobby' AND NOT r.is_private AND r.closed_reason IS NULL AND r.created_at > $1::timestamptz
+     ORDER BY r.created_at, r.id`,
+    [createdAfter.toISOString()],
+  );
+  return rows
+    .filter((row) => row.creator !== null)
+    .map((row) => ({ room: toRoom(row), creator: row.creator, players: Number(row.players) }));
 }
 
 // The room with this code. null = there is no such room.

@@ -121,6 +121,12 @@ ALTER TABLE room_players ADD COLUMN IF NOT EXISTS removed text CHECK (removed IN
 -- (the 30-minute and 3-hour limits are worked out from created_at).
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS closed_reason text CHECK (closed_reason IN ('creator-left', 'everyone-left'));
 
+-- Public rooms (issue #36): a public room in the lobby with a free seat is shown in the "Join a room" list. A
+-- private room can only be joined by code, link or QR code. Chosen at creation, never changed. Older rooms are public.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_private boolean NOT NULL DEFAULT false;
+-- The list only looks at public rooms in the lobby.
+CREATE INDEX IF NOT EXISTS rooms_public_lobby ON rooms (created_at) WHERE status = 'lobby' AND NOT is_private;
+
 -- Room games only: true once a device reported that it could not load this round's clip and the server gave the
 -- round another song. At most one swap per round (issue #41, decision 015), so nobody can skip songs by reporting
 -- failures again and again. Solo games leave it false.
