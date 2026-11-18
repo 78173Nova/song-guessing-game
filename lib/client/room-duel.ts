@@ -22,7 +22,7 @@ export type DuelSides = {
 
 // The viewer (bottom, above the answers) and the opponent (top), each with their score from the standings –
 // which count closed rounds only, so the scores change after each round, never during one. `answered` is the
-// list for the round on screen (answeredInRound): the opponent gets a tick, never what they answered.
+// list for the round on screen (answeredInRound): the opponent turns grey, never what they answered.
 export function duelSides(
   state: {
     players: string[];

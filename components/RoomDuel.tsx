@@ -1,7 +1,7 @@
 // The duel layout of a room round (issue #39), for a game with exactly two players: the opponent's nickname and
 // score at the top, facing the viewer; the song in the middle; the viewer's nickname and score at the bottom, just
 // above the answer buttons (which Room.tsx shows below, the same as on the Multiplayer game board). The opponent
-// gets a tick once they have answered, never what they answered. Which side shows what: lib/client/room-duel.ts.
+// turns grey once they have answered, never what they answered. Which side shows what: lib/client/room-duel.ts.
 import { ROUND_SECONDS } from "@/lib/client/countdown";
 import { duelSides } from "@/lib/client/room-duel";
 import { avatarEmoji } from "@/lib/game/avatars";
@@ -44,7 +44,7 @@ export default function RoomDuel({
               {sides.opponent.score}
             </p>
             <p className={sides.opponent.answered ? `${styles.name} ${styles.answered}` : styles.name}>
-              {sides.opponent.answered && <span aria-label="has answered">✓ </span>}
+              {sides.opponent.answered && <span className={styles.srOnly}>has answered: </span>}
               {sides.opponent.away && (
                 <span role="img" aria-label="away" title="Away – not connected">
                   ⏳{" "}
@@ -86,8 +86,8 @@ export default function RoomDuel({
       </div>
 
       <div className={styles.me}>
-        <p className={styles.name}>
-          {iAnswered && <span aria-label="you have answered">✓ </span>}
+        <p className={iAnswered ? `${styles.name} ${styles.answered}` : styles.name}>
+          {iAnswered && <span className={styles.srOnly}>you have answered: </span>}
           <span aria-hidden="true">{avatarEmoji(avatars[sides.me.nickname])} </span>
           <span className={styles.nickname}>{sides.me.nickname}</span>
         </p>
