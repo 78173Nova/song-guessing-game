@@ -22,7 +22,7 @@ Rules:
 | 006 | [Behaviour when the API fails](006-api-failure.md) | decided |
 | 007 | [No accounts, nicknames only](007-no-accounts.md) | decided, updated 15 Nov 2026 (accounts to create rooms) |
 | 008 | [Polling instead of WebSockets](008-polling.md) | decided, built with the room core; updated 16 Nov 2026 (shared start time, server-paced) |
-| 009 | [Review process: checks before merging, review after](009-review-process.md) | decided |
+| 009 | [Review process: checks before merging, review after](009-review-process.md) | decided; updated 17 Nov 2026 (type check, folder rules in lint, LF line endings) |
 | 010 | [Test database: PGlite](010-test-database.md) | decided |
 | 011 | [Solo game screens: logic outside the screen code](011-solo-ui.md) | decided |
 | 012 | [Rooms: tables, tokens, codes and the player limit](012-rooms.md) | decided, built (room core, away/kick/leave, several games per room, public rooms and the lobby countdown; updated 17 Nov 2026) |

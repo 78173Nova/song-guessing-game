@@ -1,0 +1,3 @@
+# Store and check out text files with LF line endings on every computer (Windows included),
+# so code that reads files line by line (e.g. lib/db/schema.ts) sees the same text as CI and Vercel.
+* text=auto eol=lf

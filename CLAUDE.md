@@ -18,7 +18,10 @@ The team are **programming beginners**: explain proposals in plain language befo
 - `docs/decisions/` – decisions made (Decision / Why / Alternatives / Limits / How it could change,
   one or two sentences each)
 - `docs/reference/` – earlier prototype (README + notes on what we keep and change), ideas only
-- `specs/` – one spec per task (Why / What / Out of scope / Done when)
+- `specs/` – specs 001–004 (Why / What / Out of scope / Done when). Later tasks are GitHub issues,
+  referenced as `(#n)` in commits: read one with `gh issue view <n>`
+- `GLOSSARY.md` – the names for things in code, UI and docs (e.g. "room creator", never "host");
+  check it when naming something
 
 ## Stack
 - Next.js 16 (App Router) with TypeScript – UI and server routes in one project.
@@ -40,13 +43,14 @@ The team are **programming beginners**: explain proposals in plain language befo
 (Keep this list up to date.)
 - Run the app locally: `npm run dev` (then open http://localhost:3000)
 - Tests: `npm test` (runs once; tests live in `tests/` and end in `.test.ts`)
-- Lint: `npm run lint`
+- Lint: `npm run lint` (also checks the folder rules below, see `eslint.config.mjs`)
+- Type check: `npm run typecheck` (Vitest does not check types, so run this too)
 - Check the build: `npm run build`
 - Create tables, load sample songs, check stored previews and look up missing ones on iTunes: `npm run db:seed`
   (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
 - Create the team accounts (already verified) from `TEAM_ACCOUNTS`: `npm run db:team-accounts`
   (uses `DATABASE_URL` and `TEAM_ACCOUNTS` from `.env.local`; safe to run again)
-- CI: `.github/workflows/ci.yml` runs `npm ci`, lint, tests and build on every pull request
+- CI: `.github/workflows/ci.yml` runs `npm ci`, lint, type check, tests and build on every pull request
 
 ## Folder structure
 - `app/` – pages and server routes (`app/api/...`)
@@ -71,8 +75,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 2. **Tests first:** for a new feature, propose the tests first and let the person you are working
    with review them (no teammate needed), then build. Test accepted **and** rejected actions as well as edge cases.
 3. **Never change tests to make them pass.** If a test looks wrong, say so and stop.
-4. **Proof, not claims:** at the end of a task run `npm test`, show the output and list every
-   changed file. Also say how to check the change in the running app.
+4. **Proof, not claims:** at the end of a task run `npm run typecheck`, `npm run lint` and `npm test`,
+   show the output and list every changed file. Also say how to check the change in the running app.
 5. **The server decides:** song selection, answer checking and scoring happen on the server.
    The browser never receives the correct answer before the player has answered.
    Every input from the browser is validated on the server (type, length, allowed values).
@@ -83,19 +87,17 @@ The team are **programming beginners**: explain proposals in plain language befo
    message for the user. The app must never crash when the API fails.
 8. **Tests stay offline:** tests never call the real iTunes API or the real Neon database.
    Use fake responses and a temporary test database.
-9. **Database schema:** anyone on the team may change `db/schema.sql` – no approval needed.
-10. **Keep the docs current:** when something is decided or changed, add or update the matching
-    file in `docs/decisions/` on the same branch (do not delete the old reasoning; append
-    "Update <date>: …"). When commands or structure change, update this file.
-11. **Stay small:** change only what the task asks for. No side refactors, no unnecessary packages.
+9. **Keep the docs current:** when something is decided or changed, add or update the matching
+   file in `docs/decisions/` on the same branch (do not delete the old reasoning; append
+   "Update <date>: …"). When commands or structure change, update this file.
+10. **Stay small:** change only what the task asks for. No side refactors, no unnecessary packages.
     When unsure, ask instead of guessing.
-12. **Git:** commit messages say what changed ("Move answer checking to the server", not "update").
+11. **Git:** commit messages say what changed ("Move answer checking to the server", not "update").
     Open pull requests with `gh pr create`; the description covers what, why, test output and how
-    to check it. Merging (see `docs/decisions/009-review-process.md`): the author merges once the
-    automatic checks are green and tags a teammate, who reviews it before the next team meeting.
-    Before merging a pull request that changes tests or `CLAUDE.md`, the author tells the team in
-    the group chat. Claude never merges a pull request itself.
-13. **Language:** code, comments, commit messages, pull requests and all documentation in English.
+    to check it. Claude never merges a pull request: the author does once the checks are green
+    (`docs/decisions/009-review-process.md`), tags a teammate to review it before the next team meeting,
+    and tells the group chat first when it changes tests or `CLAUDE.md`.
+12. **Language:** code, comments, commit messages, pull requests and all documentation in English.
 
 ## When something goes wrong
 If the same error comes back twice: stop, explain the error in plain language and propose a
