@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiLogOut, apiWhoIsLoggedIn } from "@/lib/client/account-api";
+import { showError } from "./messages";
 import styles from "./Landing.module.css";
 
 // The account part of the landing page: Log in / Sign up, or "Logged in as <username>" and Log out. The username
@@ -11,17 +12,15 @@ import styles from "./Landing.module.css";
 export default function AccountButtons() {
   // undefined while asking the server, null when nobody is logged in.
   const [username, setUsername] = useState<string | null | undefined>(undefined);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     apiWhoIsLoggedIn().then(setUsername);
   }, []);
 
   async function logOut() {
-    setError("");
     const result = await apiLogOut();
     if (result.ok) setUsername(null);
-    else setError(result.message);
+    else showError(result.message); // a short message (#62): it is not about a form field
   }
 
   // Keeps the space, so the page does not jump when the answer arrives.
@@ -30,10 +29,10 @@ export default function AccountButtons() {
   if (username === null) {
     return (
       <div className={styles.accountButtons}>
-        <Link href="/login" className={styles.secondary}>
+        <Link href="/login" className={styles.quiet}>
           Log in
         </Link>
-        <Link href="/signup" className={styles.primary}>
+        <Link href="/signup" className={styles.quiet}>
           Sign up
         </Link>
       </div>
@@ -41,23 +40,16 @@ export default function AccountButtons() {
   }
 
   return (
-    <>
-      <div className={styles.accountButtons}>
-        <p className={styles.loggedIn}>
-          Logged in as{" "}
-          <Link href="/account" className={styles.accountLink} title="Account settings">
-            <strong>{username}</strong>
-          </Link>
-        </p>
-        <button type="button" className={styles.secondary} onClick={logOut}>
-          Log out
-        </button>
-      </div>
-      {error && (
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
-      )}
-    </>
+    <div className={styles.accountButtons}>
+      <p className={styles.loggedIn}>
+        Logged in as{" "}
+        <Link href="/account" className={styles.accountLink} title="Account settings">
+          <strong>{username}</strong>
+        </Link>
+      </p>
+      <button type="button" className={styles.quiet} onClick={logOut}>
+        Log out
+      </button>
+    </div>
   );
 }

@@ -39,7 +39,7 @@ export default function RoomCodeForm() {
           aria-invalid={error !== ""}
           aria-describedby="room-code-error"
         />
-        <button type="submit" className={styles.primary}>
+        <button type="submit" className={styles.secondary}>
           Enter
         </button>
       </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ForgotPasswordForm from "@/components/ForgotPasswordForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Forgot password · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function ForgotPasswordPage() {
         <p className={styles.pitch}>Enter the email of your account and we send you a link to choose a new password.</p>
         <ForgotPasswordForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

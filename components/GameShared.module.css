@@ -1,0 +1,430 @@
+/*
+ * The pieces the solo game (SoloGame.tsx) and the room game (Room.tsx) share, so both look the same: the play
+ * frame, buttons, the stage with the wave circle (GameStage.tsx), the time bar (TimeBar.tsx), answer buttons and
+ * the reveal (verdict, points, song). What only one of them uses stays in SoloGame.module.css or Room.module.css.
+ * Mobile first: one column, big touch targets; from 40rem the answers sit in a 2 × 2 grid.
+ * Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour transitions on
+ * hover/press are allowed (--duration-instant). Every duration is a token, so "reduce motion" (durations become
+ * 0ms) turns all of it off. Delays are fractions of a duration token for the same reason.
+ */
+.game {
+  width: 100%;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  text-align: center;
+}
+
+.intro {
+  max-width: var(--width-form);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  color: var(--color-text-muted);
+}
+
+/* ---------- Buttons ---------- */
+
+.primary,
+.secondary,
+.option {
+  font: inherit;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform var(--duration-instant) var(--ease-out);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.option:focus-visible,
+.song a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  border: none;
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+}
+
+.wide {
+  width: 100%;
+  max-width: var(--width-form);
+}
+
+.secondary {
+  display: block;
+  min-height: 52px;
+  margin: 0 auto var(--space-4);
+  padding: 0 var(--space-5);
+  font-size: var(--text-md);
+  font-weight: 600;
+  border: 2px solid var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .primary:not(:disabled):hover {
+    background: var(--color-primary-hover);
+  }
+
+  .secondary:hover,
+  .option:not(:disabled):hover {
+    border-color: var(--color-primary);
+  }
+}
+
+/* Press state: a small, quick squeeze so a tap visibly counts. */
+.primary:not(:disabled):active,
+.secondary:active,
+.option:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.primary:not(:disabled):active {
+  background: var(--color-primary-hover);
+}
+
+/* "Start game" while the chosen settings cannot start a game (the note above says why). */
+.primary:disabled {
+  color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+  cursor: not-allowed;
+}
+
+/* An icon in a line of text or a button, e.g. the play icon in "Tap to start". */
+.inlineIcon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 0.15em;
+}
+
+.primary .inlineIcon {
+  margin-top: 0;
+}
+
+/* ---------- The play frame: stage, time bar, messages, question ---------- */
+
+.play {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The stage: a fixed square where the wave circle is drawn. Base radius 34 %, disc 26 % (DESIGN.md). */
+.stage {
+  position: relative;
+  width: 220px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+/* The wave circle's canvas fills the stage, behind the disc. Its outline stays between 34 % and 48 % of the
+   stage, so it never reaches the answer buttons below. */
+.wave {
+  position: absolute;
+  inset: 0;
+}
+
+.disc {
+  position: absolute;
+  inset: 24%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.discIcon {
+  width: 44%;
+  height: 44%;
+  stroke-width: 2.5;
+  animation: pop var(--duration-base) var(--ease-out) both;
+}
+
+.discRight {
+  color: var(--color-success);
+}
+
+.discWrong {
+  color: var(--color-danger);
+}
+
+@media (min-width: 40rem) {
+  .stage {
+    width: 280px;
+  }
+}
+
+/* Time left: a thin bar that shrinks from the right with transform (never width). Its width comes from the
+   screen that shows it (TimeBar's className). */
+.timeTrack {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-alt);
+}
+
+.timeFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  transform-origin: left center;
+  transition: transform var(--duration-base) linear;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.question {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ---------- Answer buttons ---------- */
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+@media (min-width: 40rem) {
+  .options {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 2px solid var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.option:disabled {
+  cursor: default;
+}
+
+.answerTitle {
+  min-width: 0;
+}
+
+/* What a mark says in words, next to its icon: "Locked in", "Right answer", "Your answer". */
+.mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  animation: pop var(--duration-fast) var(--ease-out) both;
+}
+
+/* The tapped answer (solo, while the server checks it; rooms, until the round closes). Also the chosen mode on
+   the solo start screen. */
+.chosen {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-weight: 700;
+}
+
+.chosen .mark {
+  color: var(--color-primary);
+}
+
+.correct {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.correct .mark {
+  color: var(--color-success);
+  animation-duration: var(--duration-base);
+}
+
+.wrong {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.wrong .mark {
+  color: var(--color-danger);
+  animation-duration: var(--duration-base);
+}
+
+/* After the round, the answers that played no part step back. */
+.settled .option:not(.correct):not(.wrong) {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+/* ---------- Reveal: verdict, points, song ---------- */
+
+.verdictRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.verdictText {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 650;
+}
+
+.verdictText[data-kind="right"] {
+  color: var(--color-success);
+}
+
+.verdictText[data-kind="wrong"],
+.verdictText[data-kind="timeout"] {
+  color: var(--color-danger);
+}
+
+/* A skipped round is not the player's fault: plain text, smaller. */
+.verdictText[data-kind="skipped"] {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.verdictIcon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+/* "+840 points" pops in last (scale 0.9 → 1), while the score at the top rolls up. */
+.earned {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  animation: pop var(--duration-base) var(--ease-out) both;
+  animation-delay: calc(var(--duration-base) * 2 / 3);
+}
+
+.earnedNumber {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.song {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: left;
+}
+
+.song img {
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.songText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 700;
+}
+
+.songMeta {
+  color: var(--color-text-muted);
+}
+
+/* The link keeps a 44px tap area without looking like a button. */
+.song a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Motion ---------- */
+
+/* Fades in and rises 8px. Other modules use it with `composes: riseIn from "./GameShared.module.css";` and set
+   the duration, timing, fill mode and delay themselves with the animation-… properties (not the `animation`
+   shorthand, which would reset the name). */
+.riseIn {
+  animation-name: riseIn;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
