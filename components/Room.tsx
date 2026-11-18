@@ -40,7 +40,6 @@ import {
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
 import { standingsView } from "@/lib/client/standings-view";
-import type { CoverColours } from "@/lib/client/cover-colours";
 import { useCoverColours } from "@/lib/client/useCoverColours";
 import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { avatarEmoji } from "@/lib/game/avatars";
@@ -48,6 +47,7 @@ import { QUESTION_LABELS } from "@/lib/game/modes";
 import { MAX_PLAYERS_BY_TYPE, totalRoundsOf } from "@/lib/game/room-settings";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
+import GameStage from "./GameStage";
 import ArrowLeftIcon from "./icons/ArrowLeftIcon";
 import AwayIcon from "./icons/AwayIcon";
 import CheckIcon from "./icons/CheckIcon";
@@ -57,10 +57,9 @@ import RoomBoard from "./RoomBoard";
 import RoomDuel from "./RoomDuel";
 import { clearProblem, showError, showProblem } from "./messages";
 import SharePopup from "./SharePopup";
-import WaveCircle from "./WaveCircle";
 import styles from "./Landing.module.css";
 import room from "./Room.module.css";
-import game from "./SoloGame.module.css";
+import shared from "./GameShared.module.css";
 
 // How often the page asks the server for news (polling, decision 008).
 const POLL_MS = 1000;
@@ -435,7 +434,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   }
 
   return (
-    <div className={`${game.game} ${styles.cardWide}`}>
+    <div className={`${shared.game} ${styles.cardWide}`}>
       <GameScreen
         screen={screen}
         state={state}
@@ -455,10 +454,10 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         {clips.blocked && screen.kind === "round" && (
           <button
             type="button"
-            className={`${game.primary} ${game.wide}`}
+            className={`${shared.primary} ${shared.wide}`}
             onClick={() => clips.playFromTap(screen.number, screen.startsAt)}
           >
-            <PlayIcon className={game.inlineIcon} />
+            <PlayIcon className={shared.inlineIcon} />
             Tap to hear the music
           </button>
         )}
@@ -555,9 +554,9 @@ function GameScreen({
   switch (screen.kind) {
     case "get-ready":
       return (
-        <section className={game.center} role="status">
-          <p className={game.intro}>Get ready! Round {screen.number} starts in</p>
-          <p className={game.bigNumber}>{Math.max(1, screen.secondsToStart)}</p>
+        <section className={shared.center} role="status">
+          <p className={shared.intro}>Get ready! Round {screen.number} starts in</p>
+          <p className={room.bigNumber}>{Math.max(1, screen.secondsToStart)}</p>
         </section>
       );
 
@@ -580,14 +579,14 @@ function GameScreen({
         analyser,
       };
       return (
-        <section className={game.play}>
+        <section className={shared.play}>
           {roomLayout(state) === "duel" ? (
             <RoomDuel {...top} standings={state.standings} scores={duelScores} />
           ) : (
             <RoomBoard {...top} />
           )}
-          {screen.questionType && <h2 className={game.question}>{QUESTION_LABELS[screen.questionType]}</h2>}
-          <div className={game.options}>
+          {screen.questionType && <h2 className={shared.question}>{QUESTION_LABELS[screen.questionType]}</h2>}
+          <div className={shared.options}>
             {screen.options.map((title, index) => (
               <AnswerButton
                 key={index}
@@ -610,30 +609,30 @@ function GameScreen({
       const kind = screen.answer === null ? "timeout" : screen.correct ? "right" : "wrong";
       const verdict = { right: "Right!", wrong: "Wrong", timeout: "No answer" }[kind];
       return (
-        <section className={game.play}>
+        <section className={shared.play}>
           {/* The same circle as in the solo reveal; the clip keeps playing, and the circle takes the cover's colours. */}
-          <RoomStage analyser={analyser} colours={coverColours}>
+          <GameStage analyser={analyser} colours={coverColours}>
             {kind === "right" ? (
-              <CheckIcon className={`${game.discIcon} ${game.discRight}`} />
+              <CheckIcon className={`${shared.discIcon} ${shared.discRight}`} />
             ) : (
-              <CrossIcon className={`${game.discIcon} ${game.discWrong}`} />
+              <CrossIcon className={`${shared.discIcon} ${shared.discWrong}`} />
             )}
-          </RoomStage>
+          </GameStage>
           <div className={room.reveal} role="status">
-            <div className={game.verdictRow}>
-              <p className={game.verdictText} data-kind={kind}>
+            <div className={shared.verdictRow}>
+              <p className={shared.verdictText} data-kind={kind}>
                 {kind === "right" ? (
-                  <CheckIcon className={game.verdictIcon} />
+                  <CheckIcon className={shared.verdictIcon} />
                 ) : (
-                  <CrossIcon className={game.verdictIcon} />
+                  <CrossIcon className={shared.verdictIcon} />
                 )}
                 {verdict}
               </p>
-              <p className={game.earned}>
-                <span className={game.earnedNumber}>+{screen.points}</span> points
+              <p className={shared.earned}>
+                <span className={shared.earnedNumber}>+{screen.points}</span> points
               </p>
             </div>
-            <div className={game.song}>
+            <div className={shared.song}>
               {screen.song.artworkUrl && (
                 // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
                 // eslint-disable-next-line @next/next/no-img-element
@@ -648,9 +647,9 @@ function GameScreen({
                   }}
                 />
               )}
-              <div className={game.songText}>
-                <p className={game.title}>{screen.song.title}</p>
-                <p className={game.songMeta}>{screen.song.artist}</p>
+              <div className={shared.songText}>
+                <p className={shared.title}>{screen.song.title}</p>
+                <p className={shared.songMeta}>{screen.song.artist}</p>
                 {screen.song.storeUrl && (
                   <a href={screen.song.storeUrl} target="_blank" rel="noopener noreferrer">
                     Open in Apple Music
@@ -661,11 +660,11 @@ function GameScreen({
             <p className={room.total}>
               Score <NumberFlow value={screen.score} className={room.totalNumber} />
             </p>
-            <button type="button" className={game.secondary} onClick={() => onContinue(screen.number)}>
+            <button type="button" className={shared.secondary} onClick={() => onContinue(screen.number)}>
               Tap to continue
             </button>
           </div>
-          <div className={`${game.options} ${game.settled}`}>
+          <div className={`${shared.options} ${shared.settled}`}>
             {screen.options.map((title, index) => (
               <AnswerButton
                 key={index}
@@ -681,17 +680,17 @@ function GameScreen({
 
     case "next-starting":
       return (
-        <p className={game.message} role="status">
+        <p className={shared.message} role="status">
           Next round starting…
         </p>
       );
 
     case "set-summary":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Set {screen.set} – your songs</h2>
           <SummaryList songs={screen.songs} />
-          <button type="button" className={game.secondary} onClick={() => skip("summary")}>
+          <button type="button" className={shared.secondary} onClick={() => skip("summary")}>
             Tap to continue
           </button>
         </section>
@@ -699,10 +698,10 @@ function GameScreen({
 
     case "set-standings":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Standings after set {screen.set}</h2>
           <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
-          <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+          <button type="button" className={shared.secondary} onClick={() => skip("standings")}>
             Tap to continue
           </button>
         </section>
@@ -710,11 +709,11 @@ function GameScreen({
 
     case "final":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Final standings</h2>
           <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
           {closedRound !== null && (
-            <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+            <button type="button" className={shared.secondary} onClick={() => skip("standings")}>
               Tap to continue
             </button>
           )}
@@ -724,7 +723,7 @@ function GameScreen({
 
     case "final-summary":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Your songs</h2>
           <SummaryList songs={screen.songs} />
           <p className={room.total}>
@@ -738,7 +737,7 @@ function GameScreen({
                 <>
                   <button
                     type="button"
-                    className={`${game.primary} ${game.wide}`}
+                    className={`${shared.primary} ${shared.wide}`}
                     onClick={onPlayAgain}
                     disabled={sending}
                   >
@@ -753,26 +752,6 @@ function GameScreen({
         </section>
       );
   }
-}
-
-// The stage of the room result: the wave circle (behind) and a solid disc in front, the same as the solo stage.
-// colours: the circle's colours; undefined keeps the app's own colours. The album cover's colours (#64) are only
-// passed here, on the result screen, once the answer is revealed (CLAUDE.md rule 5).
-function RoomStage({
-  analyser,
-  colours,
-  children,
-}: {
-  analyser: AnalyserNode | null;
-  colours?: CoverColours;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={game.stage}>
-      <WaveCircle analyser={analyser} colours={colours} className={game.wave} />
-      <div className={game.disc}>{children}</div>
-    </div>
-  );
 }
 
 const MARK_LABEL = { none: null, chosen: "Locked in", correct: "Right answer", wrong: "Your answer" } as const;
@@ -792,18 +771,18 @@ function AnswerButton({
   disabled: boolean;
   onClick?: () => void;
 }) {
-  const markClass = { none: "", chosen: game.chosen, correct: game.correct, wrong: game.wrong }[mark];
+  const markClass = { none: "", chosen: shared.chosen, correct: shared.correct, wrong: shared.wrong }[mark];
   return (
     <button
       type="button"
-      className={`${game.option} ${markClass}`}
+      className={`${shared.option} ${markClass}`}
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
     >
-      <span className={game.answerTitle}>{title}</span>
+      <span className={shared.answerTitle}>{title}</span>
       {mark !== "none" && (
-        <span className={game.mark}>
+        <span className={shared.mark}>
           {mark === "correct" && <CheckIcon />}
           {mark === "wrong" && <CrossIcon />}
           {MARK_LABEL[mark]}

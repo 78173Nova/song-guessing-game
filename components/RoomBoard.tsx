@@ -7,10 +7,10 @@
 // The circle uses the app's own colours only (CLAUDE.md rule 5: nothing about the song before the answer).
 import NumberFlow from "@number-flow/react";
 import { BOARD, boardSeats, SEAT, SONG_RADIUS } from "@/lib/client/room-board";
-import { timeLeftFraction } from "@/lib/client/solo-view";
 import { avatarEmoji } from "@/lib/game/avatars";
 import AwayIcon from "./icons/AwayIcon";
 import CheckIcon from "./icons/CheckIcon";
+import TimeBar from "./TimeBar";
 import WaveCircle from "./WaveCircle";
 import styles from "./RoomBoard.module.css";
 
@@ -101,9 +101,7 @@ export default function RoomBoard({
         </div>
       </div>
       {/* Time left: the board's base line, shrinking with transform (never width). */}
-      <div className={styles.timeTrack} aria-hidden="true">
-        <div className={styles.timeFill} style={{ transform: `scaleX(${timeLeftFraction(timeLeft)})` }} />
-      </div>
+      <TimeBar left={timeLeft} className={styles.timeTrack} />
       <p className={styles.me}>
         <span className={styles.avatar} aria-hidden="true">
           {avatarEmoji(avatars[me])}

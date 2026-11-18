@@ -10,10 +10,10 @@
 import NumberFlow from "@number-flow/react";
 import { useEffect, useState } from "react";
 import { duelSides, type ScoreMemory } from "@/lib/client/room-duel";
-import { timeLeftFraction } from "@/lib/client/solo-view";
 import { avatarEmoji } from "@/lib/game/avatars";
 import AwayIcon from "./icons/AwayIcon";
 import CheckIcon from "./icons/CheckIcon";
+import TimeBar from "./TimeBar";
 import WaveCircle from "./WaveCircle";
 import styles from "./RoomDuel.module.css";
 
@@ -121,9 +121,7 @@ export default function RoomDuel({
         </section>
       </div>
       {/* Time left: the same base line as under the game board, shrinking with transform (never width). */}
-      <div className={styles.timeTrack} aria-hidden="true">
-        <div className={styles.timeFill} style={{ transform: `scaleX(${timeLeftFraction(timeLeft)})` }} />
-      </div>
+      <TimeBar left={timeLeft} className={styles.timeTrack} />
     </div>
   );
 }

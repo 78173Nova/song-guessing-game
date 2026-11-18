@@ -735,3 +735,10 @@ are allowed (`--duration-instant`, as the token table already says: "hover colou
 `transform` and `opacity` (and the wave circle on its canvas). This matches the CSS: the landing and form buttons,
 inputs, tiles and avatar options fade their border or background colour over `--duration-instant`; the game and
 room buttons change colour at once and only their press scale moves.
+
+Update 18 Nov 2026 (#57, review): the solo and room games share their styles through
+`components/GameShared.module.css` (buttons, the stage, the time bar, answer buttons, the reveal and the `pop` and
+`riseIn` keyframes, each defined once) instead of the room importing `SoloGame.module.css`. One stage component
+(`components/GameStage.tsx`) and one time bar (`components/TimeBar.tsx`) are used by the solo round, the room result,
+the game board and the duel; each screen only sets the time bar's width. The wave circle's audio wiring is one hook,
+`useWaveAudio` (`lib/client/useWaveAudio.ts`). Nothing looks different.

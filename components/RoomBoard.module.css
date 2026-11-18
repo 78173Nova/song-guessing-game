@@ -174,21 +174,9 @@
   color: var(--color-danger);
 }
 
-/* Time left: the board's base line. It shrinks from the right with transform, never width. */
+/* Time left: the board's base line (TimeBar, styled in GameShared.module.css). Only its width is set here. */
 .timeTrack {
   width: min(100%, 34rem, 62svh);
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--color-surface-alt);
-}
-
-.timeFill {
-  height: 100%;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  transform-origin: left center;
-  transition: transform var(--duration-base) linear;
 }
 
 /* The viewer's own nickname: larger than everyone else's, just above the answers. */
