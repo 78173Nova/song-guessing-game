@@ -29,4 +29,4 @@ Rules:
 | 013 | [Game modes: title, artist, year, mixed](013-game-modes.md) | decided, partly built |
 | 014 | [Accounts](014-accounts.md) | decided, mostly built (sign-up, verification, login, password reset, avatars and Account settings, changing username/email/password; updated 17 Nov 2026; Brevo email delivery #25) |
 | 015 | [Room games: server-paced rounds, clips on every device](015-room-games.md) | decided, built (issue #33; updated 17 Nov 2026: room settings and sets, song swap, QR code, several games per room) |
-| 016 | [Visual design: one look, the wave circle and three UI packages](016-visual-design.md) – rules in [DESIGN.md](../../DESIGN.md) | decided, accepted 18 Nov 2026 (plan only; build in #59–#67) |
+| 016 | [Visual design: one look, the wave circle and three UI packages](016-visual-design.md) – rules in [DESIGN.md](../../DESIGN.md) | decided, accepted and built 18 Nov 2026 (#59–#67; review fixes #57) |
