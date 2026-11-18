@@ -10,7 +10,7 @@ import { apiAccountSettings } from "@/lib/client/account-api";
 import { canPlayPreviews, prepareClip, UNSUPPORTED_BROWSER_MESSAGE } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS } from "@/lib/client/countdown";
 import { answeredInRound } from "@/lib/client/room-board";
-import { roomLayout } from "@/lib/client/room-duel";
+import { roomLayout, scoreMemory } from "@/lib/client/room-duel";
 import {
   apiAnswerRoom,
   apiExtendCountdown,
@@ -546,6 +546,8 @@ function GameScreen({
   const closedRound = state.round?.status === "closed" ? state.round.number : null;
   // The album cover's colours for the circle, only once the answer is revealed (null otherwise, CLAUDE.md rule 5).
   const coverColours = useCoverColours(screen.kind === "result" ? screen.song.artworkUrl : null);
+  // The duel scores the viewer saw last, kept across rounds so each score rolls up when the next round starts (#66).
+  const [duelScores] = useState(scoreMemory);
   const skip = (step: SkipStep) => {
     if (closedRound !== null) onContinue(closedRound, step);
   };
@@ -572,15 +574,16 @@ function GameScreen({
         number: screen.number,
         totalRounds: screen.totalRounds,
         secondsLeft: screen.secondsLeft,
+        // Seconds left, not rounded (screen.startsAt is already on the local clock), for the time bar.
+        timeLeft: Math.min(screen.secondsLeft, (screen.startsAt + ROUND_SECONDS * 1000 - now) / 1000),
+        analyser,
       };
-      // Seconds left, not rounded (screen.startsAt is already on the local clock).
-      const timeLeft = Math.min(screen.secondsLeft, (screen.startsAt + ROUND_SECONDS * 1000 - now) / 1000);
       return (
         <section className={game.play}>
           {roomLayout(state) === "duel" ? (
-            <RoomDuel {...top} standings={state.standings} />
+            <RoomDuel {...top} standings={state.standings} scores={duelScores} />
           ) : (
-            <RoomBoard {...top} timeLeft={timeLeft} analyser={analyser} />
+            <RoomBoard {...top} />
           )}
           {screen.questionType && <h2 className={game.question}>{QUESTION_LABELS[screen.questionType]}</h2>}
           <div className={game.options}>
