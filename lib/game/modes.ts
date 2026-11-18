@@ -1,8 +1,8 @@
 // Game modes (spec 003, decision 013): what the player guesses. Plain functions: no database, no network.
-import { isValidGameId } from "./answers";
-import { isDecade, type Filters } from "./filters";
-import { isGenre } from "./genres";
-import { MAX_RECENT_GAMES } from "./recent-songs";
+import { isValidGameId } from "./answers.ts";
+import { isDecade, type Filters } from "./filters.ts";
+import { isGenre } from "./genres.ts";
+import { MAX_RECENT_GAMES } from "./recent-songs.ts";
 
 // The modes a player can choose. "mixed" picks one of the question types at random for each round.
 export const MODES = ["title", "artist", "year", "mixed"] as const;

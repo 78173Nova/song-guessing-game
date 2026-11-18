@@ -1,5 +1,5 @@
 // Avoiding the songs of the player's last games (spec 003, decision 013). Plain functions: no database, no network.
-import { ROUNDS_PER_GAME } from "./rounds";
+import { ROUNDS_PER_GAME } from "./rounds.ts";
 
 // The most recent games the browser may send, newest first.
 export const MAX_RECENT_GAMES = 3;

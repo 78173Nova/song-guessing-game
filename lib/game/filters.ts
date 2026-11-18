@@ -1,5 +1,5 @@
 // Genre and decade filters (spec 003, decision 013). Plain functions: no database, no network.
-import { isGenre, type Genre } from "./genres";
+import { isGenre, type Genre } from "./genres.ts";
 
 // The decades a player can choose. There is no 1950s filter: the one 1957 song only plays with "Any".
 export const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;

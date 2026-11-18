@@ -2,11 +2,11 @@
 // Tokens come in as the raw value from the request and are hashed here, so a raw token can never
 // reach the database (decision 012).
 import { createHash } from "node:crypto";
-import { DEFAULT_AVATAR } from "../game/avatars";
+import { DEFAULT_AVATAR } from "../game/avatars.ts";
 import type { Decade } from "../game/filters";
 import type { Genre } from "../game/genres";
 import type { Mode } from "../game/modes";
-import { DEFAULT_ROOM_SETTINGS, type RoomSettings, type RoomType } from "../game/room-settings";
+import { DEFAULT_ROOM_SETTINGS, type RoomSettings, type RoomType } from "../game/room-settings.ts";
 import type { NewRound } from "../game/rounds";
 import type { Db, TransactionDb } from "./client";
 

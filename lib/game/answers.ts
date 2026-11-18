@@ -1,6 +1,6 @@
 // Checking answers and validating what the browser sends. Plain functions: no database, no network.
-import { OPTIONS_PER_ROUND } from "./rounds";
-import { scoreAnswer } from "./scoring";
+import { OPTIONS_PER_ROUND } from "./rounds.ts";
+import { scoreAnswer } from "./scoring.ts";
 
 export type RoundStatus = "waiting" | "open" | "answered" | "skipped";
 
