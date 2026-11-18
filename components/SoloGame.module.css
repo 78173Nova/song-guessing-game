@@ -106,7 +106,7 @@
 }
 
 /* The answer a room player tapped, before the round closes (components/Room.tsx). */
-/* Why some genres or decades are greyed out (spec 003, "filter gaps"). */
+/* The line above "Start game": how many songs match (issue #8). */
 .filterNote {
   max-width: 28rem;
   margin: 0;
@@ -196,51 +196,14 @@
   color: var(--accent);
 }
 
-/* Mode choice on the start screen: 2 × 2 buttons, the chosen one outlined. */
-.modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 28rem;
-  border: none;
-}
-
-.modes legend {
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.modes .option {
-  min-height: 3.25rem;
-}
-
-/* Genre and decade dropdowns: side by side, stacked on very narrow phones. */
-.filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 28rem;
-}
-
-.filters label {
+/* Mode, genre and decade tiles on the start screen (issue #8): the tile rows from "Create a room", left-aligned. */
+.settings {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  font-weight: 600;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 28rem;
   text-align: left;
-}
-
-.filters select {
-  min-height: 3.25rem;
-  padding: 0 0.75rem;
-  font: inherit;
-  font-weight: 400;
-  border: 2px solid var(--muted);
-  border-radius: 12px;
-  color: var(--foreground);
-  background: var(--card);
 }
 
 .chosen {

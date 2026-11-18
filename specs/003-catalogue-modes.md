@@ -163,6 +163,29 @@ When a line below can be read two ways, choose the simpler option that keeps the
   (`too-few-songs`), whatever the screen allows. The screen only checks the song count, not the "4 different
   titles or artists" rule for a mode, so that message can still appear
 
+## Decided on 18 Nov 2026 (solo settings, `feature/solo-settings`, issues #7 and #8)
+- **Tiles instead of dropdowns (#8):** the start screen shows mode, genre and decade as the tile rows of "Create a
+  room". The tile row moved into its own component, `components/TileGroup.tsx`, used by the room form, the room list
+  and the solo screen; the room screens look and behave as before. Solo stays single choice: one genre, one decade,
+  "Any" by default, so `POST /api/games` and the database do not change. Above "Start game" a line says, e.g.,
+  "12 songs match – 5 will be played", or the "Only 3 songs match …" message (then Start is disabled).
+  This replaces "a genre dropdown and a decade dropdown" under "Game (UI)"
+- **Greyed-out tiles (#7):** genre and decade tiles with fewer than 5 playable songs are greyed out as before, now as
+  disabled tiles with the note under the decade row. Mode tiles are greyed out when the chosen filters match fewer
+  than 4 different titles (title mode), fewer than 4 different artists (artist mode) or either (mixed mode, which asks
+  for both), with a short note under the mode row. With fewer than 5 songs no mode is greyed out: the filters are the
+  problem, and the line above "Start game" says so
+- **New route:** `GET /api/games/matching-songs?genre=…&decade=…` sends only `{ songs, titles, artists }` for the
+  chosen filters (missing = Any), counted like the answer options (ignoring upper/lower case). An unknown genre or
+  decade, a filter given twice or any other field is refused with 400. If it cannot be loaded, nothing is greyed out
+- **Chosen mode stops working after a filter change:** it stays chosen but greyed out, "Start game" is disabled, and a
+  line says why, e.g. "Artist needs 4 different artists – these filters have only 2. Choose another mode or other
+  filters." The mode is never switched without the player noticing
+- **The server still decides:** `POST /api/games` refuses such a game with `too-few-songs` on its own. The screen's rule
+  (`modeFits`) sits next to `buildRounds`, and a test checks that both agree for every mode
+- With today's catalogue no combination with 5 or more songs has fewer than 4 titles or artists, so the mode tiles only
+  grey out if the song list changes. The tests cover it with made-up songs
+
 ## Open questions
 - **Production database:** `npm run db:seed` uses the `dev` database from `.env.local`. Karin asks Niklas for access
   to the production database or asks him to seed it after `feature/songs` is merged.

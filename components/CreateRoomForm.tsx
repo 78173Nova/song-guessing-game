@@ -22,6 +22,7 @@ import { markShareOnArrival } from "@/lib/client/share";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
+import TileGroup from "./TileGroup";
 import styles from "./Landing.module.css";
 
 
@@ -127,7 +128,7 @@ export default function CreateRoomForm() {
 
       <p className={styles.hint}>These settings cannot be changed once the room is created.</p>
 
-      <Choice
+      <TileGroup
         legend="Room type"
         options={[
           { value: "duel", label: "Duel (2 players)" },
@@ -136,7 +137,7 @@ export default function CreateRoomForm() {
         selected={(value) => settings.type === value}
         onTap={(value) => change({ type: value as RoomSettings["type"] })}
       />
-      <Choice
+      <TileGroup
         legend="Who can find the room?"
         options={[
           { value: "public", label: "Public (in the room list)" },
@@ -145,31 +146,31 @@ export default function CreateRoomForm() {
         selected={(value) => (value === "private") === isPrivate}
         onTap={(value) => setIsPrivate(value === "private")}
       />
-      <Choice
+      <TileGroup
         legend="What do you guess?"
         options={MODES.map((mode) => ({ value: mode, label: MODE_LABELS[mode] }))}
         selected={(value) => settings.mode === value}
         onTap={(value) => change({ mode: value as Mode })}
       />
-      <Choice
+      <TileGroup
         legend="Genres"
         options={[{ value: "any", label: "Any" }, ...GENRES.map((genre) => ({ value: genre, label: GENRE_LABELS[genre] }))]}
         selected={(value) => isTileSelected<Genre>(genres, value as Genre)}
         onTap={(value) => change({ genres: toggleTile<Genre>(genres, value as Genre) as TileChoice<Genre> })}
       />
-      <Choice
+      <TileGroup
         legend="Decades"
         options={[{ value: "any", label: "Any" }, ...DECADES.map((decade) => ({ value: String(decade), label: `${decade}s` }))]}
         selected={(value) => isTileSelected<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade))}
         onTap={(value) => change({ decades: toggleTile<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade)) })}
       />
-      <Choice
+      <TileGroup
         legend="Songs per set"
         options={SONGS_PER_SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
         selected={(value) => String(settings.songsPerSet) === value}
         onTap={(value) => change({ songsPerSet: Number(value) as RoomSettings["songsPerSet"] })}
       />
-      <Choice
+      <TileGroup
         legend="Number of sets"
         options={SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
         selected={(value) => String(settings.sets) === value}
@@ -190,35 +191,5 @@ export default function CreateRoomForm() {
         {sending ? "Creating…" : "Create the room"}
       </button>
     </form>
-  );
-}
-
-// A row of tiles: tapping one calls onTap; `selected` says which are on.
-export function Choice({
-  legend,
-  options,
-  selected,
-  onTap,
-}: {
-  legend: string;
-  options: { value: string; label: string }[];
-  selected: (value: string) => boolean;
-  onTap: (value: string) => void;
-}) {
-  return (
-    <fieldset className={styles.tiles}>
-      <legend className={styles.codeLabel}>{legend}</legend>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={selected(option.value) ? `${styles.tile} ${styles.tileOn}` : styles.tile}
-          aria-pressed={selected(option.value)}
-          onClick={() => onTap(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </fieldset>
   );
 }

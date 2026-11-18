@@ -2,6 +2,7 @@
 // it never throws, so the screen can always show something sensible.
 import type { Filters, SongCount } from "../game/filters";
 import type { Mode } from "../game/modes";
+import type { MatchingCounts } from "../game/rounds";
 import type { Answer, AnswerResult, RoundInfo } from "./game-state";
 
 export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your internet connection and try again.";
@@ -111,4 +112,24 @@ function isSongCount(value: unknown): value is SongCount {
   if (typeof value !== "object" || value === null) return false;
   const { genre, decade, count } = value as Record<string, unknown>;
   return typeof genre === "string" && Number.isInteger(decade) && Number.isInteger(count);
+}
+
+// Loads the three numbers for the chosen genre + decade on the solo start screen (issue #7). A filter that is
+// "Any" is left out. null if anything goes wrong: the screen then greys out no mode, and the server still checks.
+export async function apiSoloMatchingSongs(filters: Filters, fetchFn: FetchFn = fetch): Promise<MatchingCounts | null> {
+  const query = new URLSearchParams();
+  if (filters.genre !== undefined) query.set("genre", filters.genre);
+  if (filters.decade !== undefined) query.set("decade", String(filters.decade));
+  const url = query.size === 0 ? "/api/games/matching-songs" : `/api/games/matching-songs?${query}`;
+  try {
+    const response = await fetchFn(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (typeof data !== "object" || data === null) return null;
+    const { songs, titles, artists } = data as Record<string, unknown>;
+    if (![songs, titles, artists].every((n) => Number.isInteger(n) && (n as number) >= 0)) return null;
+    return { songs: songs as number, titles: titles as number, artists: artists as number };
+  } catch {
+    return null;
+  }
 }

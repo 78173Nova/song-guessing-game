@@ -315,6 +315,17 @@
   outline-offset: 2px;
 }
 
+/* A tile that cannot be chosen (solo start screen, issue #7), and the note under its row saying why. */
+.tile:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tileNote {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* The "Join a room" list of public rooms (issue #36). */
 .roomList {
   display: flex;

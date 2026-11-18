@@ -20,7 +20,7 @@ export function canChoose(counts: SongCount[] | null, filters: Filters): boolean
   return counts === null || matchingCount(counts, filters) >= MIN_MATCHING_SONGS;
 }
 
-// The short notes under the dropdowns, saying why some choices are greyed out. None if nothing is.
+// The short notes under the genre and decade tiles, saying why some choices are greyed out. None if nothing is.
 export function filterNotes(counts: SongCount[] | null, filters: Filters): string[] {
   if (counts === null) return [];
   const notes: string[] = [];

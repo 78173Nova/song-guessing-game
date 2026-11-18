@@ -14,14 +14,23 @@ import {
 } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { canChoose, filterNotes } from "@/lib/client/filter-choices";
-import { apiAnswer, apiNextRound, apiReplace, apiSongCounts, apiStartGame } from "@/lib/client/game-api";
+import {
+  apiAnswer,
+  apiNextRound,
+  apiReplace,
+  apiSoloMatchingSongs,
+  apiSongCounts,
+  apiStartGame,
+} from "@/lib/client/game-api";
+import { canPickMode, decadeFromTile, genreFromTile, matchLine, modeNotes, modeProblem } from "@/lib/client/solo-settings";
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { DECADES, type Decade, type SongCount } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
-import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
+import { ROUNDS_PER_GAME, type MatchingCounts } from "@/lib/game/rounds";
 import styles from "./SoloGame.module.css";
+import TileGroup from "./TileGroup";
 
 // A tiny silent sound. Playing it once on each player during the Start tap "unlocks" the players on
 // phones, so the clips may start later without another tap.
@@ -71,6 +80,23 @@ export default function SoloGame() {
       cancelled = true;
     };
   }, []);
+
+  // Songs, different titles and different artists for the chosen genre + decade (issue #7), asked again on every
+  // change; a late reply for an older choice is ignored. null until loaded, or if loading failed: then no mode is
+  // greyed out and the server still checks the start.
+  const [matching, setMatching] = useState<MatchingCounts | null>(null);
+  useEffect(() => {
+    let current = true;
+    apiSoloMatchingSongs({ genre, decade }).then((counts) => {
+      if (current) setMatching(counts);
+    });
+    return () => {
+      current = false;
+    };
+  }, [genre, decade]);
+  // The line above "Start game", and why the chosen mode cannot start (it stays chosen, greyed out).
+  const line = matchLine(matching);
+  const problem = modeProblem(matching, mode);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -275,61 +301,48 @@ export default function SoloGame() {
           <p className={styles.intro}>
             Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
-          <fieldset className={styles.modes}>
-            <legend>What do you want to guess?</legend>
-            {MODES.map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={m === mode ? `${styles.option} ${styles.chosen}` : styles.option}
-                aria-pressed={m === mode}
-                onClick={() => setMode(m)}
-              >
-                {MODE_LABELS[m]}
-              </button>
-            ))}
-          </fieldset>
-          <div className={styles.filters}>
-            <label>
-              Genre
-              <select
-                value={genre ?? ""}
-                onChange={(e) => setGenre(GENRES.find((g) => g === e.target.value))}
-              >
-                <option value="">Any</option>
-                {GENRES.map((g) => (
-                  <option key={g} value={g} disabled={!canChoose(songCounts, { genre: g, decade })}>
-                    {GENRE_LABELS[g]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Decade
-              <select
-                value={decade ?? ""}
-                onChange={(e) => setDecade(DECADES.find((d) => String(d) === e.target.value))}
-              >
-                <option value="">Any</option>
-                {DECADES.map((d) => (
-                  <option key={d} value={d} disabled={!canChoose(songCounts, { genre, decade: d })}>
-                    {d}s
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className={styles.settings}>
+            <TileGroup
+              legend="What do you want to guess?"
+              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m) }))}
+              selected={(value) => value === mode}
+              onTap={(value) => setMode(MODES.find((m) => m === value) ?? "title")}
+              notes={modeNotes(matching)}
+            />
+            <TileGroup
+              legend="Genre"
+              options={[
+                { value: "any", label: "Any" },
+                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }) })),
+              ]}
+              selected={(value) => value === (genre ?? "any")}
+              onTap={(value) => setGenre(genreFromTile(value))}
+            />
+            <TileGroup
+              legend="Decade"
+              options={[
+                { value: "any", label: "Any" },
+                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }) })),
+              ]}
+              selected={(value) => value === String(decade ?? "any")}
+              onTap={(value) => setDecade(decadeFromTile(value))}
+              notes={filterNotes(songCounts, { genre, decade })}
+            />
           </div>
-          {filterNotes(songCounts, { genre, decade }).map((note) => (
-            <p key={note} className={styles.filterNote}>
-              {note}
+          <p className={line.tooFew ? styles.error : styles.filterNote} role="status">
+            {line.text}
+          </p>
+          {problem && (
+            <p className={styles.error} role="status">
+              {problem}
             </p>
-          ))}
+          )}
           {state.message && (
             <p className={styles.error} role="alert">
               {state.message}
             </p>
           )}
-          <button className={styles.primary} onClick={handleStart}>
+          <button className={styles.primary} onClick={handleStart} disabled={line.tooFew || problem !== null}>
             Start game
           </button>
         </section>
