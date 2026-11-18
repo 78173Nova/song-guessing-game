@@ -15,7 +15,7 @@ import {
 } from "../db/games";
 import { isRoomGame } from "../db/rooms";
 import { listSongsWithPreview } from "../db/songs";
-import { filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
+import { countByGenreAndDecade, filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
 import { songPools } from "../game/recent-songs";
@@ -124,6 +124,13 @@ export async function startGame(
   const gameId = await createGame(db, built.rounds, input.mode, filters);
   const previewUrls = built.rounds.map((round) => songs.find((s) => s.id === round.songId)!.previewUrl);
   return { status: 201, body: { gameId, previewUrls } };
+}
+
+// GET /api/games/song-counts – how many playable songs each genre + decade has, so the start screen can grey out
+// choices with too few (spec 003, "filter gaps"). Only counts: no titles, artists, years or song IDs.
+// startGame still refuses a combination with too few songs on its own.
+export async function getSongCounts(db: Db): Promise<ApiResult> {
+  return { status: 200, body: { counts: countByGenreAndDecade(await listSongsWithPreview(db)) } };
 }
 
 // POST /api/games/[id]/next – sends the next round without the correct answer and notes the time.

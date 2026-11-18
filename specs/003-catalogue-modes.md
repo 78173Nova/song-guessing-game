@@ -147,6 +147,22 @@ When a line below can be read two ways, choose the simpler option that keeps the
   would stop working from the third game, while avoiding just the newest game still leaves 6
 - `/replace` does not avoid recent songs (it only runs when a clip fails to load)
 
+## Decided on 18 Nov 2026 (filter gaps, `feature/filter-gaps`)
+- **2020s hip-hop:** the decade had only 1 hip-hop song (*luther*), so that filter could never start a game. 6 songs
+  were added (*Mood*, *Laugh Now Cry Later*, *ROCKSTAR*, *INDUSTRY BABY*, *First Class*, *Paint the Town Red*),
+  following the year rule above. The song list test now requires at least 5 hip-hop songs from the 2020s
+- **Explicit rule for the 2020s:** a 2020s song is allowed when the clip the game plays is not explicit
+  (iTunes `trackExplicitness` "notExplicit" or "cleaned"), even if the original recording is explicit.
+  Earlier decades keep the old rule (no explicit originals). `lookupPreview` never picks an explicit clip, for any
+  song (decision 005, update 18 Nov 2026). Songs whose clean edit still has heavy themes are left out by hand
+- **Greyed-out filters:** `GET /api/games/song-counts` sends the number of playable songs per genre and decade
+  (only counts, nothing about single songs). On the start screen, choosing a genre greys out the decades with fewer
+  than 5 of its songs, and choosing a decade greys out the genres with fewer than 5 songs from it, with a short
+  note under the dropdowns. If the counts cannot be loaded, nothing is greyed out
+- **The server still decides:** `POST /api/games` refuses a combination with too few songs exactly as before
+  (`too-few-songs`), whatever the screen allows. The screen only checks the song count, not the "4 different
+  titles or artists" rule for a mode, so that message can still appear
+
 ## Open questions
 - **Production database:** `npm run db:seed` uses the `dev` database from `.env.local`. Karin asks Niklas for access
   to the production database or asks him to seed it after `feature/songs` is merged.

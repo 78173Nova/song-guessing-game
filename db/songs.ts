@@ -3,7 +3,8 @@ import type { SongInput } from "../lib/db/songs";
 // The song catalogue (spec 003, decision 005): 300+ well-known songs from 1960–2026, plus Jailhouse Rock (1957).
 // Year = first release of this recording, album or single, whichever came first (not a remaster or compilation).
 // Genre = one of the 6 genres in lib/game/genres.ts. Artist and title are written as iTunes writes them
-// (e.g. "Lady A", not "Lady Antebellum"), so the seed finds the preview. No songs with explicit lyrics.
+// (e.g. "Lady A", not "Lady Antebellum"), so the seed finds the preview. No songs with explicit lyrics
+// (2020s: the clip must not be explicit, the original may be – decision 005, update 18 Nov 2026).
 // Drafted with Claude decade by decade; Karin checks every line.
 export const songList: SongInput[] = [
   { artist: "Elvis Presley", title: "Jailhouse Rock", year: 1957, genre: "rock" },
@@ -346,6 +347,14 @@ export const songList: SongInput[] = [
   { artist: "Kylie Minogue", title: "Padam Padam", year: 2023, genre: "dance" },
   { artist: "Lady Gaga", title: "Abracadabra", year: 2025, genre: "pop" },
   { artist: "Kendrick Lamar", title: "luther", year: 2024, genre: "hip-hop" },
+  // 2020s hip-hop (filter gaps, checked by Karin): the original is explicit, but the clip iTunes gives us is
+  // "cleaned" – allowed for the 2020s (decision 005, update 18 Nov 2026).
+  { artist: "24kGoldn feat. iann dior", title: "Mood", year: 2020, genre: "hip-hop" },
+  { artist: "Drake feat. Lil Durk", title: "Laugh Now Cry Later", year: 2020, genre: "hip-hop" },
+  { artist: "DaBaby feat. Roddy Ricch", title: "ROCKSTAR", year: 2020, genre: "hip-hop" },
+  { artist: "Lil Nas X & Jack Harlow", title: "INDUSTRY BABY", year: 2021, genre: "hip-hop" },
+  { artist: "Jack Harlow", title: "First Class", year: 2022, genre: "hip-hop" },
+  { artist: "Doja Cat", title: "Paint the Town Red", year: 2023, genre: "hip-hop" },
   { artist: "Zach Bryan", title: "Something in the Orange", year: 2022, genre: "country" },
   { artist: "Noah Kahan", title: "Stick Season", year: 2022, genre: "country" },
   { artist: "Zach Bryan feat. Kacey Musgraves", title: "I Remember Everything", year: 2023, genre: "country" },
