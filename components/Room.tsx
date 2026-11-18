@@ -875,7 +875,7 @@ function RankMark({ rank, shared }: { rank: number; shared: boolean }) {
   );
 }
 
-// The set summary: one row per song with right/wrong (icon and word), the song with its iTunes link under it, and
+// The set summary: one row per song with right/wrong (icon and word), the song with its Apple Music link under it, and
 // the points on the right.
 function SummaryList({ songs }: { songs: SummaryItem[] }) {
   return (
@@ -900,9 +900,9 @@ function SummaryList({ songs }: { songs: SummaryItem[] }) {
                 href={song.storeUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Open ${song.title} on iTunes`}
+                aria-label={`Open ${song.title} in Apple Music`}
               >
-                Open in iTunes
+                Open in Apple Music
               </a>
             )}
           </span>

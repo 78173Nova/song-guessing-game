@@ -436,7 +436,7 @@ Laptop (≥ 40rem): answers in a 2 × 2 grid under the circle.
 │  │ ✓ Right!          +840     │  │  verdict word + icon, points pop in
 │  │ ┌────┐ Blinding Lights     │  │
 │  │ │cover│ The Weeknd · 2019  │  │  cover 96px, --radius-sm
-│  │ └────┘ ‹Open in iTunes›    │  │
+│  │ └────┘ ‹Open in Apple Music›│ │
 │  │ [        Next song       ] │  │
 │  └────────────────────────────┘  │
 │  answer buttons stay below, locked: right one green + ✓, own wrong one red + ✗
@@ -524,7 +524,7 @@ Laptop: the two sides sit left and right of the circle instead of above and belo
 ```
 
 **Set summary** (and solo results): a list, one row per song – icon + "Right"/"Wrong", title and artist,
-points right-aligned and tabular, "Open in iTunes" as a quiet link. No cover images in the list.
+points right-aligned and tabular, "Open in Apple Music" as a quiet link. No cover images in the list.
 
 ## Elevation & Depth
 

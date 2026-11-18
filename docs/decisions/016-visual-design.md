@@ -162,3 +162,9 @@ name and in the duel, as the team decided in PR #74 (a tick or the success green
 stays readable without colour: a bold name plus hidden "has answered" text on the board, and the word "Answered" on the
 pills. The solo settings tiles from `main` (team feedback points 7 and 8) use the shared tile style; their notes about
 too few songs use the form error style, while a refused start still shows as a short message.
+
+Update 18 Nov 2026 (team feedback): the solo results list now has an "Open in Apple Music" link under each song, like
+the set summary in rooms (team feedback). The link wording is now "Open in Apple Music" everywhere (solo reveal, solo
+results, room reveal, set summary; aria-label "Open <title> in Apple Music"), because the links open music.apple.com.
+Before, the set summary said "Open in iTunes" and the reveals said "Open in Apple Music". The solo game keeps each
+round's link in its history when the answer comes back, so the results can show it; a song without a link shows none.
