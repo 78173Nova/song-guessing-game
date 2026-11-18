@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiLogIn, apiResendVerification } from "@/lib/client/account-api";
@@ -24,6 +24,18 @@ export default function LoginForm() {
   // Remember ?next= in case the person signs up first: the address loses it on the way through the email.
   useEffect(() => {
     rememberNextPath(new URLSearchParams(window.location.search).get("next"));
+  }, []);
+
+  // Next.js keeps this page alive (hidden) after a successful login, so "Log out" and then "Log in" would bring
+  // back the old "Logging in…" button, disabled until a page refresh (same as CreateRoomForm, PR #70). Reset the
+  // button, any old error and the password when the page is hidden; the username stays for the next login.
+  // See node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md.
+  useLayoutEffect(() => {
+    return () => {
+      setSending(false);
+      setError("");
+      setPassword("");
+    };
   }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -62,6 +74,9 @@ export default function LoginForm() {
         id="login-name"
         className={styles.textInput}
         autoComplete="username"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         maxLength={254}
         value={login}
         onChange={(event) => setLogin(event.target.value)}

@@ -1,0 +1,37 @@
+/* Short messages (Sonner), DESIGN.md "Components": --color-surface, --shadow-raised, icon + sentence.
+   Sonner adds its own stylesheet after ours, so these selectors are one step more specific than its rules. */
+.toaster.toaster {
+  --normal-bg: var(--color-surface);
+  --normal-border: var(--color-border);
+  --normal-text: var(--color-text);
+  --border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  /* A modal pop-up turns off clicks on the rest of the page; messages stay swipeable above it. */
+  pointer-events: auto;
+}
+
+.toaster [data-sonner-toast][data-styled="true"] {
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  box-shadow: var(--shadow-raised);
+}
+
+.toaster [data-sonner-toast][data-styled="true"] [data-title] {
+  font-weight: 600;
+}
+
+/* The icon carries the meaning as well as the colour (Never Colour Alone): a tick or a cross. */
+.toaster [data-sonner-toast][data-styled="true"] [data-icon] {
+  width: 20px;
+  height: 20px;
+}
+
+.toaster [data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--color-success);
+}
+
+.toaster [data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--color-danger);
+}

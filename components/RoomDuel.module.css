@@ -1,100 +1,244 @@
-/* The duel layout of a room round (components/RoomDuel.tsx). It takes the place of the game board above the
-   answers, so it keeps to about the same height (never more than about half the screen) and the answer buttons
-   below stay where they are. Works from a narrow phone upwards. */
+/* The duel layout of a room round (components/RoomDuel.tsx, issue #66). It takes the place of the game board above
+   the answers and matches it: the same wave circle with the seconds on a solid disc, the same time bar, the same
+   "(you)" and "Answered" marks. On a phone the opponent's side is on top (cyan), the circle in the middle and the
+   viewer's side at the bottom (violet), just above the answers; from 48rem the two sides stand left and right of
+   the circle. Tokens only (app/globals.css). */
+.wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .duel {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  max-height: 62vh;
-  margin-bottom: 0.75rem;
+  align-items: stretch;
+  gap: var(--space-3);
 }
 
-.opponent,
+/* One player's side: who on the left, the score on the right. */
+.side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  color: var(--color-text);
+}
+
+.opponent {
+  background: var(--color-secondary-soft);
+  border-color: var(--color-secondary);
+}
+
 .me {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 100%;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
 }
 
-.name {
+.who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.nameRow {
   margin: 0;
   max-width: 100%;
   display: flex;
   align-items: center;
-  font-size: 1.25rem;
-  font-weight: 700;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 650;
   white-space: nowrap;
-  padding: 0.1em 0.6em;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  box-sizing: border-box;
 }
 
-.answered {
-  border-color: var(--good);
-  background: var(--good-bg);
+.avatar {
+  flex-shrink: 0;
 }
 
 /* Long nicknames end in "…"; the full nickname shows when hovering (title). */
-.nickname {
+.name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Both scores large. */
+.opponent .name {
+  color: var(--color-secondary);
+}
+
+.you {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* Answered: the word on a neutral grey pill, never a tick or the success green, so it does not hint at right or
+   wrong (team feedback, PR #74), and never which answer. */
+.answered,
+.away {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.answered {
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+}
+
+/* Away: the away icon and the word, muted, with a dashed outline (the same as an away seat on the board). */
+.away {
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border-strong);
+}
+
+.gone {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* Both scores large and tabular, so the digits do not jump while they roll. */
 .score {
   margin: 0;
-  font-size: clamp(2rem, 10vw, 3rem);
-  font-weight: 800;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.scoreLabel {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.scoreNumber {
+  font-family: var(--font-display);
+  font-size: var(--text-number);
+  line-height: var(--leading-number);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.opponent .scoreNumber {
+  color: var(--color-secondary);
+}
+
+.me .scoreNumber {
+  color: var(--color-primary);
+}
+
+/* The circle and the round line under it. */
+.centre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The wave circle, whole (the board shows its top half). Small enough on a phone that both sides and the
+   answers still fit. */
+.song {
+  position: relative;
+  width: min(220px, 56vw, 26svh);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+.wave {
+  position: absolute;
+  inset: 0;
+}
+
+/* The solid disc that holds the seconds (a checked pair: --color-text on --color-surface). */
+.disc {
+  position: absolute;
+  inset: 24%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.seconds {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 7vw, 2.75rem);
+  font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
-.song {
-  position: relative;
-  width: min(40vw, 22vh, 9rem);
-  aspect-ratio: 1;
-}
-
-.ring {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.track,
-.progress {
-  fill: none;
-  stroke-width: 9;
-}
-
-.track {
-  stroke: var(--muted);
-}
-
-.progress {
-  stroke: var(--accent);
-  transition: stroke-dasharray 0.2s linear;
-}
-
-.songText {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.1;
-}
-
-.seconds {
-  font-size: clamp(1.4rem, 7vw, 2rem);
-  font-weight: 700;
+/* The last five seconds: the digits turn red (the number itself already says how little time is left). */
+.low {
+  color: var(--color-danger);
 }
 
 .round {
-  font-size: 0.8rem;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+/* Time left: the same base line as under the game board (TimeBar, styled in GameShared.module.css). Only its width
+   is set here. */
+.timeTrack {
+  width: 100%;
+}
+
+/* Laptop: opponent left, circle in the middle, the viewer right; each side stacked and centred. */
+@media (min-width: 48rem) {
+  .duel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .side {
+    flex-direction: column;
+    justify-content: center;
+    align-self: stretch;
+    text-align: center;
+  }
+
+  .who,
+  .score {
+    align-items: center;
+  }
+
+  .song {
+    width: min(220px, 30svh);
+  }
+
+  .scoreNumber {
+    font-size: min(var(--text-number), 2.75rem);
+  }
 }

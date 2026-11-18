@@ -165,6 +165,11 @@ all replies and errors is in `specs/002-room-core.md` ("Routes").
   on this site (`safeNextPath`), so our login page cannot be used to send people to another site. The login
   page also remembers `next` in `localStorage` and uses it once on the next login, so a guest who signs up
   first (the verification email often opens a new tab) still comes back to "Create a room".
+  Update 18 Nov 2026: a guest on "Create a room" is no longer sent straight to the login page, which gave no
+  reason. The page says "You need an account to create a room. Joining a room works without one." with Log in
+  (`/login?next=/create`) and Sign up (`/signup?next=/create`). The sign-up page now remembers `next` too, so a
+  new player still lands on "Create a room" after verifying and logging in. Limit: a verification email opened
+  in another browser or device has nothing remembered, so that login goes to the front page.
 
 ### Why
 - **The creator plays:** the reworked rooms are played by everyone on their own device; nobody only runs the

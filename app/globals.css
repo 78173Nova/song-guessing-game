@@ -1,33 +1,147 @@
+/*
+ * Design tokens from DESIGN.md (decision 016). Every colour, font, size, space, radius, shadow and timing the
+ * app uses is defined here once; area stylesheets use var(--…) only, never a raw colour.
+ * Light mode first, then a dark-mode block that follows the system setting.
+ * tests/client/design-tokens.test.ts checks every text/background pair listed in DESIGN.md in both modes.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card: #f6f6f8;
-  --muted: #e2e2e8;
-  --accent: #5b3fd6;
-  --accent-text: #ffffff;
-  --good: #1f9d55;
-  --good-bg: #e3f6ea;
-  --bad: #d64545;
-  --bad-bg: #fbe5e5;
+  /* Colours */
+  --color-bg: #f4f5fb;
+  --color-surface: #ffffff;
+  --color-surface-alt: #e9ebf6;
+  --color-text: #10142e;
+  --color-text-muted: #4b5175;
+  --color-border: #d3d6e6;
+  --color-border-strong: #6b7194;
+  --color-primary: #5a2fd0;
+  --color-on-primary: #ffffff;
+  --color-primary-hover: #4a22b5;
+  --color-primary-soft: #ebe5ff;
+  --color-secondary: #0b6b80;
+  --color-secondary-soft: #dcf3f8;
+  --color-success: #146c3b;
+  --color-success-bg: #e1f3e8;
+  --color-danger: #b42029;
+  --color-danger-bg: #fbe4e5;
+  --color-focus: #5a2fd0;
+  --color-wave-blue: #1d3a8f;
+  --color-wave-cyan: #0891b2;
+  --color-wave-violet: #7c3aed;
+  --color-backdrop: rgb(10 13 36 / 0.55);
+  --color-qr-bg: #ffffff; /* Behind the QR code in both modes: scanners need dark-on-light (#62) */
+
+  /* Fonts (the --font-bricolage and --font-atkinson variables come from next/font in app/layout.tsx) */
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-body: var(--font-atkinson), system-ui, sans-serif;
+
+  /* Type scale */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5625rem;
+  --text-2xl: clamp(1.75rem, 1.4rem + 1.5vw, 2.25rem);
+  --text-display: clamp(2.5rem, 1.8rem + 4vw, 4rem);
+  --text-number: clamp(3rem, 2rem + 6vw, 5rem);
+  --leading-xs: 1.4;
+  --leading-sm: 1.45;
+  --leading-md: 1.5;
+  --leading-lg: 1.35;
+  --leading-xl: 1.2;
+  --leading-2xl: 1.1;
+  --leading-display: 1;
+  --leading-number: 1;
+  --measure: 65ch;
+
+  /* Spacing (4px steps) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Widths */
+  --width-form: 30rem;
+  --width-game: 40rem;
+  --width-board: 56rem;
+
+  /* Corners */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  /* Shadows (only for things that float above the page) */
+  --shadow-raised: 0 2px 8px rgb(16 20 46 / 0.08);
+  --shadow-overlay: 0 16px 40px rgb(16 20 46 / 0.18);
+
+  /* Motion */
+  --duration-instant: 100ms;
+  --duration-fast: 160ms;
+  --duration-base: 240ms;
+  --duration-slow: 420ms;
+  --duration-wave-colour: 900ms;
+  --stagger-step: 40ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+
+  color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --card: #17171c;
-    --muted: #2c2c35;
-    --accent: #8b74ff;
-    --accent-text: #0a0a0a;
-    --good: #3ccf7a;
-    --good-bg: #12301f;
-    --bad: #ff6b6b;
-    --bad-bg: #3a1616;
+    --color-bg: #0a0d24;
+    --color-surface: #141936;
+    --color-surface-alt: #1e2448;
+    --color-text: #eef0ff;
+    --color-text-muted: #aab0d8;
+    --color-border: #2b3262;
+    --color-border-strong: #7179ab;
+    --color-primary: #a88cff;
+    --color-on-primary: #0a0d24;
+    --color-primary-hover: #bba6ff;
+    --color-primary-soft: #2a2163;
+    --color-secondary: #4fd3e6;
+    --color-secondary-soft: #0e2d3d;
+    --color-success: #5fe09a;
+    --color-success-bg: #0f2b22;
+    --color-danger: #ff8b8f;
+    --color-danger-bg: #3a1422;
+    --color-focus: #a88cff;
+    --color-wave-blue: #4466e0;
+    --color-wave-cyan: #33d1ea;
+    --color-wave-violet: #9b6bff;
+    --color-backdrop: rgb(0 0 0 / 0.65);
+    --color-qr-bg: #ffffff;
+
+    --shadow-raised: 0 2px 8px rgb(0 0 0 / 0.4);
+    --shadow-overlay: 0 16px 40px rgb(0 0 0 / 0.6);
+  }
+}
+
+/* Reduce motion: every timing becomes 0ms, also the wave circle's colour blend (#64: the colour changes at once). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-wave-colour: 0ms;
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --stagger-step: 0ms;
   }
 }
 
 html {
   height: 100%;
+  /* Phones: no grey flash over a tapped control (each control has its own pressed state instead), and no
+     font inflation when a phone turns sideways. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -40,9 +154,9 @@ body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -53,13 +167,53 @@ body {
   margin: 0;
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+}
+
+/* Form controls do not take the page font by default. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Phones: a tap on a control counts at once (no wait for a double-tap zoom), and holding a finger on a button does
+   not select its label. Text that is content stays selectable. */
+a,
+button,
+label,
+select,
+summary {
+  touch-action: manipulation;
+}
+
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 a {
   color: inherit;
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* Keyboard focus, the same on every button, link and field (DESIGN.md, "Focus"). Mouse clicks do not show it. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Browser surfaces in the app's colours (DESIGN.md, "Browser surfaces"). */
+::selection {
+  color: var(--color-text);
+  background: var(--color-primary-soft);
+}
+
+:root {
+  accent-color: var(--color-primary);
+  caret-color: var(--color-primary);
 }

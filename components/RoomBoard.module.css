@@ -1,19 +1,33 @@
 /* The game board of a room round (components/RoomBoard.tsx). Every size is a share of the board, so the same
    layout works on a phone and on a laptop. The board keeps its shape (100 × 80 board units) and is never taller
-   than about half the screen, so the answers fit below it. */
+   than about half the screen, so the answers fit below it. Tokens only (app/globals.css). */
 .table {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 0.75rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .board {
   position: relative;
-  width: min(100%, 34rem, 62vh);
+  width: min(100%, 34rem, 62svh);
   aspect-ratio: 100 / 80;
   /* Lets the labels size their text by the board's width (cqw). */
   container-type: inline-size;
+}
+
+/* "Round 3 / 10" in the top left corner, which the rings of nicknames never reach. */
+.round {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
 }
 
 .seats {
@@ -28,89 +42,176 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.15em;
   padding: 0 0.3em;
-  border-radius: 999px;
-  font-size: clamp(0.6rem, 3.2cqw, 0.95rem);
+  border-radius: var(--radius-full);
+  font-size: clamp(0.625rem, 3.2cqw, 0.95rem);
+  line-height: 1;
   white-space: nowrap;
-  color: var(--foreground);
-  background: var(--card);
-  border: 1px solid var(--muted);
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   box-sizing: border-box;
 }
 
+/* Answered: neutral grey and a bold name, never the success green and never a tick (team feedback, PR #74: a tick
+   or green reads as "they got it right"). Screen readers hear "has answered" (.srOnly). */
 .answered {
-  border-color: var(--good);
-  background: var(--good-bg);
+  font-weight: 700;
+  border-color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+}
+
+/* Away: muted, dashed outline and the away icon. */
+.away {
+  color: var(--color-text-muted);
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+/* The away mark: a small badge on the label's top-left corner, so it takes no room from the nickname
+   (with 25 players a label is only about 50px wide on a phone). */
+.mark {
+  position: absolute;
+  top: -0.55em;
+  left: -0.35em;
+  display: inline-flex;
+  padding: 0.1em;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.away .mark {
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+  stroke-width: 3;
+}
+
+/* Text only for screen readers ("has answered"). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.away .icon {
+  color: var(--color-text-muted);
 }
 
 /* Long nicknames end in "…"; the full nickname shows when hovering (title). */
 .name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.song {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-}
-
-.arc {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.track,
-.progress {
-  fill: none;
-  stroke-width: 9;
-}
-
-.track {
-  stroke: var(--muted);
-}
-
-.progress {
-  stroke: var(--accent);
-  transition: stroke-dasharray 0.2s linear;
-}
-
-.songText {
-  position: absolute;
-  inset: 25% 0 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  line-height: 1.1;
-}
-
-.seconds {
-  font-size: clamp(1rem, 6cqw, 1.8rem);
-  font-weight: 700;
-}
-
-.round {
-  font-size: clamp(0.55rem, 2.6cqw, 0.8rem);
-}
-
-/* The viewer's own nickname: larger than everyone else's, just above the answers. */
-.me {
-  margin: 0.5rem 0 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.5rem;
-  font-weight: 700;
 }
 
 /* The avatar before a nickname (issue #44). It stays inside the label; a long nickname shortens instead. */
 .avatar {
   flex-shrink: 0;
-  margin-right: 0.25em;
+}
+
+.seat .avatar {
+  font-size: 0.9em;
+}
+
+/* The song: the top half of the wave circle. The canvas is a square as wide as this box; its centre sits on the
+   box's bottom edge, so only the top half shows. The outline stays inside 48 % of the square, within the old
+   half circle, so it never reaches a nickname. */
+.song {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  overflow: hidden;
+}
+
+.wave {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* The solid half disc (radius 28 % of the square) that holds the seconds, standing on the bottom edge. */
+.disc {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 0;
+  height: 56%;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.seconds {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 6.5cqw, 2.25rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The last five seconds: the digits turn red (the number itself already says how little time is left). */
+.low {
+  color: var(--color-danger);
+}
+
+/* Time left: the board's base line (TimeBar, styled in GameShared.module.css). Only its width is set here. */
+.timeTrack {
+  width: min(100%, 34rem, 62svh);
+}
+
+/* The viewer's own nickname: larger than everyone else's, just above the answers. */
+.me {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.me .name {
+  min-width: 0;
+}
+
+.you {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* "Answered" next to your own name: a neutral grey pill with the word, no tick and no green (team feedback,
+   PR #74), the same as for every other player. */
+.meAnswered {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
 }
