@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ResetPasswordForm from "@/components/ResetPasswordForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Choose a new password · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function ResetPasswordPage() {
         <h1 className={styles.title}>Choose a new password</h1>
         <ResetPasswordForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

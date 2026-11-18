@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CreateRoomForm from "@/components/CreateRoomForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Create a room · Song Guessing Game" };
@@ -12,7 +13,7 @@ export default function CreatePage() {
         <h1 className={styles.title}>Create a room</h1>
         <CreateRoomForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

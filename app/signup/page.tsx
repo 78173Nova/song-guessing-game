@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SignupForm from "@/components/SignupForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Sign up · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function SignupPage() {
         <p className={styles.pitch}>You need an account only to create a room. Solo and joining stay open to everyone.</p>
         <SignupForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

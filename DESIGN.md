@@ -666,3 +666,9 @@ line-height tokens `--leading-xs` … `--leading-number` carry the line heights 
 under reduce motion `--duration-wave-colour` keeps its value (only the movement timings become `0ms`), because
 the circle still crossfades its colour on reveal. To add a text/background pair, add a row to the
 "Contrast pairs" table: `tests/client/design-tokens.test.ts` reads that table and checks the row in the given mode.
+
+Update 18 Nov 2026 (#60): icons live in `components/icons/` (also headphones, bolt, people and a back arrow for the
+landing page and back links). The focus ring, `::selection`, `accent-color` and `caret-color` are set once in
+`app/globals.css` for every element. The room code input uses the body font (Atkinson tells 0/O and 1/l apart);
+the large room code in the lobby keeps the display font. Until #64 adds the canvas, the landing page shows a still
+ring in the wave colours in the circle's place.

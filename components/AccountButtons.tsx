@@ -30,10 +30,10 @@ export default function AccountButtons() {
   if (username === null) {
     return (
       <div className={styles.accountButtons}>
-        <Link href="/login" className={styles.secondary}>
+        <Link href="/login" className={styles.quiet}>
           Log in
         </Link>
-        <Link href="/signup" className={styles.primary}>
+        <Link href="/signup" className={styles.quiet}>
           Sign up
         </Link>
       </div>
@@ -49,7 +49,7 @@ export default function AccountButtons() {
             <strong>{username}</strong>
           </Link>
         </p>
-        <button type="button" className={styles.secondary} onClick={logOut}>
+        <button type="button" className={styles.quiet} onClick={logOut}>
           Log out
         </button>
       </div>

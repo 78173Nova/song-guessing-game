@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AccountSettingsForm from "@/components/AccountSettingsForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Account settings · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function AccountPage() {
         <h1 className={styles.title}>Account settings</h1>
         <AccountSettingsForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

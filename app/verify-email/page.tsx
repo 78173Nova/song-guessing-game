@@ -1,5 +1,6 @@
 import Link from "next/link";
 import VerifyEmail from "@/components/VerifyEmail";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Verify your email · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function VerifyEmailPage() {
         <h1 className={styles.title}>Verify your email</h1>
         <VerifyEmail />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>
