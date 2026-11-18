@@ -747,3 +747,8 @@ Update 18 Nov 2026 (#57, review): this replaces the end of the #67 note. The sol
 server or network errors, a clip that would not load) now show as short messages (`showError`, #62), the same style as
 every other error that is not tied to one field. The button that recovers stays in the page: "Start game" on the start
 screen and "Try again" on the error screen, which says "The game stopped." in muted text.
+
+Update 18 Nov 2026 (#57, review): a shared rank in the standings is visible on screen, not only to screen readers: it
+shows as "=2" (`rankText`, `lib/client/standings-view.ts`) on the podium block and in the list row alike, so when more
+than three players share podium ranks the tied player in the list shows the same "=1" and never looks lower-ranked.
+The list's rank column is 2.75rem wide so "=25" fits.

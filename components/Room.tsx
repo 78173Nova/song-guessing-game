@@ -39,7 +39,7 @@ import {
 } from "@/lib/client/room-game";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
-import { standingsView } from "@/lib/client/standings-view";
+import { rankText, standingsView } from "@/lib/client/standings-view";
 import { useCoverColours } from "@/lib/client/useCoverColours";
 import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { avatarEmoji } from "@/lib/game/avatars";
@@ -804,7 +804,8 @@ function RollingTotal({ value, className }: { value: number; className?: string 
 }
 
 // The standings (#65): the top three on a podium (winner in the middle; equal points = same rank and same
-// height), everyone else in a list under it. The viewer's own nickname is highlighted with "(you)".
+// height), everyone else in a list under it. A shared rank shows as "=2" on the podium and in the list alike, so a
+// tied player in the list never looks lower-ranked. The viewer's own nickname is highlighted with "(you)".
 function Standings({
   standings,
   me,
@@ -832,8 +833,7 @@ function Standings({
             {place.isMe && <span className={room.you}>(you)</span>}
             <RollingTotal value={place.score} className={room.placeScore} />
             <span className={room.block}>
-              <span aria-hidden="true">{place.rank}</span>
-              <span className={room.srOnly}>{rankLabel(place.rank, place.shared)}</span>
+              <RankMark rank={place.rank} shared={place.shared} />
             </span>
           </li>
         ))}
@@ -848,8 +848,7 @@ function Standings({
               style={{ "--row": Math.min(index, 8) } as React.CSSProperties}
             >
               <span className={room.rank}>
-                <span aria-hidden="true">{row.rank}</span>
-                <span className={room.srOnly}>{rankLabel(row.rank, row.shared)}</span>
+                <RankMark rank={row.rank} shared={row.shared} />
               </span>
               <span className={room.who}>
                 <Avatar id={avatars?.[row.nickname]} />
@@ -865,8 +864,15 @@ function Standings({
   );
 }
 
-function rankLabel(rank: number, shared: boolean): string {
-  return shared ? `Rank ${rank}, shared` : `Rank ${rank}`;
+// A rank as it shows ("=2" when shared, rankText) and as screen readers hear it ("Rank 2, shared").
+function RankMark({ rank, shared }: { rank: number; shared: boolean }) {
+  const text = rankText(rank, shared);
+  return (
+    <>
+      <span aria-hidden="true">{text.shown}</span>
+      <span className={room.srOnly}>{text.label}</span>
+    </>
+  );
 }
 
 // The set summary: one row per song with right/wrong (icon and word), the song with its iTunes link under it, and
