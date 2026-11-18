@@ -1,6 +1,6 @@
 # 016 – Visual design: one look, the wave circle and three UI packages
 
-Date: 18 Nov 2026 · Status: proposed, awaiting team review (issue #58, spec #57)
+Date: 18 Nov 2026 · Status: decided, plan accepted by Jasper Berndt on 18 Nov 2026 with all proposed extras (inline SVG icons, circle replaces the board/duel ring, QR stays on white, countdown bar on transform) (issue #58, spec #57)
 
 The detailed rules (tokens, fonts, sketches, motion, contrast list) are in [`DESIGN.md`](../../DESIGN.md).
 
