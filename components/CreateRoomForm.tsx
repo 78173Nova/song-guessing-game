@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiAccountSettings } from "@/lib/client/account-api";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
@@ -68,6 +68,16 @@ export default function CreateRoomForm() {
       current = false;
     };
   }, [genres, decades]);
+
+  // Next.js keeps this page alive (hidden) after "Create the room" navigates to the lobby, so coming back to
+  // /create would show the old "Creating…" button, disabled until a page refresh. Reset the button and any old
+  // error when the page is hidden. See node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md.
+  useLayoutEffect(() => {
+    return () => {
+      setSending(false);
+      setError("");
+    };
+  }, []);
 
   const change = (part: Partial<RoomSettings>) => setSettings((old) => ({ ...old, ...part }));
   const needed = totalRoundsOf(settings);
