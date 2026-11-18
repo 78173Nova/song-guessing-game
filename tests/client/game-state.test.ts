@@ -131,6 +131,39 @@ describe("gameReducer – answering", () => {
     expect(outcome("timeout")).toBe("timeout");
   });
 
+  it("keeps the song's iTunes link (storeUrl) in the history when the answer comes back", () => {
+    const reveal = answerAndReveal(inRound1(), 1);
+    expect(reveal.screen === "reveal" && reveal.history[0].storeUrl).toBe("https://music.example.com/s");
+  });
+
+  it("keeps a missing iTunes link as null, also for a wrong, skipped or timed-out answer", () => {
+    const noLink = (n: number) => result(n, { correct: false, points: 0, totalScore: 0, song: { ...result(n).song, storeUrl: null } });
+    for (const answer of [0, "skip", "timeout"] as const) {
+      const state = answerAndReveal(inRound1(), 1, answer, noLink(1));
+      expect(state.screen === "reveal" && state.history[0]).toMatchObject({ points: 0, storeUrl: null });
+    }
+  });
+
+  it("the results keep each round's own iTunes link, in round order, with or without one", () => {
+    const link = (n: number) => (n === 3 ? null : `https://music.example.com/song-${n}`);
+    let state = run({ type: "start" }, created, ready(0), ready(1), ready(2), ready(3), ready(4), { type: "countdown-done" });
+    for (let n = 1; n <= 5; n++) {
+      state = from(state, { type: "round-loaded", round: round(n) });
+      state = answerAndReveal(state, n, 2, result(n, { song: { ...result(n).song, storeUrl: link(n) } }));
+      state = from(state, { type: "next" });
+    }
+    expect(state.screen).toBe("results");
+    if (state.screen === "results") {
+      expect(state.history.map((h) => h.storeUrl)).toEqual([
+        "https://music.example.com/song-1",
+        "https://music.example.com/song-2",
+        null,
+        "https://music.example.com/song-4",
+        "https://music.example.com/song-5",
+      ]);
+    }
+  });
+
   it("after round 5 shows the results with all 5 songs; an error shows its message; 'Try again' resets", () => {
     let state = run({ type: "start" }, created, ready(0), ready(1), ready(2), ready(3), ready(4), { type: "countdown-done" });
     for (let n = 1; n <= 5; n++) {
