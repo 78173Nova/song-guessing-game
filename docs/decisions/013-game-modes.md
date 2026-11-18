@@ -104,3 +104,15 @@ Update 18 Nov 2026: solo settings as tiles, and greyed-out modes (team feedback 
 - **Limits:** the server still decides: `POST /api/games` refuses such a game with `too-few-songs` on its own. If the
   numbers cannot be loaded, nothing is greyed out. With today's catalogue no combination with 5+ songs has fewer than
   4 titles or artists, so mode tiles only grey out when the song list changes.
+
+Update 18 Nov 2026: the "12 songs match – 5 will be played" line is removed (`feature/fill-combos`).
+- **Decision:** the solo start screen no longer shows how many songs match, and no longer shows "5 songs will be
+  played." while the numbers load. `matchLine` now only returns the "Only 3 songs match …" message (or nothing);
+  that message still disables "Start game". The notes under greyed-out tiles and the "chosen mode cannot start"
+  line stay. The room form keeps its line.
+- **Why:** Karin asked for it on 18 Nov 2026 (changed requirement). With at least 10 songs per genre + decade
+  (decision 005, update 18 Nov 2026) every filter except 1960s/1970s hip-hop has enough songs anyway. The matching-songs route stays, because
+  the greyed-out modes and the "too few" message still need its numbers.
+- **Alternatives:** keep the line only for small filters (one more rule to explain); show it only in rooms (that
+  is how it is now, by keeping the room form unchanged).
+- **Limits:** players no longer see how much variety a filter has before they start.

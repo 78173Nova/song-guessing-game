@@ -28,6 +28,8 @@ When a line below can be read two ways, choose the simpler option that keeps the
 - [ ] The screen shows readable names: Pop, Rock, Hip-hop, R&B / Soul, Dance / Electronic, Country / Folk
 - [ ] Each genre has at least 30 songs and each decade at least 35. Not every genre exists in every decade
       (no 1960s hip-hop), so some genre + decade combinations are allowed to be too small
+      (updated 18 Nov 2026: every genre + decade combination has at least 10 songs, except hip-hop in the 1960s
+      and 1970s – see "Decided on 18 Nov 2026 (`feature/fill-combos`)" below)
 - [ ] Added on one branch, `feature/songs`, with **one commit per decade** (about 45 songs each). Claude drafts each
       decade, Karin checks every line (song well known, original year, genre) before it is committed
 - [ ] After each batch, `npm run db:seed` looks up the new previews. Songs that iTunes finds no preview for are
@@ -169,7 +171,9 @@ When a line below can be read two ways, choose the simpler option that keeps the
   and the solo screen; the room screens look and behave as before. Solo stays single choice: one genre, one decade,
   "Any" by default, so `POST /api/games` and the database do not change. Above "Start game" a line says, e.g.,
   "12 songs match – 5 will be played", or the "Only 3 songs match …" message (then Start is disabled).
-  This replaces "a genre dropdown and a decade dropdown" under "Game (UI)"
+  This replaces "a genre dropdown and a decade dropdown" under "Game (UI)".
+  (Changed 18 Nov 2026, `feature/fill-combos`: the "12 songs match – 5 will be played" line and the loading text
+  "5 songs will be played." are gone; only the "Only 3 songs match …" message is left.)
 - **Greyed-out tiles (team feedback 18 Nov, point 7):** genre and decade tiles with fewer than 5 playable songs are greyed out as before, now as
   disabled tiles with the note under the decade row. Mode tiles are greyed out when the chosen filters match fewer
   than 4 different titles (title mode), fewer than 4 different artists (artist mode) or either (mixed mode, which asks
@@ -185,6 +189,21 @@ When a line below can be read two ways, choose the simpler option that keeps the
   (`modeFits`) sits next to `buildRounds`, and a test checks that both agree for every mode
 - With today's catalogue no combination with 5 or more songs has fewer than 4 titles or artists, so the mode tiles only
   grey out if the song list changes. The tests cover it with made-up songs
+
+## Decided on 18 Nov 2026 (`feature/fill-combos`)
+- **At least 10 songs per genre + decade:** every combination of the 6 genres and the 7 decades has at least 10
+  songs, so each filter can start a game with some variety. Only hip-hop in the 1960s and 1970s is left out (those
+  songs do not exist). A test in `tests/db/song-list.test.ts` checks it. 75 songs were added (413 in total), one
+  commit per decade, with the same rules as above (year rule, well known, no explicit original before the 2020s,
+  clean clip in the 2020s, every song checked with `lookupPreview`, no artist more than 3 times)
+- **Titles that are easy to tell apart:** a new song's title must not equal or start like a title in the list, and
+  must not share its first word (ignoring "The" and "A") with a title in the same genre + decade (e.g. "Let's",
+  "Love", "Don't"). Titles that end alike in the same genre + decade (*Wagon Wheel*, *Jesus, Take the Wheel*) are
+  avoided too. Songs left out on purpose are listed in decision 005, so they are not suggested again
+- **Purple Haze:** the artist is "The Jimi Hendrix Experience", as iTunes lists it
+- **Solo start screen:** the "12 songs match – 5 will be played" line is removed, and so is the loading text
+  "5 songs will be played.". The "Only 3 songs match …" message (Start disabled) and the notes under greyed-out
+  tiles stay. The room form keeps its line
 
 ## Open questions
 - **Production database:** `npm run db:seed` uses the `dev` database from `.env.local`. Karin asks Niklas for access
