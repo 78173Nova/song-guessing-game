@@ -66,4 +66,10 @@ describe("db/songs.ts – the seed song list", () => {
     const count = songList.filter((song) => song.year >= decade && song.year <= decade + 9).length;
     expect(count).toBeGreaterThanOrEqual(MIN_PER_DECADE);
   });
+
+  // Filter gaps (spec 003): 2020s hip-hop had only 1 song, so the filter could never start a game.
+  it("has at least 5 hip-hop songs from the 2020s", () => {
+    const count = songList.filter((song) => song.genre === "hip-hop" && song.year >= 2020).length;
+    expect(count).toBeGreaterThanOrEqual(5);
+  });
 });
