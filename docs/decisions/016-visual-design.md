@@ -98,3 +98,15 @@ colours can be passed in for the reveal, #64). The players now ask for cross-ori
 header, the clips would fail to load and the rounds would be skipped; then `prepare()` in `wave-audio.ts` is the
 one line to remove, and the circle idles. A clip is routed through the analyser only when the sound context is
 already running, so the music never goes silent because of the circle.
+
+Update 18 Nov 2026 (#64): the wave circle shows the album cover's colours on the solo reveal and idles on the
+landing page. `lib/client/cover-colours.ts` (`pickCoverColours`, pure, tested) picks 2–3 colours from the
+cover's pixels: it skips nearly grey, black and white pixels, sorts the rest into 12 hue groups and takes the
+biggest, never two that look nearly the same; a cover with too little colour gives null (the app colours stay).
+`lib/client/useCoverColours.ts` (`useCoverColours(artworkUrl)`) loads the cover as a separate cross-origin image,
+draws it 32 × 32 on a hidden canvas and returns the colours, or undefined while loading or on any failure; the
+room screens can use the same hook. No package. Two changes to earlier choices: under "reduce motion" the colour
+now changes at once (`--duration-wave-colour` becomes 0ms too, as the ticket asks), and the circle goes back to
+the app colours over `--duration-base` instead of the 900ms blend, so no album colour is left when the next round
+starts. Limit: the cover is downloaded twice (once for the picture, once with cross-origin access for the
+pixels); both are small and usually come from the browser cache.
