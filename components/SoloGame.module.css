@@ -106,6 +106,14 @@
 }
 
 /* The answer a room player tapped, before the round closes (components/Room.tsx). */
+/* Why some genres or decades are greyed out (spec 003, "filter gaps"). */
+.filterNote {
+  max-width: 28rem;
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
 .chosen {
   border-color: var(--accent);
 }

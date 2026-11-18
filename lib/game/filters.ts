@@ -41,3 +41,26 @@ export function tooFewSongsMessage(matching: number): string {
   if (matching < 5) return `Only ${matching} songs match these filters – ${hint}.`;
   return `These filters match too few different titles or artists for this mode – ${hint}, or another mode.`;
 }
+
+// A game needs 5 different songs (5 rounds). A genre + decade with fewer can never start, so the start screen
+// greys it out (spec 003, "filter gaps"). The server still refuses it on its own.
+export const MIN_MATCHING_SONGS = 5;
+
+// How many songs one genre has in one decade. Only counts – nothing about single songs.
+export type SongCount = { genre: string; decade: number; count: number };
+
+// Counts the songs per genre and decade (1989 → 1980). Only combinations with songs are listed, sorted by
+// genre, then decade. The 1957 song gets decade 1950, so adding up "Any decade" stays correct.
+export function countByGenreAndDecade<T extends { genre: string; year: number }>(songs: T[]): SongCount[] {
+  const counts = new Map<string, SongCount>();
+  for (const song of songs) {
+    const decade = decadeOf(song.year);
+    const key = `${song.genre}|${decade}`;
+    const entry = counts.get(key) ?? { genre: song.genre, decade, count: 0 };
+    entry.count += 1;
+    counts.set(key, entry);
+  }
+  return [...counts.values()].sort((a, b) =>
+    a.genre === b.genre ? a.decade - b.decade : a.genre < b.genre ? -1 : 1,
+  );
+}

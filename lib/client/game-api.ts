@@ -1,6 +1,6 @@
 // The browser's calls to our game server routes. Each call returns the data or a readable message –
 // it never throws, so the screen can always show something sensible.
-import type { Filters } from "../game/filters";
+import type { Filters, SongCount } from "../game/filters";
 import type { Mode } from "../game/modes";
 import type { Answer, AnswerResult, RoundInfo } from "./game-state";
 
@@ -90,4 +90,25 @@ export function apiAnswer(gameId: string, round: number, answer: Answer, fetchFn
 
 export function apiReplace(gameId: string, round: number, fetchFn: FetchFn = fetch) {
   return post<{ round: number; previewUrl: string }>(`/api/games/${encodeURIComponent(gameId)}/replace`, { round }, fetchFn);
+}
+
+// Loads the playable songs per genre and decade for the start screen (spec 003, "filter gaps").
+// null if anything goes wrong: the screen then greys out nothing, and the server still checks every start.
+export async function apiSongCounts(fetchFn: FetchFn = fetch): Promise<SongCount[] | null> {
+  try {
+    const response = await fetchFn("/api/games/song-counts");
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    const counts = (data as { counts?: unknown } | null)?.counts;
+    if (!Array.isArray(counts) || !counts.every(isSongCount)) return null;
+    return counts;
+  } catch {
+    return null;
+  }
+}
+
+function isSongCount(value: unknown): value is SongCount {
+  if (typeof value !== "object" || value === null) return false;
+  const { genre, decade, count } = value as Record<string, unknown>;
+  return typeof genre === "string" && Number.isInteger(decade) && Number.isInteger(count);
 }

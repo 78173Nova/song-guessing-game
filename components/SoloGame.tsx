@@ -13,10 +13,11 @@ import {
   withTimeout,
 } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
-import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
+import { canChoose, filterNotes } from "@/lib/client/filter-choices";
+import { apiAnswer, apiNextRound, apiReplace, apiSongCounts, apiStartGame } from "@/lib/client/game-api";
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
-import { DECADES, type Decade } from "@/lib/game/filters";
+import { DECADES, type Decade, type SongCount } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
 import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
@@ -58,6 +59,18 @@ export default function SoloGame() {
   // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
   // a reload forgets them.
   const recentGamesRef = useRef<string[]>([]);
+  // Playable songs per genre and decade, so choices with too few songs are greyed out (spec 003, "filter gaps").
+  // null until loaded, or if loading failed: then nothing is greyed out and the server still checks the start.
+  const [songCounts, setSongCounts] = useState<SongCount[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiSongCounts().then((counts) => {
+      if (!cancelled) setSongCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -285,7 +298,7 @@ export default function SoloGame() {
               >
                 <option value="">Any</option>
                 {GENRES.map((g) => (
-                  <option key={g} value={g}>
+                  <option key={g} value={g} disabled={!canChoose(songCounts, { genre: g, decade })}>
                     {GENRE_LABELS[g]}
                   </option>
                 ))}
@@ -299,13 +312,18 @@ export default function SoloGame() {
               >
                 <option value="">Any</option>
                 {DECADES.map((d) => (
-                  <option key={d} value={d}>
+                  <option key={d} value={d} disabled={!canChoose(songCounts, { genre, decade: d })}>
                     {d}s
                   </option>
                 ))}
               </select>
             </label>
           </div>
+          {filterNotes(songCounts, { genre, decade }).map((note) => (
+            <p key={note} className={styles.filterNote}>
+              {note}
+            </p>
+          ))}
           {state.message && (
             <p className={styles.error} role="alert">
               {state.message}

@@ -70,6 +70,9 @@ function matchingPreview(song: SongToLookUp, result: unknown): PreviewData | nul
   if (!artistMatches(song.artist, artistName)) return null;
   if (cleanTitle(trackName) !== cleanTitle(song.title)) return null;
   if (isUnwantedVersion(song.title, trackName, collectionName)) return null;
+  // Never an explicit clip (decision 005, update 18 Nov 2026). Missing field = accepted, iTunes does not always send it.
+  const explicitness = r.trackExplicitness;
+  if (explicitness !== undefined && explicitness !== "notExplicit" && explicitness !== "cleaned") return null;
 
   return {
     previewUrl,
