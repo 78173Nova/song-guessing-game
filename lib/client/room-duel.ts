@@ -47,3 +47,21 @@ export function duelSides(
           },
   };
 }
+
+// What the viewer last saw of each duel score (issue #66). The duel layout shows only while a round is open, and
+// the scores change after the round closes, while it is hidden; so when the next round's duel appears, each score
+// rolls from the value seen last to the new one. A lower score than last seen means a new game: no roll down.
+export function scoreMemory() {
+  const seen = new Map<string, number>();
+  return {
+    startOf(nickname: string, score: number): number {
+      const last = seen.get(nickname);
+      return last === undefined || last > score ? score : last;
+    },
+    remember(nickname: string, score: number): void {
+      seen.set(nickname, score);
+    },
+  };
+}
+
+export type ScoreMemory = ReturnType<typeof scoreMemory>;
