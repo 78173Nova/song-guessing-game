@@ -28,6 +28,16 @@
   background: var(--color-surface);
 }
 
+/* The room game screens (board, result, standings) need more room than a form: the panel grows to the game
+   width while one of them is on screen (components/Room.tsx marks it with .cardWide). */
+.card:has(.cardWide) {
+  max-width: var(--width-game);
+}
+
+.cardWide {
+  width: 100%;
+}
+
 @media (min-width: 40rem) {
   .page {
     padding: var(--space-7) var(--space-5);
@@ -611,11 +621,6 @@
   outline-offset: 2px;
 }
 
-/* An avatar shown next to a nickname. */
-.avatar {
-  margin-right: 0.35em;
-}
-
 /* ---------- "Join a room": the public room list ---------- */
 
 .roomList {
@@ -673,36 +678,4 @@
   line-height: var(--leading-sm);
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
-}
-
-/* ---------- Borrowed by the room screens (lobby; restyled in #65) ---------- */
-
-.playerList {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.playerList li {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  border: 2px solid var(--color-border-strong);
-  overflow-wrap: anywhere;
-}
-
-.playerList li.self {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  font-weight: 600;
-}
-
-.roomCode {
-  font-family: var(--font-display);
-  font-size: var(--text-display);
-  font-weight: 800;
-  line-height: var(--leading-display);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.12em;
-  text-align: center;
 }

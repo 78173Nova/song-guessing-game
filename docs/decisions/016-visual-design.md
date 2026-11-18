@@ -98,3 +98,18 @@ colours can be passed in for the reveal, #64). The players now ask for cross-ori
 header, the clips would fail to load and the rounds would be skipped; then `prepare()` in `wave-audio.ts` is the
 one line to remove, and the circle idles. A clip is routed through the analyser only when the sound context is
 already running, so the music never goes silent because of the circle.
+
+Update 18 Nov 2026 (#65): the room screens use the tokens; no new package. The lobby shows the room code, the
+countdown (display font) and the settings at the top, then the players as rows (own row soft violet with "(you)",
+away players muted with the away icon and the word "away"); the room creator's Extend and Kick, and Leave, are
+quiet muted text buttons under the one violet button. On the Multiplayer game board the wave circle replaces the
+song half circle: only its top half shows, at the same size, so the seat positions in `lib/client/room-board.ts`
+did not change; the seconds sit on a half disc, "Round n / N" in the board's top-left corner, and the time left is
+a bar under the board (transform, not width). The answered and away marks are small badges on a nickname's corner,
+so with 25 players they take no room from the name. Rooms reuse `wave-audio.ts` the same way as the solo game
+(unlock in the Join / Start now / Play again tap, prepare players before a clip, attach when a clip starts); a
+player that loaded a clip before any tap (e.g. after a reload) is never routed through the analyser, so its sound
+cannot go silent, and the circle idles. The room result shows the same stage as the solo reveal, with a `colours`
+hook-up point for the cover colours (#64). Standings: the top three on a podium (winner in the middle, block height
+by rank, so equal points share both rank and height) from `lib/client/standings-view.ts` (pure, tested); totals
+roll up from 0 with NumberFlow (straight to the number with reduce motion). The duel layout is left to #66.

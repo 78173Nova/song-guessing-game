@@ -692,3 +692,12 @@ Update 18 Nov 2026 (#63): the wave circle replaces the still ring in the solo st
 during the round and the reveal, and idles (±3 % pulse) while loading or when no analyser is available. The time
 bar stays under the stage (not moved onto the circle). Analyser: fftSize 256 (128 bands), smoothing 0.8; the ring
 shows the lower 64 bands, mirrored left/right, with a small boost for higher bands so not only the top moves.
+
+Update 18 Nov 2026 (#65): room screens built. Board: the wave circle's top half replaces the song half circle at the
+same size (radius = `SONG_RADIUS`, outline ≤ 48 % of its square), seconds on a half disc (28 % radius), "Round n / N"
+top left, a time bar as the board's base line; answered/away marks are corner badges on the nickname labels. Room
+creator controls and Leave are quiet `--color-text-muted` text buttons in one centred row. Podium: blocks
+`--color-surface-alt` (own block `--color-primary-soft` with a primary outline), heights 6 / 4.5 / 3rem by rank;
+with two players only two blocks. Blocks rise third → second → first (`--duration-slow`, `--stagger-step` apart),
+then list rows from rank 4 rise with the stagger. The room result reuses the solo stage and reveal pieces without a
+second panel (the page card already is one).
