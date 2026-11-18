@@ -75,27 +75,16 @@
   gap: var(--space-5);
 }
 
-/* Space for the wave circle (#64 puts the canvas here). Until then a still ring in the three wave colours. */
+/* The wave circle, idling in the app colours (no sound on this page). On a phone it also shrinks with the
+   screen height, so the title and the three main buttons stay close to the top. The ring idles at about 35 % of
+   the canvas from its centre, so the outer 15 % above and below is empty: a negative margin gives that space
+   back to the page. */
 .circleSlot {
-  position: relative;
-  width: min(220px, 60vw);
-  aspect-ratio: 1;
+  --circle-size: min(220px, 55vw, 26dvh);
+  width: var(--circle-size);
+  margin-block: calc(-0.12 * var(--circle-size));
   flex: none;
-}
-
-.circleSlot::before {
-  content: "";
-  position: absolute;
-  inset: 16%; /* base radius 34% of the drawing area, as in DESIGN.md */
-  border-radius: var(--radius-full);
-  background: conic-gradient(
-    var(--color-wave-blue),
-    var(--color-wave-cyan),
-    var(--color-wave-violet),
-    var(--color-wave-blue)
-  );
-  /* Keep only a 6px ring of the gradient. A mask only reads transparency, so "black" here means "keep". */
-  mask: radial-gradient(closest-side, transparent calc(100% - 6px), black calc(100% - 5px));
+  pointer-events: none; /* it overlaps the page a little; clicks go through */
 }
 
 .landingColumn {
@@ -165,7 +154,8 @@
   }
 
   .circleSlot {
-    width: 280px;
+    --circle-size: 280px;
+    margin-block: 0;
   }
 
   .landingTitle,

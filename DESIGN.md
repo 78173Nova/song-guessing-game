@@ -692,3 +692,10 @@ Update 18 Nov 2026 (#63): the wave circle replaces the still ring in the solo st
 during the round and the reveal, and idles (±3 % pulse) while loading or when no analyser is available. The time
 bar stays under the stage (not moved onto the circle). Analyser: fftSize 256 (128 bands), smoothing 0.8; the ring
 shows the lower 64 bands, mirrored left/right, with a small boost for higher bands so not only the top moves.
+
+Update 18 Nov 2026 (#64): the cover colours come from `pickCoverColours` (`lib/client/cover-colours.ts`) through
+the `useCoverColours` hook. Under reduce motion the circle's colour now changes at once instead of crossfading
+(`--duration-wave-colour` is 0ms there too); this replaces the reduce-motion note from #59. Leaving the reveal, the
+circle blends back to the app colours over `--duration-base`. On the landing page the circle is
+`min(220px, 55vw, 26dvh)` on phones, with the empty canvas edge above and below given back to the page, so the
+title and the main buttons sit higher on short screens; 280px left of the column from 64rem up, as before.

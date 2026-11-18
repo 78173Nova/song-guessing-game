@@ -18,6 +18,7 @@ import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
+import { useCoverColours } from "@/lib/client/useCoverColours";
 import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
@@ -283,6 +284,10 @@ export default function SoloGame() {
       ? (state.round.questionType ?? (mode === "mixed" ? undefined : mode))
       : undefined;
 
+  // The album cover's colours for the wave circle, only once the answer is revealed (CLAUDE.md rule 5).
+  // Outside the reveal this is undefined, so the circle goes back to the app colours before the next round.
+  const coverColours = useCoverColours(state.screen === "reveal" ? state.result.song.artworkUrl : null);
+
   return (
     <div className={styles.game}>
       {state.screen === "start" && (
@@ -353,7 +358,10 @@ export default function SoloGame() {
         <section className={styles.play}>
           <StatusLine state={state} />
           {/* The circle follows the music only while a clip plays (round and reveal); otherwise it idles. */}
-          <Stage analyser={state.screen === "round" || state.screen === "reveal" ? waveAnalyser : null}>
+          <Stage
+            analyser={state.screen === "round" || state.screen === "reveal" ? waveAnalyser : null}
+            colours={coverColours}
+          >
             <StageCentre state={state} now={now} getReadyAt={getReadyAt} roundStartedAt={roundStartedAt} />
           </Stage>
 
@@ -509,12 +517,21 @@ function StatusLine({ state }: { state: InPlay }) {
   );
 }
 
-// The stage: a fixed square in the middle of the round. The wave circle fills it, behind the disc; it uses the
-// app's own colours only (no song data during a round, CLAUDE.md rule 5). The disc holds the seconds (or 3-2-1).
-function Stage({ analyser, children }: { analyser: AnalyserNode | null; children: React.ReactNode }) {
+// The stage: a fixed square in the middle of the round. The wave circle fills it, behind the disc. During a round
+// it uses the app's own colours only (no song data, CLAUDE.md rule 5); on reveal it blends into the cover's
+// colours. The disc holds the seconds (or 3-2-1).
+function Stage({
+  analyser,
+  colours,
+  children,
+}: {
+  analyser: AnalyserNode | null;
+  colours: readonly string[] | undefined;
+  children: React.ReactNode;
+}) {
   return (
     <div className={styles.stage}>
-      <WaveCircle analyser={analyser} className={styles.wave} />
+      <WaveCircle analyser={analyser} colours={colours} className={styles.wave} />
       <div className={styles.disc}>{children}</div>
     </div>
   );
