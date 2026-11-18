@@ -61,3 +61,10 @@ Update 18 Nov 2026: the tokens now live in `app/globals.css` (#59), with the old
 the fonts load through `next/font/google` (no package). `tests/client/design-tokens.test.ts` reads the colours
 from that stylesheet and the pair list from the "Contrast pairs" table in `DESIGN.md`, so a pair added to the
 table is checked automatically in both modes; the limit above ("not checked until #59") no longer applies.
+
+Update 18 Nov 2026 (#61): NumberFlow is installed as `@number-flow/react` 0.6.2 (exact version, adds only
+`number-flow` and `esm-env`). It rolls the solo countdown, the 3-2-1 and the score; it follows "reduce motion" by
+itself (`respectMotionPreference`, on by default), so numbers then change without rolling. `npm audit --omit=dev`
+reports 0 vulnerabilities; the full `npm audit` reports 16 high findings that were already there before this
+package, all from one `picomatch` advisory inside the dev tooling (vitest, eslint-config-next), with no fixed
+version yet.
