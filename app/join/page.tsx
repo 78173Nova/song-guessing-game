@@ -1,6 +1,7 @@
 import Link from "next/link";
 import RoomCodeForm from "@/components/RoomCodeForm";
 import RoomList from "@/components/RoomList";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Join a room · Song Guessing Game" };
@@ -16,7 +17,7 @@ export default function JoinPage() {
         <RoomCodeForm />
         <RoomList />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

@@ -61,3 +61,10 @@ Update 18 Nov 2026: the tokens now live in `app/globals.css` (#59), with the old
 the fonts load through `next/font/google` (no package). `tests/client/design-tokens.test.ts` reads the colours
 from that stylesheet and the pair list from the "Contrast pairs" table in `DESIGN.md`, so a pair added to the
 table is checked automatically in both modes; the limit above ("not checked until #59") no longer applies.
+
+Update 18 Nov 2026 (#60): the landing page and form screens use the tokens. The shared icons are hand-written
+inline SVG components in `components/icons/` (one file per icon, same 24px box and 2px stroke), no icon package.
+On the landing page only "Play solo" is a filled button (One Violet Rule), so "Create a room" became a secondary
+button and Log in / Sign up became quiet text buttons. Error lines get their cross icon from CSS, so every error on
+every screen looks the same without changing the components. Account forms still show the server's one message per
+form right above its button: the server does not say which field it is about.

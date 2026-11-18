@@ -61,8 +61,8 @@ export default function RoomList() {
   const { genres, decades } = filter;
 
   return (
-    <section className={styles.form} aria-labelledby="room-list-title">
-      <h2 id="room-list-title" className={styles.codeLabel}>
+    <section className={`${styles.form} ${styles.section}`} aria-labelledby="room-list-title">
+      <h2 id="room-list-title" className={styles.sectionTitle}>
         Public rooms
       </h2>
       <Choice

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LoginForm from "@/components/LoginForm";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Log in · Song Guessing Game" };
@@ -12,7 +13,7 @@ export default function LoginPage() {
         <h1 className={styles.title}>Log in</h1>
         <LoginForm />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

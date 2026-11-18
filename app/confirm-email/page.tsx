@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ConfirmEmailChange from "@/components/ConfirmEmailChange";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
 export const metadata = { title: "Confirm your new email · Song Guessing Game" };
@@ -13,7 +14,7 @@ export default function ConfirmEmailChangePage() {
         <h1 className={styles.title}>Confirm your new email</h1>
         <ConfirmEmailChange />
         <Link href="/" className={styles.textLink}>
-          ← Back to the front page
+          <ArrowLeftIcon /> Back to the front page
         </Link>
       </main>
     </div>

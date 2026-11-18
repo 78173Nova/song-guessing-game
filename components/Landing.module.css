@@ -1,247 +1,566 @@
-/* The front page and the placeholder pages: one centred card. Mobile first. */
+/*
+ * The landing page and every form screen (sign up, log in, password, email links, create and join a room,
+ * Account settings, avatar picker, "Coming soon"), plus a few pieces the room screens borrow (#60).
+ * Rules from DESIGN.md: tokens only (no raw colours), labels above fields, errors right below with a cross icon,
+ * 52px buttons and inputs, every control at least 44 × 44px, one filled violet button per screen. Mobile first;
+ * the one layout breakpoint is 40rem (640px).
+ */
+
+/* ---------- Page frame: one centred panel ---------- */
+
 .page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem 1rem;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-4);
 }
 
 .card {
   width: 100%;
-  max-width: 30rem;
+  max-width: var(--width-form);
+  /* margin auto centres the panel, but lets a long form (Create a room) start at the top instead of being cut. */
+  margin: auto;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem 1.5rem;
-  border-radius: 20px;
-  background: var(--card);
+  gap: var(--space-5);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+@media (min-width: 40rem) {
+  .page {
+    padding: var(--space-7) var(--space-5);
+  }
+
+  .card {
+    padding: var(--space-6);
+  }
 }
 
 .title {
-  font-size: 1.9rem;
-  line-height: 1.15;
-  text-align: center;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: var(--leading-2xl);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
+/* A calm line of text: the page's intro, a status ("Checking your link…") or a reply from the server. */
 .pitch {
-  font-size: 1.1rem;
-  line-height: 1.5;
+  max-width: var(--measure);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* ---------- Landing page ---------- */
+
+.landing {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6) var(--space-4) var(--space-5);
+}
+
+.landingMain {
+  width: 100%;
+  max-width: var(--width-form);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* Space for the wave circle (#64 puts the canvas here). Until then a still ring in the three wave colours. */
+.circleSlot {
+  position: relative;
+  width: min(220px, 60vw);
+  aspect-ratio: 1;
+  flex: none;
+}
+
+.circleSlot::before {
+  content: "";
+  position: absolute;
+  inset: 16%; /* base radius 34% of the drawing area, as in DESIGN.md */
+  border-radius: var(--radius-full);
+  background: conic-gradient(
+    var(--color-wave-blue),
+    var(--color-wave-cyan),
+    var(--color-wave-violet),
+    var(--color-wave-blue)
+  );
+  /* Keep only a 6px ring of the gradient. A mask only reads transparency, so "black" here means "keep". */
+  mask: radial-gradient(closest-side, transparent calc(100% - 6px), black calc(100% - 5px));
+}
+
+.landingColumn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.landingTitle {
+  font-size: var(--text-display);
+  font-weight: 800;
+  line-height: var(--leading-display);
+  letter-spacing: -0.03em;
   text-align: center;
-  opacity: 0.85;
+  text-wrap: balance;
+}
+
+.landingPitch {
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-text-muted);
+  text-align: center;
+  text-wrap: balance;
 }
 
 .points {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  line-height: 1.4;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
 }
 
 .points li {
   display: flex;
-  gap: 0.6rem;
+  align-items: flex-start;
+  gap: var(--space-3);
 }
 
+.pointIcon {
+  flex: none;
+  margin-top: 0.15em;
+  color: var(--color-secondary);
+}
+
+/* The three ways in: Play solo (the one filled button), Create a room, Join a room. */
+.mainButtons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.big {
+  width: 100%;
+  min-height: 3.5rem;
+}
+
+/* Laptop: the circle sits left of the column (DESIGN.md, landing sketch). */
+@media (min-width: 64rem) {
+  .landingMain {
+    max-width: calc(280px + var(--space-8) + var(--width-form));
+    flex-direction: row;
+    gap: var(--space-8);
+  }
+
+  .circleSlot {
+    width: 280px;
+  }
+
+  .landingTitle,
+  .landingPitch {
+    text-align: left;
+  }
+}
+
+/* ---------- Account row on the landing page ---------- */
+
 .accountButtons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  min-height: 3rem; /* keeps the space while the page asks who is logged in */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 2.75rem; /* keeps the space while the page asks who is logged in */
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 
 .loggedIn {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  line-height: 1.3;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 
+.accountLink {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* ---------- Buttons ---------- */
+
 .primary,
-.secondary {
+.secondary,
+.quiet {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 3rem;
-  padding: 0 1.25rem;
+  gap: var(--space-2);
+  min-height: 3.25rem;
+  padding: 0 var(--space-5);
   font: inherit;
+  font-size: var(--text-lg);
   font-weight: 600;
-  border-radius: 12px;
+  line-height: var(--leading-lg);
+  text-align: center;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--duration-instant) var(--ease-out),
+    background-color var(--duration-instant) var(--ease-out),
+    border-color var(--duration-instant) var(--ease-out);
 }
 
 .primary {
   border: none;
-  color: var(--accent-text);
-  background: var(--accent);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
 }
 
 .secondary {
-  border: 2px solid var(--accent);
-  color: var(--foreground);
-  background: transparent;
+  border: 2px solid var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
-.primary:focus-visible,
-.secondary:focus-visible,
-.codeInput:focus-visible,
-.textLink:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+/* A quiet action: Log in / Sign up / Log out on the landing page. Text only, still a 44px tap area. */
+.quiet {
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  font-size: var(--text-md);
+  border: none;
+  color: var(--color-primary);
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
 }
+
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .secondary:hover:not(:disabled) {
+    border-color: var(--color-primary);
+  }
+
+  .quiet:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+.primary:active:not(:disabled),
+.secondary:active:not(:disabled),
+.quiet:active {
+  transform: scale(0.97);
+}
+
+.primary:active:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  border-color: transparent;
+  color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+  cursor: default;
+}
+
+/* ---------- Forms ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Tight inside a field (label, box, hint), more space before the next field and before the button. */
+.form > label:not(:first-child),
+.form > fieldset:not(:first-child),
+.form > button:not(:first-child),
+.form > a:not(:first-child),
+.form > .form:not(:first-child) {
+  margin-top: var(--space-3);
+}
+
+/* An empty message line takes no space, but stays in the page so screen readers still hear it when it fills. */
+.form > .error:empty,
+.form > .hint:empty {
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.codeLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-sm);
+  color: var(--color-text);
+}
+
+.hint {
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-text-muted);
+}
+
+/* Links inside running text ("No account yet? Sign up"). The global style removes link colour, so it comes back here. */
+.hint a,
+.pitch a {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.textInput,
+.codeInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-md); /* at least 16px, so phones do not zoom in */
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  transition: border-color var(--duration-instant) var(--ease-out);
+}
+
+.textInput::placeholder,
+.codeInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+@media (hover: hover) {
+  .textInput:hover,
+  .codeInput:hover {
+    border-color: var(--color-text-muted);
+  }
+}
+
+.textInput:focus-visible,
+.codeInput:focus-visible {
+  border-color: var(--color-primary);
+}
+
+.textInput[aria-invalid="true"],
+.codeInput[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* An error: danger colour, a cross icon in front and bold enough to notice. Same on every screen. */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-sm);
+  color: var(--color-danger);
+}
+
+.error::before {
+  content: "";
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.15em;
+  background: currentColor;
+  /* The cross from components/icons/CrossIcon.tsx as a mask, so it takes the text colour in both modes. */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.error:empty::before {
+  content: none;
+}
+
+/* Back to the front page, under every form. */
+.textLink {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+}
+
+@media (hover: hover) {
+  .textLink:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+/* A small text button inside a hint, e.g. "Change for this room". Inline, but a full 44px tap area. */
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-1);
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* One part of a page with several forms (Account settings): a line above, its own heading. */
+.section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionTitle {
+  font-size: var(--text-xl);
+  font-weight: 650;
+  line-height: var(--leading-xl);
+}
+
+/* ---------- Room code box (landing page and "Join a room") ---------- */
 
 .codeForm {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--muted);
-}
-
-.codeLabel {
-  font-weight: 600;
+  gap: var(--space-2);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
 }
 
 .codeRow {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .codeInput {
   flex: 1;
+  font-size: var(--text-lg); /* body font: its 0 and O, 1 and l are clearly different */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+/* ---------- Tiles: room settings and room list filters ---------- */
+
+.tiles {
   min-width: 0;
-  min-height: 3rem;
-  padding: 0 1rem;
-  font: inherit;
-  font-size: 1.25rem;
-  letter-spacing: 0.15em;
-  border: 2px solid var(--muted);
-  border-radius: 12px;
-  color: var(--foreground);
-  background: var(--background);
-}
-
-.codeInput[aria-invalid="true"] {
-  border-color: var(--bad);
-}
-
-.error {
-  min-height: 1.25rem;
-  font-size: 0.9rem;
-  color: var(--bad);
-}
-
-.textLink {
-  align-self: center;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-/* The account forms (sign up, log in). */
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.textInput {
-  min-height: 3rem;
-  padding: 0 1rem;
-  font: inherit;
-  border: 2px solid var(--muted);
-  border-radius: 12px;
-  color: var(--foreground);
-  background: var(--background);
-}
-
-.textInput:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.hint {
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.primary:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* The three ways in on the front page: Play solo, Create a room, Join a room. */
-.mainButtons {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.big {
-  min-height: 3.75rem;
-  font-size: 1.15rem;
-  text-decoration: none;
-}
-
-/* The lobby: everyone who has joined. */
-.playerList {
-  list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.playerList li {
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  border: 2px solid var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.playerList li.self {
-  border-color: var(--accent);
-  font-weight: 600;
-}
-
-.roomCode {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-align: center;
-}
-
-/* The avatar choice (issue #44): 16 emoji in a grid, the chosen one framed. */
-.avatarPicker {
+  gap: var(--space-2);
   border: none;
-  padding: 0;
-  margin: 0;
+}
+
+.tiles legend {
+  margin-bottom: var(--space-2);
+}
+
+.tile {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2.75rem;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--duration-instant) var(--ease-out),
+    border-color var(--duration-instant) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .tile:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+.tile:active {
+  transform: scale(0.97);
+}
+
+/* Selected: tint, violet outline and a tick, so it is not shown by colour alone. */
+.tileOn {
+  padding-left: var(--space-3);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.tileCheck {
+  color: var(--color-primary);
+}
+
+/* ---------- Avatar picker ---------- */
+
+.avatarPicker {
   min-width: 0;
+  border: none;
+}
+
+.avatarPicker legend {
+  margin-bottom: var(--space-2);
 }
 
 .avatarGrid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-@media (max-width: 420px) {
+@media (min-width: 40rem) {
   .avatarGrid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(8, minmax(0, 1fr));
   }
 }
 
 .avatarOption {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
+  min-width: 2.75rem;
   min-height: 2.75rem;
-  font-size: 1.5rem;
-  border: 2px solid var(--muted);
-  border-radius: 12px;
-  position: relative;
+  font-size: var(--text-xl);
+  line-height: 1;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--duration-instant) var(--ease-out),
+    border-color var(--duration-instant) var(--ease-out);
 }
 
 .avatarOption input {
@@ -251,13 +570,44 @@
   height: 1px;
 }
 
+@media (hover: hover) {
+  .avatarOption:hover {
+    border-color: var(--color-border-strong);
+  }
+}
+
+.avatarOption:active {
+  transform: scale(0.95);
+}
+
+/* Chosen: violet outline and tint, plus a tick badge in the corner (not colour alone). */
 .avatarOption:has(input:checked) {
-  border-color: var(--accent);
-  border-width: 3px;
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.avatarCheck {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: var(--radius-full);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.avatarOption:has(input:checked) .avatarCheck {
+  display: flex;
 }
 
 .avatarOption:has(input:focus-visible) {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
@@ -266,60 +616,12 @@
   margin-right: 0.35em;
 }
 
-/* A small text button inside a hint, e.g. "Change for this room". */
-.linkButton {
-  padding: 0;
-  font: inherit;
-  color: var(--accent);
-  text-decoration: underline;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
+/* ---------- "Join a room": the public room list ---------- */
 
-/* "Logged in as <username>": the username opens Account settings (issue #44). */
-.accountLink {
-  color: var(--accent);
-}
-/* Room settings on "Create a room": rows of tiles, the selected ones outlined (issue #34). */
-.tiles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  border: none;
-}
-
-.tiles legend {
-  margin-bottom: 0.4rem;
-}
-
-.tile {
-  min-height: 2.75rem;
-  padding: 0.4rem 0.9rem;
-  font: inherit;
-  border: 2px solid var(--muted);
-  border-radius: 999px;
-  color: var(--foreground);
-  background: var(--background);
-  cursor: pointer;
-}
-
-.tileOn {
-  border-color: var(--accent);
-  font-weight: 700;
-}
-
-.tile:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* The "Join a room" list of public rooms (issue #36). */
 .roomList {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   padding: 0;
   list-style: none;
 }
@@ -327,32 +629,80 @@
 .roomEntry {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--muted);
-  border-radius: 14px;
-  color: var(--foreground);
-  background: var(--background);
-  text-decoration: none;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  transition:
+    transform var(--duration-instant) var(--ease-out),
+    border-color var(--duration-instant) var(--ease-out);
 }
 
-.roomEntry:hover {
-  border-color: var(--accent);
+@media (hover: hover) {
+  .roomEntry:hover {
+    border-color: var(--color-primary);
+  }
 }
 
-.roomEntry:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+.roomEntry:active {
+  transform: scale(0.99);
 }
 
 .roomEntryTop {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.roomEntryTop strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.roomEntryTop span {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .roomEntryDetails {
-  font-size: 0.9rem;
-  opacity: 0.8;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
+}
+
+/* ---------- Borrowed by the room screens (lobby; restyled in #65) ---------- */
+
+.playerList {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.playerList li {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border-strong);
+  overflow-wrap: anywhere;
+}
+
+.playerList li.self {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+
+.roomCode {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: 800;
+  line-height: var(--leading-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  text-align: center;
 }

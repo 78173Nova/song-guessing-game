@@ -22,6 +22,7 @@ import { markShareOnArrival } from "@/lib/client/share";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
+import CheckIcon from "./icons/CheckIcon";
 import styles from "./Landing.module.css";
 
 
@@ -206,6 +207,7 @@ export function Choice({
           aria-pressed={selected(option.value)}
           onClick={() => onTap(option.value)}
         >
+          {selected(option.value) && <CheckIcon size={16} className={styles.tileCheck} />}
           {option.label}
         </button>
       ))}

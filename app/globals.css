@@ -189,3 +189,20 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* Keyboard focus, the same on every button, link and field (DESIGN.md, "Focus"). Mouse clicks do not show it. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Browser surfaces in the app's colours (DESIGN.md, "Browser surfaces"). */
+::selection {
+  color: var(--color-text);
+  background: var(--color-primary-soft);
+}
+
+:root {
+  accent-color: var(--color-primary);
+  caret-color: var(--color-primary);
+}
