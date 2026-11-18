@@ -6,18 +6,20 @@ import nextTs from "eslint-config-next/typescript";
 // Each rule is set once per folder below; when two blocks match a file, the later block wins, so every
 // later block repeats what it needs from the earlier ones.
 
-// An import of lib/<name>, written as "@/lib/<name>/..." or as a relative path like "../<name>/...".
-const folder = (name, message) => ({ regex: `^(@/lib/|(\\.\\./)+(lib/)?)${name}(/|$)`, message });
+// A pattern that matches imports of lib/<name>, written as "@/lib/<name>/..." or as a relative path
+// like "../<name>/...".
+const folderPattern = (name, message) => ({ regex: `^(@/lib/|(\\.\\./)+(lib/)?)${name}(/|$)`, message });
 
-const neonImport = {
-  name: "@neondatabase/serverless",
+// Any package from Neon (the database company), e.g. "@neondatabase/serverless".
+const neonPattern = {
+  group: ["@neondatabase/*"],
   message: "Only lib/db talks to the database. Call a function from lib/db instead.",
 };
-const dbImport = folder("db", "This folder must not use the database (CLAUDE.md, Folder structure).");
-const apiImport = folder("api", "lib/api is server code. Call the server route through lib/client instead.");
-const musicImport = folder("music", "This folder must not call iTunes. Only lib/music does, called from the server.");
-const emailImport = folder("email", "This folder must not send emails. Only lib/email does, called from the server.");
-const clientImport = folder("client", "Game and account rules do not depend on browser code.");
+const dbPattern = folderPattern("db", "This folder must not use the database (CLAUDE.md, Folder structure).");
+const apiPattern = folderPattern("api", "lib/api is server code. Call the server route through lib/client instead.");
+const musicPattern = folderPattern("music", "This folder must not call iTunes. Only lib/music does, called from the server.");
+const emailPattern = folderPattern("email", "This folder must not send emails. Only lib/email does, called from the server.");
+const clientPattern = folderPattern("client", "Game and account rules do not depend on browser code.");
 
 const sqlCall = {
   selector: "CallExpression[callee.property.name=/^(query|transaction)$/]",
@@ -44,9 +46,14 @@ const eslintConfig = defineConfig([
     files: ["**/*.{ts,tsx,mts}"],
     ignores: ["lib/db/**", "tests/**"],
     rules: {
-      "no-restricted-imports": ["error", { paths: [neonImport] }],
+      "no-restricted-imports": ["error", { patterns: [neonPattern] }],
       "no-restricted-syntax": ["error", sqlCall],
     },
+  },
+  // Server routes and scripts: they go online only through lib/music and lib/email.
+  {
+    files: ["app/api/**", "db/**"],
+    rules: { "no-restricted-syntax": ["error", sqlCall, fetchCall] },
   },
   // Game and account rules: no database, no network, no browser code – easy to test.
   {
@@ -54,7 +61,7 @@ const eslintConfig = defineConfig([
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: [neonImport], patterns: [dbImport, apiImport, musicImport, emailImport, clientImport] },
+        { patterns: [neonPattern, dbPattern, apiPattern, musicPattern, emailPattern, clientPattern] },
       ],
       "no-restricted-syntax": ["error", sqlCall, fetchCall],
     },
@@ -74,7 +81,7 @@ const eslintConfig = defineConfig([
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: [neonImport], patterns: [dbImport, apiImport, musicImport, emailImport] },
+        { patterns: [neonPattern, dbPattern, apiPattern, musicPattern, emailPattern] },
       ],
     },
   },

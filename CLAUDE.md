@@ -94,7 +94,8 @@ The team are **programming beginners**: explain proposals in plain language befo
     When unsure, ask instead of guessing.
 11. **Git:** commit messages say what changed ("Move answer checking to the server", not "update").
     Open pull requests with `gh pr create`; the description covers what, why, test output and how
-    to check it. Claude never merges a pull request: the author does (`docs/decisions/009-review-process.md`),
+    to check it. Claude never merges a pull request: the author does once the checks are green
+    (`docs/decisions/009-review-process.md`), tags a teammate to review it before the next team meeting,
     and tells the group chat first when it changes tests or `CLAUDE.md`.
 12. **Language:** code, comments, commit messages, pull requests and all documentation in English.
 
