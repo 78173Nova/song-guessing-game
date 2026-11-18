@@ -27,6 +27,7 @@ import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
 import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
+import { showError } from "./messages";
 import GameStage from "./GameStage";
 import shared from "./GameShared.module.css";
 import styles from "./SoloGame.module.css";
@@ -283,6 +284,15 @@ export default function SoloGame() {
   // Outside the reveal this is undefined, so the circle goes back to the app colours before the next round.
   const coverColours = useCoverColours(state.screen === "reveal" ? state.result.song.artworkUrl : null);
 
+  // Errors not tied to one form field (the server refused the start, the server or network failed, a clip would not
+  // load) show as short messages, the same as everywhere else (#62, user story 26). The button that recovers stays
+  // in the page: "Start game" on the start screen, "Try again" on the error screen.
+  const errorMessage =
+    state.screen === "error" ? state.message : state.screen === "start" ? (state.message ?? null) : null;
+  useEffect(() => {
+    if (errorMessage !== null) showError(errorMessage);
+  }, [errorMessage]);
+
   return (
     <div className={shared.game}>
       {state.screen === "start" && (
@@ -334,12 +344,6 @@ export default function SoloGame() {
               </select>
             </label>
           </div>
-          {state.message && (
-            <p className={styles.error} role="alert">
-              <CrossIcon className={shared.inlineIcon} />
-              {state.message}
-            </p>
-          )}
           <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Start game
           </button>
@@ -458,12 +462,10 @@ export default function SoloGame() {
         </section>
       )}
 
+      {/* The error itself shows as a short message (showError above); the page keeps the button that recovers. */}
       {state.screen === "error" && (
-        <section className={shared.center} role="alert">
-          <p className={styles.errorBox}>
-            <CrossIcon className={shared.inlineIcon} />
-            {state.message}
-          </p>
+        <section className={shared.center}>
+          <p className={shared.intro}>The game stopped.</p>
           <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Try again
           </button>

@@ -742,3 +742,8 @@ Update 18 Nov 2026 (#57, review): the solo and room games share their styles thr
 (`components/GameStage.tsx`) and one time bar (`components/TimeBar.tsx`) are used by the solo round, the room result,
 the game board and the duel; each screen only sets the time bar's width. The wave circle's audio wiring is one hook,
 `useWaveAudio` (`lib/client/useWaveAudio.ts`). Nothing looks different.
+
+Update 18 Nov 2026 (#57, review): this replaces the end of the #67 note. The solo game's errors (the start refused,
+server or network errors, a clip that would not load) now show as short messages (`showError`, #62), the same style as
+every other error that is not tied to one field. The button that recovers stays in the page: "Start game" on the start
+screen and "Try again" on the error screen, which says "The game stopped." in muted text.

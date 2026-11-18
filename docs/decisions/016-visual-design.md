@@ -146,3 +146,13 @@ done, on purpose: a `theme-color` for the phone's status bar (Next.js needs the 
 copy token values outside `app/globals.css`; `color-scheme` already lets the browser match light and dark), and
 `viewport-fit=cover` (the page would then need safe-area padding on every side; without it the browser keeps the page
 clear of the notch by itself).
+
+Update 18 Nov 2026 (#57, review): this replaces the #67 note on the solo game's errors. They now show as short
+messages through `showError` (`components/messages.ts`, #62), like every other error that is not tied to one form
+field (user story 26: one message style). The button that recovers stays in the page: "Start game" on the start
+screen (e.g. after "too few songs match these filters") and "Try again" on the error screen, which now only says
+"The game stopped." Why the change: one message style everywhere matters more than keeping the text above its button;
+the button stays, so the player can still recover after the message has gone. Also from the review: the solo and
+room games share one stage, one time bar, one stylesheet (`GameShared.module.css`) and one audio hook
+(`useWaveAudio`); the motion rule now says that short hover/press colour transitions are allowed; and a shared
+rank in the standings is visible on screen ("=2"), not only to screen readers.

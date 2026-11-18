@@ -1,6 +1,6 @@
 /*
- * The solo game's own pieces: the start screen, the status line, the seconds inside the stage, the reveal panel,
- * the results and the errors. The pieces it shares with the room game (buttons, stage, time bar, answers, reveal)
+ * The solo game's own pieces: the start screen, the status line, the seconds inside the stage, the reveal panel
+ * and the results. The pieces it shares with the room game (buttons, stage, time bar, answers, reveal)
  * are in GameShared.module.css.
  * Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour transitions on
  * hover/press are allowed (--duration-instant). Every duration is a token, so "reduce motion" (durations become
@@ -141,7 +141,7 @@
   animation-delay: calc(var(--duration-base) / 3);
 }
 
-/* ---------- Results and errors ---------- */
+/* ---------- Results ---------- */
 
 .results {
   width: 100%;
@@ -220,35 +220,4 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-text);
-}
-
-.error {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  max-width: var(--width-form);
-  font-weight: 600;
-  line-height: var(--leading-md);
-  text-align: left;
-  color: var(--color-danger);
-}
-
-.errorBox {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  width: 100%;
-  max-width: var(--width-form);
-  padding: var(--space-4);
-  border: 2px solid var(--color-danger);
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  line-height: var(--leading-md);
-  text-align: left;
-  color: var(--color-text);
-  background: var(--color-danger-bg);
-}
-
-.errorBox svg {
-  color: var(--color-danger);
 }
