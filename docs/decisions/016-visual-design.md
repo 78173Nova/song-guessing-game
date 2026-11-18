@@ -125,3 +125,14 @@ cannot go silent, and the circle idles. The room result shows the same stage as 
 the cover colours from `useCoverColours` (#64); the board during a round never gets them. Standings: the top three on a podium (winner in the middle, block height
 by rank, so equal points share both rank and height) from `lib/client/standings-view.ts` (pure, tested); totals
 roll up from 0 with NumberFlow (straight to the number with reduce motion). The duel layout is left to #66.
+
+Update 18 Nov 2026 (#66): the duel layout uses the tokens; no new package. The opponent's side (cyan tint, top) and
+the viewer's side (violet tint with "(you)", bottom, just above the answers) each show avatar, nickname and a large
+score; from 48rem the two sides stand left and right of the circle. The duel ring is replaced by the whole wave
+circle with the seconds on its solid disc, and the time bar under it is the same as the board's, so the answer area
+matches the Multiplayer game board; during a round the circle has the app colours only (rule 5). The opponent's
+answered mark is a check icon and the word "Answered" (and an away icon and "Away"), never their answer. The duel
+shows only while a round is open, so the scores change while it is hidden: `scoreMemory` in
+`lib/client/room-duel.ts` (pure, tested) keeps the score the viewer saw last, and each score rolls from there with
+NumberFlow when the next round starts (a lower score means a new game: no roll down). Limit: after a reload the
+memory is empty, so the scores show at once without rolling.

@@ -708,3 +708,11 @@ creator controls and Leave are quiet `--color-text-muted` text buttons in one ce
 with two players only two blocks. Blocks rise third → second → first (`--duration-slow`, `--stagger-step` apart),
 then list rows from rank 4 rise with the stagger. The room result reuses the solo stage and reveal pieces without a
 second panel (the page card already is one); its circle blends to the cover colours like the solo reveal.
+
+Update 18 Nov 2026 (#66): duel built. Each side is a tinted panel (`--color-secondary-soft` with a `--color-secondary`
+outline for the opponent, `--color-primary-soft` with a `--color-primary` outline for "you"): avatar and nickname
+(opponent's nickname in `--color-secondary`), an "Answered" / "Away" pill under it, and the score on the right with
+a small "Score" label, in `--text-number` (capped at 2.75rem side by side on a laptop so 5 digits fit). The whole wave
+circle sits between them, `min(220px, 56vw, 26vh)` on phones and `min(220px, 30vh)` from 48rem, with the seconds
+on a solid disc (inset 24 %), "Round n / N" under it and the board's time bar under the duel. Scores roll from the
+value seen last round to the new one when a round starts (NumberFlow; at once with reduce motion).
