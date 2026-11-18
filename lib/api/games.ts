@@ -15,11 +15,11 @@ import {
 } from "../db/games";
 import { isRoomGame } from "../db/rooms";
 import { listSongsWithPreview } from "../db/songs";
-import { countByGenreAndDecade, filterSongs, hasFilters, tooFewSongsMessage } from "../game/filters";
+import { countByGenreAndDecade, filterSongs, hasFilters, parseFiltersQuery, tooFewSongsMessage } from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
 import { songPools } from "../game/recent-songs";
-import { buildReplacementRound, buildRounds, type BuildResult } from "../game/rounds";
+import { buildReplacementRound, buildRounds, countMatching, type BuildResult } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -131,6 +131,16 @@ export async function startGame(
 // startGame still refuses a combination with too few songs on its own.
 export async function getSongCounts(db: Db): Promise<ApiResult> {
   return { status: 200, body: { counts: countByGenreAndDecade(await listSongsWithPreview(db)) } };
+}
+
+// GET /api/games/matching-songs?genre=rock&decade=1980 – for one genre + decade (missing = Any), only three
+// numbers: playable songs, different titles, different artists (issue #7). The solo start screen shows the count
+// and greys out modes that cannot start. startGame still refuses such a game on its own.
+export async function getMatchingSongs(db: Db, params: URLSearchParams): Promise<ApiResult> {
+  const parsed = parseFiltersQuery(params);
+  if (!parsed.ok) return fail(parsed.error);
+  const songs = filterSongs(await listSongsWithPreview(db), parsed.filters);
+  return { status: 200, body: countMatching(songs) };
 }
 
 // POST /api/games/[id]/next – sends the next round without the correct answer and notes the time.

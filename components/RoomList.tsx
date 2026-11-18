@@ -9,7 +9,7 @@ import { isTileSelected, toggleTile } from "@/lib/client/room-settings";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, type Mode } from "@/lib/game/modes";
-import { Choice } from "./CreateRoomForm";
+import TileGroup from "./TileGroup";
 import styles from "./Landing.module.css";
 
 const ANY_FILTER: RoomListFilter = { type: "multiplayer", mode: "any", genres: "any", decades: "any" };
@@ -65,7 +65,7 @@ export default function RoomList() {
       <h2 id="room-list-title" className={styles.codeLabel}>
         Public rooms
       </h2>
-      <Choice
+      <TileGroup
         legend="Room type"
         options={[
           { value: "duel", label: "Duel" },
@@ -74,19 +74,19 @@ export default function RoomList() {
         selected={(value) => filter.type === value}
         onTap={(value) => change({ type: value as RoomListFilter["type"] })}
       />
-      <Choice
+      <TileGroup
         legend="Mode"
         options={[{ value: "any", label: "Any" }, ...MODES.map((mode) => ({ value: mode, label: MODE_LABELS[mode] }))]}
         selected={(value) => filter.mode === value}
         onTap={(value) => change({ mode: value as "any" | Mode })}
       />
-      <Choice
+      <TileGroup
         legend="Genres"
         options={[{ value: "any", label: "Any" }, ...GENRES.map((genre) => ({ value: genre, label: GENRE_LABELS[genre] }))]}
         selected={(value) => isTileSelected<Genre>(genres, value as Genre)}
         onTap={(value) => change({ genres: toggleTile<Genre>(genres, value as Genre) })}
       />
-      <Choice
+      <TileGroup
         legend="Decades"
         options={[{ value: "any", label: "Any" }, ...DECADES.map((decade) => ({ value: String(decade), label: `${decade}s` }))]}
         selected={(value) => isTileSelected<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade))}
