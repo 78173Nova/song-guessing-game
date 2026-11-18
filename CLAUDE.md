@@ -50,6 +50,9 @@ The team are **programming beginners**: explain proposals in plain language befo
   (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
 - Create the team accounts (already verified) from `TEAM_ACCOUNTS`: `npm run db:team-accounts`
   (uses `DATABASE_URL` and `TEAM_ACCOUNTS` from `.env.local`; safe to run again)
+- Both `db:` scripts run with plain Node, which needs `.ts` in relative imports (`"./genres.ts"`, not
+  `"./genres"`). Write it in every file under `lib/` the scripts load; `tests/db/script-imports.test.ts`
+  fails when one is missing
 - CI: `.github/workflows/ci.yml` runs `npm ci`, lint, type check, tests and build on every pull request
 
 ## Folder structure
