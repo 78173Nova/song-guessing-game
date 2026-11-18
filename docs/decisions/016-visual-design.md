@@ -56,3 +56,8 @@ The detailed rules (tokens, fonts, sketches, motion, contrast list) are in [`DES
 - The colours, fonts and timings change in one place (`app/globals.css`) and in `DESIGN.md`.
 - The circle could move to WebGL, or react to the beat more cleverly, without changing its pure shape function.
 - A package can be dropped by replacing it with plain code in its component; each is used in only a few places.
+
+Update 18 Nov 2026: the tokens now live in `app/globals.css` (#59), with the old colour names as aliases, and
+the fonts load through `next/font/google` (no package). `tests/client/design-tokens.test.ts` reads the colours
+from that stylesheet and the pair list from the "Contrast pairs" table in `DESIGN.md`, so a pair added to the
+table is checked automatically in both modes; the limit above ("not checked until #59") no longer applies.

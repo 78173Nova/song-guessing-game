@@ -658,3 +658,11 @@ Multiplayer game board (top half) and in the duel.
 - Don't use emoji or Unicode glyphs as icons (avatars are the exception: they are content).
 - Don't lower contrast with `opacity` on text.
 - Don't add Tailwind, a component library, an animation library or an icon package.
+
+## Updates
+
+Update 18 Nov 2026 (#59): the tokens are in `app/globals.css`. Two small additions while building them:
+line-height tokens `--leading-xs` … `--leading-number` carry the line heights from the type scale table, and
+under reduce motion `--duration-wave-colour` keeps its value (only the movement timings become `0ms`), because
+the circle still crossfades its colour on reveal. To add a text/background pair, add a row to the
+"Contrast pairs" table: `tests/client/design-tokens.test.ts` reads that table and checks the row in the given mode.
