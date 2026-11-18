@@ -114,8 +114,9 @@ function isSongCount(value: unknown): value is SongCount {
   return typeof genre === "string" && Number.isInteger(decade) && Number.isInteger(count);
 }
 
-// Loads the three numbers for the chosen genre + decade on the solo start screen (issue #7). A filter that is
-// "Any" is left out. null if anything goes wrong: the screen then greys out no mode, and the server still checks.
+// Loads the three numbers for the chosen genre + decade on the solo start screen (team feedback 18 Nov, point 7). A
+// filter that is "Any" is left out. null if anything goes wrong: the screen then greys out no mode, and the server
+// still checks.
 export async function apiSoloMatchingSongs(filters: Filters, fetchFn: FetchFn = fetch): Promise<MatchingCounts | null> {
   const query = new URLSearchParams();
   if (filters.genre !== undefined) query.set("genre", filters.genre);

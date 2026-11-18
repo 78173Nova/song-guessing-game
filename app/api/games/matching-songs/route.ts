@@ -1,5 +1,5 @@
 // GET /api/games/matching-songs?genre=rock&decade=1980 – songs, different titles and different artists for the
-// solo start screen (issue #7). The steps live in lib/api/games.ts.
+// solo start screen (team feedback 18 Nov, point 7). The steps live in lib/api/games.ts.
 import { getMatchingSongs, safely } from "@/lib/api/games";
 import { getDb } from "@/lib/db/client";
 

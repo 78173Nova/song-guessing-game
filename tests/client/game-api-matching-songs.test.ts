@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { apiSoloMatchingSongs } from "@/lib/client/game-api";
 
-// Loading the three numbers for the chosen genre + decade on the solo start screen (issue #7).
+// Loading the three numbers for the chosen genre + decade on the solo start screen (team feedback 18 Nov, point 7).
 // No network: fetch is a fake.
 function reply(status: number, body: unknown) {
   return vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(

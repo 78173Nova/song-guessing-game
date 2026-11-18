@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { canPickMode, decadeFromTile, genreFromTile, matchLine, modeNotes, modeProblem } from "@/lib/client/solo-settings";
 import type { MatchingCounts } from "@/lib/game/rounds";
 
-// The solo start screen as tiles (issues #7 and #8), as plain functions. No browser, no network.
+// The solo start screen as tiles (team feedback 18 Nov, points 7 and 8), as plain functions. No browser, no network.
 // Solo stays single choice: one genre and one decade, "Any" by default. The server still refuses every game
 // that cannot start; this only stops the player choosing it and says why.
 

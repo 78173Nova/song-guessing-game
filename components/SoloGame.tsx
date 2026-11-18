@@ -81,9 +81,9 @@ export default function SoloGame() {
     };
   }, []);
 
-  // Songs, different titles and different artists for the chosen genre + decade (issue #7), asked again on every
-  // change; a late reply for an older choice is ignored. null until loaded, or if loading failed: then no mode is
-  // greyed out and the server still checks the start.
+  // Songs, different titles and different artists for the chosen genre + decade (team feedback 18 Nov, point 7),
+  // asked again on every change; a late reply for an older choice is ignored. null until loaded, or if loading
+  // failed: then no mode is greyed out and the server still checks the start.
   const [matching, setMatching] = useState<MatchingCounts | null>(null);
   useEffect(() => {
     let current = true;

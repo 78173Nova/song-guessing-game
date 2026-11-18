@@ -163,14 +163,14 @@ When a line below can be read two ways, choose the simpler option that keeps the
   (`too-few-songs`), whatever the screen allows. The screen only checks the song count, not the "4 different
   titles or artists" rule for a mode, so that message can still appear
 
-## Decided on 18 Nov 2026 (solo settings, `feature/solo-settings`, issues #7 and #8)
-- **Tiles instead of dropdowns (#8):** the start screen shows mode, genre and decade as the tile rows of "Create a
+## Decided on 18 Nov 2026 (solo settings, `feature/solo-settings`, team feedback 18 Nov, points 7 and 8)
+- **Tiles instead of dropdowns (team feedback 18 Nov, point 8):** the start screen shows mode, genre and decade as the tile rows of "Create a
   room". The tile row moved into its own component, `components/TileGroup.tsx`, used by the room form, the room list
   and the solo screen; the room screens look and behave as before. Solo stays single choice: one genre, one decade,
   "Any" by default, so `POST /api/games` and the database do not change. Above "Start game" a line says, e.g.,
   "12 songs match – 5 will be played", or the "Only 3 songs match …" message (then Start is disabled).
   This replaces "a genre dropdown and a decade dropdown" under "Game (UI)"
-- **Greyed-out tiles (#7):** genre and decade tiles with fewer than 5 playable songs are greyed out as before, now as
+- **Greyed-out tiles (team feedback 18 Nov, point 7):** genre and decade tiles with fewer than 5 playable songs are greyed out as before, now as
   disabled tiles with the note under the decade row. Mode tiles are greyed out when the chosen filters match fewer
   than 4 different titles (title mode), fewer than 4 different artists (artist mode) or either (mixed mode, which asks
   for both), with a short note under the mode row. With fewer than 5 songs no mode is greyed out: the filters are the

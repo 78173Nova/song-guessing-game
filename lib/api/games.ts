@@ -134,8 +134,8 @@ export async function getSongCounts(db: Db): Promise<ApiResult> {
 }
 
 // GET /api/games/matching-songs?genre=rock&decade=1980 – for one genre + decade (missing = Any), only three
-// numbers: playable songs, different titles, different artists (issue #7). The solo start screen shows the count
-// and greys out modes that cannot start. startGame still refuses such a game on its own.
+// numbers: playable songs, different titles, different artists (team feedback 18 Nov, point 7). The solo start
+// screen shows the count and greys out modes that cannot start. startGame still refuses such a game on its own.
 export async function getMatchingSongs(db: Db, params: URLSearchParams): Promise<ApiResult> {
   const parsed = parseFiltersQuery(params);
   if (!parsed.ok) return fail(parsed.error);
