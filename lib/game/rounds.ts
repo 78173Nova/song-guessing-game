@@ -62,8 +62,9 @@ function typesFor(mode: Mode): readonly QuestionType[] {
   return mode === "mixed" ? QUESTION_TYPES : [mode];
 }
 
-// What the solo start screen learns about the songs that match its genre + decade (issue #7): only three numbers,
-// nothing about single songs. Titles and artists are counted like the answer options ("Queen" = "queen ").
+// What the solo start screen learns about the songs that match its genre + decade (team feedback 18 Nov, point 7):
+// only three numbers, nothing about single songs. Titles and artists are counted like the answer options ("Queen" =
+// "queen ").
 export type MatchingCounts = { songs: number; titles: number; artists: number };
 
 export function countMatching(songs: SongForGame[]): MatchingCounts {

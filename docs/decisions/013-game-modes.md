@@ -89,7 +89,7 @@ Update 15 Nov 2026: avoiding the songs of recent games, and "Change settings".
   A test with a fixed random seed checks that every playable song gets played over 120 games and songs without a
   clip never do.
 
-Update 18 Nov 2026: solo settings as tiles, and greyed-out modes (issues #7 and #8, `feature/solo-settings`).
+Update 18 Nov 2026: solo settings as tiles, and greyed-out modes (team feedback 18 Nov, points 7 and 8, `feature/solo-settings`).
 - **Decision:** the solo start screen uses the tile rows of "Create a room" (now `components/TileGroup.tsx`, shared by
   the room form, the room list and the solo screen) instead of buttons and dropdowns, still single choice. A new
   `GET /api/games/matching-songs?genre=…&decade=…` sends only three numbers for the chosen filters: playable songs,

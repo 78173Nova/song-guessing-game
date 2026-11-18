@@ -3,9 +3,10 @@ import { parseFiltersQuery } from "@/lib/game/filters";
 import { MODES } from "@/lib/game/modes";
 import { buildRounds, countMatching, modeFits, type MatchingCounts } from "@/lib/game/rounds";
 
-// The three numbers the solo start screen gets for the chosen genre + decade (issue #7): songs, different titles,
-// different artists – and the rule that says which modes can start with them. Plain functions: no database,
-// no network. The rule must agree with buildRounds, which the server uses to refuse a game on its own.
+// The three numbers the solo start screen gets for the chosen genre + decade (team feedback 18 Nov, point 7):
+// songs, different titles, different artists – and the rule that says which modes can start with them. Plain
+// functions: no database, no network. The rule must agree with buildRounds, which the server uses to refuse a game
+// on its own.
 
 const song = (id: number, title: string, artist: string, year = 1985) => ({ id, title, artist, year });
 

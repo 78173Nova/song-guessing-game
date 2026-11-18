@@ -315,7 +315,8 @@
   outline-offset: 2px;
 }
 
-/* A tile that cannot be chosen (solo start screen, issue #7), and the note under its row saying why. */
+/* A tile that cannot be chosen (solo start screen, team feedback 18 Nov, point 7), and the note under its row
+   saying why. */
 .tile:disabled {
   opacity: 0.4;
   cursor: not-allowed;

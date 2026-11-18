@@ -106,7 +106,7 @@
 }
 
 /* The answer a room player tapped, before the round closes (components/Room.tsx). */
-/* The line above "Start game": how many songs match (issue #8). */
+/* The line above "Start game": how many songs match (team feedback 18 Nov, point 8). */
 .filterNote {
   max-width: 28rem;
   margin: 0;
@@ -196,7 +196,8 @@
   color: var(--accent);
 }
 
-/* Mode, genre and decade tiles on the start screen (issue #8): the tile rows from "Create a room", left-aligned. */
+/* Mode, genre and decade tiles on the start screen (team feedback 18 Nov, point 8): the tile rows from "Create a
+   room", left-aligned. */
 .settings {
   display: flex;
   flex-direction: column;

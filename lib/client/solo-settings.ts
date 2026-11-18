@@ -1,7 +1,7 @@
-// The solo start screen as tiles (issues #7 and #8), as plain functions. Single choice: one genre and one
-// decade, "Any" by default. `counts` = the three numbers for the chosen genre + decade, or null while they load
-// or when loading failed: then nothing is blocked. This only helps the player: the server refuses every game
-// that cannot start on its own.
+// The solo start screen as tiles (team feedback 18 Nov, points 7 and 8), as plain functions. Single choice: one
+// genre and one decade, "Any" by default. `counts` = the three numbers for the chosen genre + decade, or null while
+// they load or when loading failed: then nothing is blocked. This only helps the player: the server refuses every
+// game that cannot start on its own.
 import { DECADES, MIN_MATCHING_SONGS, tooFewSongsMessage, type Decade } from "../game/filters";
 import { GENRES, type Genre } from "../game/genres";
 import type { Mode } from "../game/modes";
