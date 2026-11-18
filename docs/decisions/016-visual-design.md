@@ -110,3 +110,18 @@ now changes at once (`--duration-wave-colour` becomes 0ms too, as the ticket ask
 the app colours over `--duration-base` instead of the 900ms blend, so no album colour is left when the next round
 starts. Limit: the cover is downloaded twice (once for the picture, once with cross-origin access for the
 pixels); both are small and usually come from the browser cache.
+
+Update 18 Nov 2026 (#65): the room screens use the tokens; no new package. The lobby shows the room code, the
+countdown (display font) and the settings at the top, then the players as rows (own row soft violet with "(you)",
+away players muted with the away icon and the word "away"); the room creator's Extend and Kick, and Leave, are
+quiet muted text buttons under the one violet button. On the Multiplayer game board the wave circle replaces the
+song half circle: only its top half shows, at the same size, so the seat positions in `lib/client/room-board.ts`
+did not change; the seconds sit on a half disc, "Round n / N" in the board's top-left corner, and the time left is
+a bar under the board (transform, not width). The answered and away marks are small badges on a nickname's corner,
+so with 25 players they take no room from the name. Rooms reuse `wave-audio.ts` the same way as the solo game
+(unlock in the Join / Start now / Play again tap, prepare players before a clip, attach when a clip starts); a
+player that loaded a clip before any tap (e.g. after a reload) is never routed through the analyser, so its sound
+cannot go silent, and the circle idles. The room result shows the same stage as the solo reveal, and its circle takes
+the cover colours from `useCoverColours` (#64); the board during a round never gets them. Standings: the top three on a podium (winner in the middle, block height
+by rank, so equal points share both rank and height) from `lib/client/standings-view.ts` (pure, tested); totals
+roll up from 0 with NumberFlow (straight to the number with reduce motion). The duel layout is left to #66.
