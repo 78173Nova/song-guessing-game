@@ -136,3 +136,13 @@ shows only while a round is open, so the scores change while it is hidden: `scor
 `lib/client/room-duel.ts` (pure, tested) keeps the score the viewer saw last, and each score rolls from there with
 NumberFlow when the next round starts (a lower score means a new game: no roll down). Limit: after a reload the
 memory is empty, so the scores show at once without rolling.
+
+Update 18 Nov 2026 (#67): the redesign was checked with worst-case data (20-character nicknames, 25 players, the
+highest possible scores, missing covers), on phone-width rules and for accessibility; the fixes are small and change
+no behaviour (see the DESIGN.md update for the list). The old colour names are gone, so every style uses the
+`--color-…` tokens. Decided: the solo game's errors stay in the page instead of becoming short messages (Sonner),
+because each one sits right above the button that fixes it and a short message disappears after a few seconds. Not
+done, on purpose: a `theme-color` for the phone's status bar (Next.js needs the colour as a literal value, which would
+copy token values outside `app/globals.css`; `color-scheme` already lets the browser match light and dark), and
+`viewport-fit=cover` (the page would then need safe-area padding on every side; without it the browser keeps the page
+clear of the notch by itself).
