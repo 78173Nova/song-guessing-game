@@ -89,18 +89,6 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
 
-  /* Old colour names, kept as aliases until every area is restyled (#60–#66); #67 removes them. */
-  --background: var(--color-bg);
-  --foreground: var(--color-text);
-  --card: var(--color-surface);
-  --muted: var(--color-border);
-  --accent: var(--color-primary);
-  --accent-text: var(--color-on-primary);
-  --good: var(--color-success);
-  --good-bg: var(--color-success-bg);
-  --bad: var(--color-danger);
-  --bad-bg: var(--color-danger-bg);
-
   color-scheme: light dark;
 }
 
@@ -149,6 +137,11 @@
 
 html {
   height: 100%;
+  /* Phones: no grey flash over a tapped control (each control has its own pressed state instead), and no
+     font inflation when a phone turns sideways. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -186,6 +179,21 @@ input,
 select,
 textarea {
   font-family: inherit;
+}
+
+/* Phones: a tap on a control counts at once (no wait for a double-tap zoom), and holding a finger on a button does
+   not select its label. Text that is content stays selectable. */
+a,
+button,
+label,
+select,
+summary {
+  touch-action: manipulation;
+}
+
+button {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 a {
