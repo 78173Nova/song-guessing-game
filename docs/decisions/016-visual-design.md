@@ -69,6 +69,13 @@ button and Log in / Sign up became quiet text buttons. Error lines get their cro
 every screen looks the same without changing the components. Account forms still show the server's one message per
 form right above its button: the server does not say which field it is about.
 
+Update 18 Nov 2026 (#61): NumberFlow is installed as `@number-flow/react` 0.6.2 (exact version, adds only
+`number-flow` and `esm-env`). It rolls the solo countdown, the 3-2-1 and the score; it follows "reduce motion" by
+itself (`respectMotionPreference`, on by default), so numbers then change without rolling. `npm audit --omit=dev`
+reports 0 vulnerabilities; the full `npm audit` reports 16 high findings that were already there before this
+package, all from one `picomatch` advisory inside the dev tooling (vitest, eslint-config-next), with no fixed
+version yet.
+
 Update 18 Nov 2026 (#62): **Vaul 1.1.2** (the share pop-up: a bottom sheet that can be swiped down below 40rem, a
 centred dialog with no dragging from 40rem; Esc closes it and the focus goes back to the button that opened it) and
 **Sonner 2.0.8** (short messages, mounted once in `app/layout.tsx` as `components/MessageArea.tsx`; pages call
@@ -78,6 +85,6 @@ form field (start, extend, leave, kick, play again, a refused answer, log out) a
 updates in place, for "can't reach the server" while the room or the public room list keeps asking; it goes away by
 itself when the connection is back. Field errors and the one server message per form stay where they were. The QR
 code sits on a new `--color-qr-bg` token (white in both modes) with a white frame as its quiet zone. Limit: the
-solo game's errors still show in the page; they move to short messages when the solo screens are restyled (#61).
-`npm audit --omit=dev` reports 0 vulnerabilities; the full `npm audit` reports 16 high ones on the base branch
-already (a new `picomatch` advisory inside Vitest and the lint tooling), not from these two packages.
+solo game's errors still show in the page (its files were being restyled in #61 at the same time); a later
+ticket can move them to `showError`. `npm audit --omit=dev` reports 0 vulnerabilities; the full `npm audit` still
+reports the 16 dev-tooling findings described under #61, none from these two packages.

@@ -673,6 +673,13 @@ landing page and back links). The focus ring, `::selection`, `accent-color` and 
 the large room code in the lobby keeps the display font. Until #64 adds the canvas, the landing page shows a still
 ring in the wave colours in the circle's place.
 
+Update 18 Nov 2026 (#61): the solo round is one frame from "Loading first song…" to the reveal: status line,
+the stage (a fixed 220/280px square where the wave circle goes, #63; until then a still ring in the wave colours)
+with the seconds, 3-2-1 or the verdict icon on its inner disc, then the rest. The time left is a thin bar under the
+stage that shrinks with `transform: scaleX()` (not an arc on the disc edge; #63 may move it onto the circle).
+On reveal the panel takes the place of the time bar and question, between the stage and the answers, as in the
+sketch; the answer buttons do not animate. The icons live in `components/icons/` (one file per icon).
+
 Update 18 Nov 2026 (#62): the share pop-up and short messages are built. New token `--color-qr-bg` (#ffffff in both
 modes): the QR code sits on it inside a white frame (`--space-4` padding) that adds a quiet zone. The bottom sheet
 keeps Vaul's own timing (500ms, its iOS curve), because Vaul uses the same curve when it finishes a drag; the laptop
