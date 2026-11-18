@@ -106,14 +106,6 @@
 }
 
 /* The answer a room player tapped, before the round closes (components/Room.tsx). */
-/* The line above "Start game": how many songs match (team feedback 18 Nov, point 8). */
-.filterNote {
-  max-width: 28rem;
-  margin: 0;
-  font-size: 0.9rem;
-  opacity: 0.75;
-}
-
 .chosen {
   border-color: var(--accent);
 }
