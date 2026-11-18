@@ -32,9 +32,20 @@
   box-sizing: border-box;
 }
 
+/* Has answered this round: a neutral grey, never the green of "Right!", so it does not hint at right or wrong. */
 .answered {
-  border-color: var(--good);
-  background: var(--good-bg);
+  border-color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Text only for screen readers ("has answered"); the grey above is what everyone else sees. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Long nicknames end in "…"; the full nickname shows when hovering (title). */

@@ -1,5 +1,5 @@
 // The game board of a Multiplayer room round (issue #38): the song as a half circle that fills up while the clip
-// plays, every other player's nickname around it with a tick once they have answered, and the viewer's own
+// plays, every other player's nickname around it turning grey once they have answered, and the viewer's own
 // nickname, larger, just above the answer buttons. Nobody sees what anyone else answered: the room state only
 // says who. Where each nickname sits is worked out in lib/client/room-board.ts.
 import { ROUND_SECONDS } from "@/lib/client/countdown";
@@ -46,7 +46,7 @@ export default function RoomBoard({
               style={{ left: across(seat.x), top: down(seat.y), width: across(SEAT.width), height: down(SEAT.height) }}
               title={seat.nickname}
             >
-              {seat.answered && <span aria-label="has answered">✓ </span>}
+              {seat.answered && <span className={styles.srOnly}>has answered: </span>}
               {away.includes(seat.nickname) && (
                 <span role="img" aria-label="away" title="Away – not connected">
                   ⏳{" "}
@@ -81,8 +81,8 @@ export default function RoomBoard({
           </div>
         </div>
       </div>
-      <p className={styles.me}>
-        {iAnswered && <span aria-label="you have answered">✓ </span>}
+      <p className={iAnswered ? `${styles.me} ${styles.answered}` : styles.me}>
+        {iAnswered && <span className={styles.srOnly}>you have answered: </span>}
         <span className={styles.avatar} aria-hidden="true">{avatarEmoji(avatars[me])}</span>
         {me}
       </p>

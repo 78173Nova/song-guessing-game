@@ -72,16 +72,17 @@ export function seatPositions(count: number): Seat[] {
 
 export type BoardSeat = Seat & { nickname: string; answered: boolean };
 
-// Every player except the viewer (`me`, whose nickname sits above the answers), in room order, with a tick for
-// those in `answered` – the nicknames the room state lists for the round on screen.
+// Every player except the viewer (`me`, whose nickname sits above the answers), in room order, with a grey marker
+// for those in `answered` – the nicknames the room state lists for the round on screen.
 export function boardSeats(players: string[], me: string, answered: string[]): BoardSeat[] {
   const others = players.filter((nickname) => nickname !== me);
   const positions = seatPositions(others.length);
   return others.map((nickname, i) => ({ nickname, answered: answered.includes(nickname), ...positions[i] }));
 }
 
-// The ticks for round `number`. A round can start on screen before the next reply arrives (roomScreen starts it
-// at its start time); until then the last reply's list belongs to the round before, so no ticks yet.
+// The "has answered" markers for round `number`. A round can start on screen before the next reply arrives
+// (roomScreen starts it at its start time); until then the last reply's list belongs to the round before, so no
+// markers yet.
 export function answeredInRound(
   state: { round: { number: number } | null; answered: string[] },
   number: number,
