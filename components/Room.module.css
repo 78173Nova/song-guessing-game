@@ -1,9 +1,10 @@
 /*
  * The room screens (#65): the lobby, the room game screens around the Multiplayer game board, the standings
  * podium and the set summary. The board itself is RoomBoard.module.css; buttons, forms, the stage, answer
- * buttons and the reveal pieces come from Landing.module.css and SoloGame.module.css, so every screen looks the
- * same. Tokens only (app/globals.css). Only transform and opacity animate, with duration tokens, so "reduce
- * motion" (durations 0ms) turns it all off.
+ * buttons and the reveal pieces come from Landing.module.css and GameShared.module.css, so every screen looks the
+ * same. Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour
+ * transitions on hover/press are allowed (--duration-instant). Duration tokens only, so "reduce motion"
+ * (durations 0ms) turns it all off.
  */
 
 /* Text only screen readers hear, e.g. "shared rank". */
@@ -251,11 +252,14 @@
 /* The room result: verdict and points, the song, the score and "Tap to continue". The card is already the panel,
    so no second panel here. Rises in just after the answer marks, like the solo reveal. */
 .reveal {
+  composes: riseIn from "./GameShared.module.css";
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
-  animation: riseIn var(--duration-base) var(--ease-out) both;
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
   animation-delay: calc(var(--duration-base) / 3);
 }
 
@@ -314,13 +318,16 @@
 }
 
 .place {
+  composes: riseIn from "./GameShared.module.css";
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
   text-align: center;
-  animation: riseIn var(--duration-slow) var(--ease-out) both;
+  animation-duration: var(--duration-slow);
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
 }
 
 /* The blocks rise one after another: third, second, then the winner. */
@@ -406,14 +413,18 @@
 }
 
 .standingsRow {
+  composes: riseIn from "./GameShared.module.css";
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  /* The rank column fits a shared rank like "=25". */
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   min-height: 3rem;
   padding: var(--space-2);
   border-bottom: 1px solid var(--color-border);
-  animation: riseIn var(--duration-base) var(--ease-out) both;
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
   /* After the podium has mostly risen; at most 8 rows staggered, the rest come together (DESIGN.md). */
   animation-delay: calc(var(--duration-slow) / 2 + var(--stagger-step) * var(--row, 0));
 }
@@ -550,9 +561,12 @@
   text-align: center;
 }
 
-@keyframes riseIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
+/* 3-2-1 before a room round (the solo game shows it inside the stage). */
+.bigNumber {
+  font-family: var(--font-display);
+  font-size: var(--text-number);
+  line-height: var(--leading-number);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
 }

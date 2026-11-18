@@ -39,14 +39,15 @@ import {
 } from "@/lib/client/room-game";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
-import { standingsView } from "@/lib/client/standings-view";
+import { rankText, standingsView } from "@/lib/client/standings-view";
 import { useCoverColours } from "@/lib/client/useCoverColours";
-import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
+import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { QUESTION_LABELS } from "@/lib/game/modes";
 import { MAX_PLAYERS_BY_TYPE, totalRoundsOf } from "@/lib/game/room-settings";
 import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
+import GameStage from "./GameStage";
 import ArrowLeftIcon from "./icons/ArrowLeftIcon";
 import AwayIcon from "./icons/AwayIcon";
 import CheckIcon from "./icons/CheckIcon";
@@ -56,10 +57,9 @@ import RoomBoard from "./RoomBoard";
 import RoomDuel from "./RoomDuel";
 import { clearProblem, showError, showProblem } from "./messages";
 import SharePopup from "./SharePopup";
-import WaveCircle from "./WaveCircle";
 import styles from "./Landing.module.css";
 import room from "./Room.module.css";
-import game from "./SoloGame.module.css";
+import shared from "./GameShared.module.css";
 
 // How often the page asks the server for news (polling, decision 008).
 const POLL_MS = 1000;
@@ -434,7 +434,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   }
 
   return (
-    <div className={`${game.game} ${styles.cardWide}`}>
+    <div className={`${shared.game} ${styles.cardWide}`}>
       <GameScreen
         screen={screen}
         state={state}
@@ -454,10 +454,10 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         {clips.blocked && screen.kind === "round" && (
           <button
             type="button"
-            className={`${game.primary} ${game.wide}`}
+            className={`${shared.primary} ${shared.wide}`}
             onClick={() => clips.playFromTap(screen.number, screen.startsAt)}
           >
-            <PlayIcon className={game.inlineIcon} />
+            <PlayIcon className={shared.inlineIcon} />
             Tap to hear the music
           </button>
         )}
@@ -554,9 +554,9 @@ function GameScreen({
   switch (screen.kind) {
     case "get-ready":
       return (
-        <section className={game.center} role="status">
-          <p className={game.intro}>Get ready! Round {screen.number} starts in</p>
-          <p className={game.bigNumber}>{Math.max(1, screen.secondsToStart)}</p>
+        <section className={shared.center} role="status">
+          <p className={shared.intro}>Get ready! Round {screen.number} starts in</p>
+          <p className={room.bigNumber}>{Math.max(1, screen.secondsToStart)}</p>
         </section>
       );
 
@@ -579,14 +579,14 @@ function GameScreen({
         analyser,
       };
       return (
-        <section className={game.play}>
+        <section className={shared.play}>
           {roomLayout(state) === "duel" ? (
             <RoomDuel {...top} standings={state.standings} scores={duelScores} />
           ) : (
             <RoomBoard {...top} />
           )}
-          {screen.questionType && <h2 className={game.question}>{QUESTION_LABELS[screen.questionType]}</h2>}
-          <div className={game.options}>
+          {screen.questionType && <h2 className={shared.question}>{QUESTION_LABELS[screen.questionType]}</h2>}
+          <div className={shared.options}>
             {screen.options.map((title, index) => (
               <AnswerButton
                 key={index}
@@ -609,30 +609,30 @@ function GameScreen({
       const kind = screen.answer === null ? "timeout" : screen.correct ? "right" : "wrong";
       const verdict = { right: "Right!", wrong: "Wrong", timeout: "No answer" }[kind];
       return (
-        <section className={game.play}>
+        <section className={shared.play}>
           {/* The same circle as in the solo reveal; the clip keeps playing, and the circle takes the cover's colours. */}
-          <RoomStage analyser={analyser} colours={coverColours}>
+          <GameStage analyser={analyser} colours={coverColours}>
             {kind === "right" ? (
-              <CheckIcon className={`${game.discIcon} ${game.discRight}`} />
+              <CheckIcon className={`${shared.discIcon} ${shared.discRight}`} />
             ) : (
-              <CrossIcon className={`${game.discIcon} ${game.discWrong}`} />
+              <CrossIcon className={`${shared.discIcon} ${shared.discWrong}`} />
             )}
-          </RoomStage>
+          </GameStage>
           <div className={room.reveal} role="status">
-            <div className={game.verdictRow}>
-              <p className={game.verdictText} data-kind={kind}>
+            <div className={shared.verdictRow}>
+              <p className={shared.verdictText} data-kind={kind}>
                 {kind === "right" ? (
-                  <CheckIcon className={game.verdictIcon} />
+                  <CheckIcon className={shared.verdictIcon} />
                 ) : (
-                  <CrossIcon className={game.verdictIcon} />
+                  <CrossIcon className={shared.verdictIcon} />
                 )}
                 {verdict}
               </p>
-              <p className={game.earned}>
-                <span className={game.earnedNumber}>+{screen.points}</span> points
+              <p className={shared.earned}>
+                <span className={shared.earnedNumber}>+{screen.points}</span> points
               </p>
             </div>
-            <div className={game.song}>
+            <div className={shared.song}>
               {screen.song.artworkUrl && (
                 // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
                 // eslint-disable-next-line @next/next/no-img-element
@@ -647,9 +647,9 @@ function GameScreen({
                   }}
                 />
               )}
-              <div className={game.songText}>
-                <p className={game.title}>{screen.song.title}</p>
-                <p className={game.songMeta}>{screen.song.artist}</p>
+              <div className={shared.songText}>
+                <p className={shared.title}>{screen.song.title}</p>
+                <p className={shared.songMeta}>{screen.song.artist}</p>
                 {screen.song.storeUrl && (
                   <a href={screen.song.storeUrl} target="_blank" rel="noopener noreferrer">
                     Open in Apple Music
@@ -660,11 +660,11 @@ function GameScreen({
             <p className={room.total}>
               Score <NumberFlow value={screen.score} className={room.totalNumber} />
             </p>
-            <button type="button" className={game.secondary} onClick={() => onContinue(screen.number)}>
+            <button type="button" className={shared.secondary} onClick={() => onContinue(screen.number)}>
               Tap to continue
             </button>
           </div>
-          <div className={`${game.options} ${game.settled}`}>
+          <div className={`${shared.options} ${shared.settled}`}>
             {screen.options.map((title, index) => (
               <AnswerButton
                 key={index}
@@ -680,17 +680,17 @@ function GameScreen({
 
     case "next-starting":
       return (
-        <p className={game.message} role="status">
+        <p className={shared.message} role="status">
           Next round starting…
         </p>
       );
 
     case "set-summary":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Set {screen.set} – your songs</h2>
           <SummaryList songs={screen.songs} />
-          <button type="button" className={game.secondary} onClick={() => skip("summary")}>
+          <button type="button" className={shared.secondary} onClick={() => skip("summary")}>
             Tap to continue
           </button>
         </section>
@@ -698,10 +698,10 @@ function GameScreen({
 
     case "set-standings":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Standings after set {screen.set}</h2>
           <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
-          <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+          <button type="button" className={shared.secondary} onClick={() => skip("standings")}>
             Tap to continue
           </button>
         </section>
@@ -709,11 +709,11 @@ function GameScreen({
 
     case "final":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Final standings</h2>
           <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
           {closedRound !== null && (
-            <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+            <button type="button" className={shared.secondary} onClick={() => skip("standings")}>
               Tap to continue
             </button>
           )}
@@ -723,7 +723,7 @@ function GameScreen({
 
     case "final-summary":
       return (
-        <section className={game.center}>
+        <section className={shared.center}>
           <h2 className={room.heading}>Your songs</h2>
           <SummaryList songs={screen.songs} />
           <p className={room.total}>
@@ -737,7 +737,7 @@ function GameScreen({
                 <>
                   <button
                     type="button"
-                    className={`${game.primary} ${game.wide}`}
+                    className={`${shared.primary} ${shared.wide}`}
                     onClick={onPlayAgain}
                     disabled={sending}
                   >
@@ -752,26 +752,6 @@ function GameScreen({
         </section>
       );
   }
-}
-
-// The stage of the room result: the wave circle (behind) and a solid disc in front, the same as the solo stage.
-// colours: the circle's colours; undefined keeps the app's own colours. The album cover's colours (#64) are only
-// passed here, on the result screen, once the answer is revealed (CLAUDE.md rule 5).
-function RoomStage({
-  analyser,
-  colours,
-  children,
-}: {
-  analyser: AnalyserNode | null;
-  colours?: readonly string[];
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={game.stage}>
-      <WaveCircle analyser={analyser} colours={colours} className={game.wave} />
-      <div className={game.disc}>{children}</div>
-    </div>
-  );
 }
 
 const MARK_LABEL = { none: null, chosen: "Locked in", correct: "Right answer", wrong: "Your answer" } as const;
@@ -791,18 +771,18 @@ function AnswerButton({
   disabled: boolean;
   onClick?: () => void;
 }) {
-  const markClass = { none: "", chosen: game.chosen, correct: game.correct, wrong: game.wrong }[mark];
+  const markClass = { none: "", chosen: shared.chosen, correct: shared.correct, wrong: shared.wrong }[mark];
   return (
     <button
       type="button"
-      className={`${game.option} ${markClass}`}
+      className={`${shared.option} ${markClass}`}
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
     >
-      <span className={game.answerTitle}>{title}</span>
+      <span className={shared.answerTitle}>{title}</span>
       {mark !== "none" && (
-        <span className={game.mark}>
+        <span className={shared.mark}>
           {mark === "correct" && <CheckIcon />}
           {mark === "wrong" && <CrossIcon />}
           {MARK_LABEL[mark]}
@@ -824,7 +804,8 @@ function RollingTotal({ value, className }: { value: number; className?: string 
 }
 
 // The standings (#65): the top three on a podium (winner in the middle; equal points = same rank and same
-// height), everyone else in a list under it. The viewer's own nickname is highlighted with "(you)".
+// height), everyone else in a list under it. A shared rank shows as "=2" on the podium and in the list alike, so a
+// tied player in the list never looks lower-ranked. The viewer's own nickname is highlighted with "(you)".
 function Standings({
   standings,
   me,
@@ -852,8 +833,7 @@ function Standings({
             {place.isMe && <span className={room.you}>(you)</span>}
             <RollingTotal value={place.score} className={room.placeScore} />
             <span className={room.block}>
-              <span aria-hidden="true">{place.rank}</span>
-              <span className={room.srOnly}>{rankLabel(place.rank, place.shared)}</span>
+              <RankMark rank={place.rank} shared={place.shared} />
             </span>
           </li>
         ))}
@@ -868,8 +848,7 @@ function Standings({
               style={{ "--row": Math.min(index, 8) } as React.CSSProperties}
             >
               <span className={room.rank}>
-                <span aria-hidden="true">{row.rank}</span>
-                <span className={room.srOnly}>{rankLabel(row.rank, row.shared)}</span>
+                <RankMark rank={row.rank} shared={row.shared} />
               </span>
               <span className={room.who}>
                 <Avatar id={avatars?.[row.nickname]} />
@@ -885,8 +864,15 @@ function Standings({
   );
 }
 
-function rankLabel(rank: number, shared: boolean): string {
-  return shared ? `Rank ${rank}, shared` : `Rank ${rank}`;
+// A rank as it shows ("=2" when shared, rankText) and as screen readers hear it ("Rank 2, shared").
+function RankMark({ rank, shared }: { rank: number; shared: boolean }) {
+  const text = rankText(rank, shared);
+  return (
+    <>
+      <span aria-hidden="true">{text.shown}</span>
+      <span className={room.srOnly}>{text.label}</span>
+    </>
+  );
 }
 
 // The set summary: one row per song with right/wrong (icon and word), the song with its iTunes link under it, and
@@ -955,40 +941,37 @@ function useRoomClips(
   const wantedRef = useRef<{ number: number; startsAt: number } | null>(null);
   const [blocked, setBlocked] = useState(false); // the browser refused to start a clip without a tap
   const [problem, setProblem] = useState("");
-  const waveAudioRef = useRef<WaveAudio | null>(null);
-  // The analyser once a clip is routed through it; null = the circle idles.
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  // The wave circle's sound analyser (lib/client/useWaveAudio.ts); analyser = null while the circle idles.
+  const { analyser, unlock: unlockWave, resume: resumeWave, prepare: prepareWave, attach: attachWave } = useWaveAudio();
 
   const players = useCallback((count: number) => {
     while (playersRef.current.length < count) {
       const player = new Audio();
       player.preload = "auto";
-      waveAudioRef.current?.prepare(player); // before its first src (does nothing before the first tap)
+      prepareWave(player); // before its first src (does nothing before the first tap)
       playersRef.current.push(player);
     }
     return playersRef.current;
-  }, []);
+  }, [prepareWave]);
 
   // Called inside a tap (Join, Start now): plays a silent sound on every player so later clips may start alone.
   // Also starts the sound analyser for the wave circle, which phones allow only in a tap.
   const unlock = useCallback(() => {
-    const waveAudio = (waveAudioRef.current ??= createWaveAudio());
-    waveAudio.unlock();
+    unlockWave();
     for (const player of players(MAX_ROUNDS)) {
       if (player.src && player.src !== SILENT_SOUND) continue;
-      waveAudio.prepare(player); // before the next src, or the analyser reads only silence
+      prepareWave(player); // before the next src, or the analyser reads only silence
       player.src = SILENT_SOUND;
       player.play().catch(() => {});
     }
-  }, [players]);
+  }, [players, unlockWave, prepareWave]);
 
   // Start a loaded clip; route it through the analyser first when the sound context runs (otherwise it plays as
   // before and the circle idles).
   const start = useCallback((player: HTMLAudioElement, startsAt: number) => {
-    const waveAudio = waveAudioRef.current;
-    if (waveAudio?.attach(player)) setAnalyser(waveAudio.analyser());
+    attachWave(player);
     startClip(player, startsAt, setBlocked);
-  }, []);
+  }, [attachWave]);
 
   // Load every clip in advance, one after another, like the solo game (load → try once more → swap the song →
   // give up). After a swap only the changed clip loads again, so the clip that is playing is not interrupted.
@@ -1038,24 +1021,18 @@ function useRoomClips(
   // "Tap to hear the music": the tap may also wake the sound analyser.
   const playFromTap = useCallback(
     (number: number, startsAt: number) => {
-      waveAudioRef.current?.unlock();
+      resumeWave();
       play(number, startsAt);
     },
-    [play],
+    [play, resumeWave],
   );
 
   const stopAll = useCallback(() => {
     wantedRef.current = null;
     playersRef.current.forEach((player) => player.pause());
   }, []);
-  // No music after leaving the page, and no sound context left open.
-  useEffect(
-    () => () => {
-      stopAll();
-      waveAudioRef.current?.close();
-    },
-    [stopAll],
-  );
+  // No music after leaving the page (useWaveAudio closes the sound context itself).
+  useEffect(() => () => stopAll(), [stopAll]);
 
   return { unlock, play, playFromTap, stopAll, blocked, problem, analyser };
 }

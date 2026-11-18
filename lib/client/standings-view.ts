@@ -3,7 +3,7 @@
 // Everyone else is a list under it. Ranks come from the server: equal points share a rank, and here they also
 // share a podium step and are marked as shared, so the screen can say so. The podium stays in rank order (that
 // is the order screen readers read it in); `column` only says where each block stands.
-// components/Room.tsx turns this into blocks and rows.
+// rankText says how each rank reads. components/Room.tsx turns this into blocks and rows.
 import type { Standing } from "./room-api";
 
 export type StandingRow = Standing & {
@@ -33,4 +33,10 @@ export function standingsView(standings: Standing[], me: string): StandingsView 
     column: COLUMNS[index],
   }));
   return { podium, rest: rows.slice(PODIUM_SIZE) };
+}
+
+// What a rank says. On screen a shared rank gets "=" in front ("=2"), the way sports tables mark a tie, so a tied
+// player in the list never looks lower-ranked than the tied players on the podium. Screen readers hear the label.
+export function rankText(rank: number, shared: boolean): { shown: string; label: string } {
+  return shared ? { shown: `=${rank}`, label: `Rank ${rank}, shared` } : { shown: `${rank}`, label: `Rank ${rank}` };
 }

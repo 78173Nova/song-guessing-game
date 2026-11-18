@@ -1,5 +1,5 @@
 // Connects the game's audio players to the browser's sound analyser, so the wave circle can follow the music.
-// No React here; the screens call it at the right moments:
+// No React here; the game screens call it through useWaveAudio (lib/client/useWaveAudio.ts) at the right moments:
 // - unlock(): inside the Start tap (phones only allow sound to start from a tap)
 // - prepare(player): right after creating a player, before its first `src`
 // - attach(player): when its clip starts

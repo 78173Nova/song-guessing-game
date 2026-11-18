@@ -729,3 +729,26 @@ image. On the board the answered/away badges come after the nickname (a screen r
 player who is both gets the second badge on the other corner. The solo game keeps its errors in the page (start
 screen and error screen) instead of short messages: each one belongs to the button right under it ("Start game",
 "Try again") and should not disappear after a few seconds.
+
+Update 18 Nov 2026 (#57, review): the motion rule, said precisely. Short colour transitions on hover/press states
+are allowed (`--duration-instant`, as the token table already says: "hover colour"); anything that moves uses only
+`transform` and `opacity` (and the wave circle on its canvas). This matches the CSS: the landing and form buttons,
+inputs, tiles and avatar options fade their border or background colour over `--duration-instant`; the game and
+room buttons change colour at once and only their press scale moves.
+
+Update 18 Nov 2026 (#57, review): the solo and room games share their styles through
+`components/GameShared.module.css` (buttons, the stage, the time bar, answer buttons, the reveal and the `pop` and
+`riseIn` keyframes, each defined once) instead of the room importing `SoloGame.module.css`. One stage component
+(`components/GameStage.tsx`) and one time bar (`components/TimeBar.tsx`) are used by the solo round, the room result,
+the game board and the duel; each screen only sets the time bar's width. The wave circle's audio wiring is one hook,
+`useWaveAudio` (`lib/client/useWaveAudio.ts`). Nothing looks different.
+
+Update 18 Nov 2026 (#57, review): this replaces the end of the #67 note. The solo game's errors (the start refused,
+server or network errors, a clip that would not load) now show as short messages (`showError`, #62), the same style as
+every other error that is not tied to one field. The button that recovers stays in the page: "Start game" on the start
+screen and "Try again" on the error screen, which says "The game stopped." in muted text.
+
+Update 18 Nov 2026 (#57, review): a shared rank in the standings is visible on screen, not only to screen readers: it
+shows as "=2" (`rankText`, `lib/client/standings-view.ts`) on the podium block and in the list row alike, so when more
+than three players share podium ranks the tied player in the list shows the same "=1" and never looks lower-ranked.
+The list's rank column is 2.75rem wide so "=25" fits.

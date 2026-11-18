@@ -17,9 +17,9 @@ import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
-import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
+import { optionMark, verdictOf, type OptionMark } from "@/lib/client/solo-view";
 import { useCoverColours } from "@/lib/client/useCoverColours";
-import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
+import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
@@ -27,8 +27,11 @@ import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
 import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
+import { showError } from "./messages";
+import GameStage from "./GameStage";
+import shared from "./GameShared.module.css";
 import styles from "./SoloGame.module.css";
-import WaveCircle from "./WaveCircle";
+import TimeBar from "./TimeBar";
 
 // A tiny silent sound. Playing it once on each player during the Start tap "unlocks" the players on
 // phones, so the clips may start later without another tap.
@@ -49,9 +52,10 @@ export default function SoloGame() {
   // One audio player per round, created during the Start tap.
   const playersRef = useRef<HTMLAudioElement[]>([]);
   // Connects the players to the sound analyser for the wave circle (created in the first Start tap).
-  const waveAudioRef = useRef<WaveAudio | null>(null);
-  // The analyser once a clip is routed through it; null = the circle idles.
-  const [waveAnalyser, setWaveAnalyser] = useState<AnalyserNode | null>(null);
+  // waveAnalyser: the analyser once a clip is routed through it; null = the circle idles.
+  const wave = useWaveAudio();
+  const waveAnalyser = wave.analyser;
+  const attachWave = wave.attach;
   // "gameId:round" an answer was already sent for – stops a click and the timer both sending one.
   const answeredRef = useRef<string | null>(null);
   // "gameId:round" whose start was already requested – stops a round being requested twice.
@@ -135,16 +139,14 @@ export default function SoloGame() {
     pauseAll();
     // Still inside the tap: start the sound analyser (phones allow this only in a tap) and let go of the
     // previous game's players.
-    const waveAudio = (waveAudioRef.current ??= createWaveAudio());
-    waveAudio.detachAll();
-    waveAudio.unlock();
-    setWaveAnalyser(null);
+    wave.detachAll();
+    wave.unlock();
     // Still inside the tap: create and unlock one player per round.
     const players = Array.from({ length: ROUNDS_PER_GAME }, (_, index) => {
       const player = new Audio();
       player.preload = "auto";
       player.addEventListener("error", () => handlePlayerError(player, index));
-      waveAudio.prepare(player); // before the first src, or the analyser reads only silence
+      wave.prepare(player); // before the first src, or the analyser reads only silence
       player.src = SILENT_SOUND;
       player.play().catch(() => {});
       return player;
@@ -189,7 +191,7 @@ export default function SoloGame() {
 
   function handleTapToStart() {
     if (state.screen !== "tap-to-start") return;
-    waveAudioRef.current?.unlock();
+    wave.resume();
     playersRef.current[state.roundNumber - 1]?.play().catch(() => {});
     dispatch({ type: "tapped" });
   }
@@ -229,8 +231,7 @@ export default function SoloGame() {
         loadedRoundRef.current = { key: startingKey, round };
       }
       // Route the clip through the analyser when the sound context runs; otherwise it plays as before.
-      const waveAudio = waveAudioRef.current;
-      if (waveAudio?.attach(player)) setWaveAnalyser(waveAudio.analyser());
+      attachWave(player);
       if (player.paused && !player.error) {
         try {
           player.currentTime = 0;
@@ -249,7 +250,7 @@ export default function SoloGame() {
       // A clip that was given up on: the round is skipped right away.
       if (player.error) sendAnswer(gameId, roundNumber, "skip");
     })();
-  }, [startingKey, sendAnswer]);
+  }, [startingKey, sendAnswer, attachWave]);
 
   // The 15-second countdown: ticks while the round is open, and sends "timeout" when it reaches 0.
   const roundKey = state.screen === "round" ? `${state.gameId}:${state.round.round}` : null;
@@ -265,17 +266,12 @@ export default function SoloGame() {
     return () => clearInterval(timer);
   }, [roundKey, pending, roundStartedAt, sendAnswer]);
 
-  // No music on the start, results and error screens, or after leaving the page.
+  // No music on the start, results and error screens, or after leaving the page (useWaveAudio closes the sound
+  // context itself).
   useEffect(() => {
     if (state.screen === "start" || state.screen === "results" || state.screen === "error") pauseAll();
   }, [state.screen]);
-  useEffect(
-    () => () => {
-      pauseAll();
-      waveAudioRef.current?.close();
-    },
-    [],
-  );
+  useEffect(() => () => pauseAll(), []);
 
   // What the current round asks. The server sends it with each round; without it (older data),
   // title/artist/year games fall back to the chosen mode and mixed games show no question.
@@ -288,11 +284,20 @@ export default function SoloGame() {
   // Outside the reveal this is undefined, so the circle goes back to the app colours before the next round.
   const coverColours = useCoverColours(state.screen === "reveal" ? state.result.song.artworkUrl : null);
 
+  // Errors not tied to one form field (the server refused the start, the server or network failed, a clip would not
+  // load) show as short messages, the same as everywhere else (#62, user story 26). The button that recovers stays
+  // in the page: "Start game" on the start screen, "Try again" on the error screen.
+  const errorMessage =
+    state.screen === "error" ? state.message : state.screen === "start" ? (state.message ?? null) : null;
+  useEffect(() => {
+    if (errorMessage !== null) showError(errorMessage);
+  }, [errorMessage]);
+
   return (
-    <div className={styles.game}>
+    <div className={shared.game}>
       {state.screen === "start" && (
-        <section className={styles.center}>
-          <p className={styles.intro}>
+        <section className={shared.center}>
+          <p className={shared.intro}>
             Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
           <fieldset className={styles.modes}>
@@ -301,7 +306,7 @@ export default function SoloGame() {
               <button
                 key={m}
                 type="button"
-                className={m === mode ? `${styles.option} ${styles.chosen}` : styles.option}
+                className={m === mode ? `${shared.option} ${shared.chosen}` : shared.option}
                 aria-pressed={m === mode}
                 onClick={() => setMode(m)}
               >
@@ -339,13 +344,7 @@ export default function SoloGame() {
               </select>
             </label>
           </div>
-          {state.message && (
-            <p className={styles.error} role="alert">
-              <CrossIcon className={styles.inlineIcon} />
-              {state.message}
-            </p>
-          )}
-          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
+          <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Start game
           </button>
         </section>
@@ -355,45 +354,45 @@ export default function SoloGame() {
           circle sits) and what belongs under it. The stage stays in place, so the screens follow each
           other calmly instead of jumping. */}
       {inPlay(state) && (
-        <section className={styles.play}>
+        <section className={shared.play}>
           <StatusLine state={state} />
           {/* The circle follows the music only while a clip plays (round and reveal); otherwise it idles. */}
-          <Stage
+          <GameStage
             analyser={state.screen === "round" || state.screen === "reveal" ? waveAnalyser : null}
             colours={coverColours}
           >
             <StageCentre state={state} now={now} getReadyAt={getReadyAt} roundStartedAt={roundStartedAt} />
-          </Stage>
+          </GameStage>
 
           {(state.screen === "creating" || state.screen === "first-clip") && (
-            <p className={styles.message} role="status">
+            <p className={shared.message} role="status">
               Loading first song…
             </p>
           )}
 
           {state.screen === "get-ready" && (
-            <p className={styles.message} role="status">
+            <p className={shared.message} role="status">
               Get ready!
             </p>
           )}
 
           {state.screen === "starting" && (
-            <p className={styles.message} role="status">
+            <p className={shared.message} role="status">
               Round {state.roundNumber}…
             </p>
           )}
 
           {state.screen === "clip-loading" && (
-            <p className={styles.message} role="status">
+            <p className={shared.message} role="status">
               Loading next song…
             </p>
           )}
 
           {state.screen === "tap-to-start" && (
-            <div className={styles.message}>
+            <div className={shared.message}>
               <p>Your browser needs one more tap to play the sound.</p>
-              <button className={`${styles.primary} ${styles.wide}`} onClick={handleTapToStart}>
-                <PlayIcon className={styles.inlineIcon} />
+              <button className={`${shared.primary} ${shared.wide}`} onClick={handleTapToStart}>
+                <PlayIcon className={shared.inlineIcon} />
                 Tap to start
               </button>
             </div>
@@ -402,6 +401,7 @@ export default function SoloGame() {
           {state.screen === "round" && (
             <TimeBar
               left={state.pending === null ? ROUND_SECONDS - (now - roundStartedAt) / 1000 : null}
+              className={styles.timeBar}
             />
           )}
 
@@ -409,11 +409,11 @@ export default function SoloGame() {
 
           {/* The server says what each round asks – in mixed games it changes from round to round. */}
           {state.screen === "round" && questionType && (
-            <h2 className={styles.question}>{QUESTION_LABELS[questionType]}</h2>
+            <h2 className={shared.question}>{QUESTION_LABELS[questionType]}</h2>
           )}
 
           {(state.screen === "round" || state.screen === "reveal") && (
-            <div className={state.screen === "reveal" ? `${styles.options} ${styles.settled}` : styles.options}>
+            <div className={state.screen === "reveal" ? `${shared.options} ${shared.settled}` : shared.options}>
               {state.round.options.map((title, index) => (
                 <AnswerButton
                   key={index}
@@ -429,7 +429,7 @@ export default function SoloGame() {
       )}
 
       {state.screen === "results" && (
-        <section className={styles.center}>
+        <section className={shared.center}>
           <h2 className={styles.finalHeading}>
             Your score
             <span className={styles.finalScore}>{state.score}</span>
@@ -439,9 +439,9 @@ export default function SoloGame() {
               <li key={played.round}>
                 <span className={styles.outcome} data-outcome={played.outcome}>
                   {played.outcome === "correct" ? (
-                    <CheckIcon className={styles.inlineIcon} />
+                    <CheckIcon className={shared.inlineIcon} />
                   ) : (
-                    <CrossIcon className={styles.inlineIcon} />
+                    <CrossIcon className={shared.inlineIcon} />
                   )}
                   {OUTCOME_WORD[played.outcome]}
                 </span>
@@ -452,23 +452,21 @@ export default function SoloGame() {
               </li>
             ))}
           </ol>
-          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
+          <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Play again
           </button>
           {/* Back to the start screen: mode, genre and decade stay as chosen, so they are preselected. */}
-          <button className={styles.secondary} onClick={() => dispatch({ type: "reset" })}>
+          <button className={shared.secondary} onClick={() => dispatch({ type: "reset" })}>
             Change settings
           </button>
         </section>
       )}
 
+      {/* The error itself shows as a short message (showError above); the page keeps the button that recovers. */}
       {state.screen === "error" && (
-        <section className={styles.center} role="alert">
-          <p className={styles.errorBox}>
-            <CrossIcon className={styles.inlineIcon} />
-            {state.message}
-          </p>
-          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
+        <section className={shared.center}>
+          <p className={shared.intro}>The game stopped.</p>
+          <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Try again
           </button>
         </section>
@@ -517,26 +515,6 @@ function StatusLine({ state }: { state: InPlay }) {
   );
 }
 
-// The stage: a fixed square in the middle of the round. The wave circle fills it, behind the disc. During a round
-// it uses the app's own colours only (no song data, CLAUDE.md rule 5); on reveal it blends into the cover's
-// colours. The disc holds the seconds (or 3-2-1).
-function Stage({
-  analyser,
-  colours,
-  children,
-}: {
-  analyser: AnalyserNode | null;
-  colours: readonly string[] | undefined;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={styles.stage}>
-      <WaveCircle analyser={analyser} colours={colours} className={styles.wave} />
-      <div className={styles.disc}>{children}</div>
-    </div>
-  );
-}
-
 // What sits inside the disc on each screen.
 function StageCentre({
   state,
@@ -553,7 +531,7 @@ function StageCentre({
     const left = Math.max(1, Math.ceil(GET_READY_SECONDS - (now - getReadyAt) / 1000));
     return <NumberFlow value={left} className={`${styles.number} ${styles.seconds}`} aria-hidden="true" />;
   }
-  if (state.screen === "tap-to-start") return <PlayIcon className={styles.discIcon} />;
+  if (state.screen === "tap-to-start") return <PlayIcon className={shared.discIcon} />;
   if (state.screen === "round") {
     const left = state.pending === null ? secondsLeft(now - roundStartedAt) : null;
     return (
@@ -575,21 +553,12 @@ function StageCentre({
   if (state.screen === "reveal") {
     const { kind } = verdictOf(state.chosen, state.result.correct);
     return kind === "right" ? (
-      <CheckIcon className={`${styles.discIcon} ${styles.discRight}`} />
+      <CheckIcon className={`${shared.discIcon} ${shared.discRight}`} />
     ) : (
-      <CrossIcon className={`${styles.discIcon} ${styles.discWrong}`} />
+      <CrossIcon className={`${shared.discIcon} ${shared.discWrong}`} />
     );
   }
   return null;
-}
-
-// A thin bar under the stage that empties over the 15 seconds. It shrinks with transform (not width).
-function TimeBar({ left }: { left: number | null }) {
-  return (
-    <div className={styles.timeTrack} aria-hidden="true">
-      <div className={styles.timeFill} style={{ transform: `scaleX(${timeLeftFraction(left)})` }} />
-    </div>
-  );
 }
 
 const MARK_LABEL = { none: null, chosen: "Locked in", correct: "Right answer", wrong: "Your answer" } as const;
@@ -607,12 +576,12 @@ function AnswerButton({
   disabled: boolean;
   onClick: () => void;
 }) {
-  const markClass = { none: "", chosen: styles.chosen, correct: styles.correct, wrong: styles.wrong }[mark];
+  const markClass = { none: "", chosen: shared.chosen, correct: shared.correct, wrong: shared.wrong }[mark];
   return (
-    <button className={`${styles.option} ${styles.answer} ${markClass}`} disabled={disabled} onClick={onClick}>
-      <span className={styles.answerTitle}>{title}</span>
+    <button className={`${shared.option} ${markClass}`} disabled={disabled} onClick={onClick}>
+      <span className={shared.answerTitle}>{title}</span>
       {mark !== "none" && (
-        <span className={styles.mark}>
+        <span className={shared.mark}>
           {mark === "correct" && <CheckIcon />}
           {mark === "wrong" && <CrossIcon />}
           {MARK_LABEL[mark]}
@@ -629,20 +598,20 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
 
   return (
     <div className={styles.revealPanel} role="status">
-      <div className={styles.verdictRow}>
-        <p className={styles.verdictText} data-kind={verdict.kind}>
+      <div className={shared.verdictRow}>
+        <p className={shared.verdictText} data-kind={verdict.kind}>
           {verdict.kind === "right" ? (
-            <CheckIcon className={styles.verdictIcon} />
+            <CheckIcon className={shared.verdictIcon} />
           ) : (
-            <CrossIcon className={styles.verdictIcon} />
+            <CrossIcon className={shared.verdictIcon} />
           )}
           {verdict.text}
         </p>
-        <p className={styles.earned}>
-          <span className={styles.earnedNumber}>+{result.points}</span> points
+        <p className={shared.earned}>
+          <span className={shared.earnedNumber}>+{result.points}</span> points
         </p>
       </div>
-      <div className={styles.song}>
+      <div className={shared.song}>
         {result.song.artworkUrl && (
           // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
           // eslint-disable-next-line @next/next/no-img-element
@@ -657,9 +626,9 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
             }}
           />
         )}
-        <div className={styles.songText}>
-          <p className={styles.title}>{result.song.title}</p>
-          <p className={styles.songMeta}>
+        <div className={shared.songText}>
+          <p className={shared.title}>{result.song.title}</p>
+          <p className={shared.songMeta}>
             {result.song.artist}
             {result.song.year !== undefined && ` · ${result.song.year}`}
           </p>
@@ -670,7 +639,7 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
           )}
         </div>
       </div>
-      <button className={`${styles.primary} ${styles.wide}`} onClick={onNext}>
+      <button className={`${shared.primary} ${shared.wide}`} onClick={onNext}>
         {isLast ? "See results" : "Next song"}
       </button>
     </div>

@@ -14,6 +14,7 @@
 // Performance (animation-performance): the drawing runs on requestAnimationFrame only while the canvas is on
 // screen and the tab is visible, never through React state, and stops entirely when nothing moves.
 import { useEffect, useRef } from "react";
+import type { CoverColours } from "@/lib/client/cover-colours";
 import { blendColours, idlePulse, waveOutline } from "@/lib/client/wave-shape";
 import styles from "./WaveCircle.module.css";
 
@@ -23,7 +24,7 @@ const FILL_ALPHA = 0.18; // a light wash of the same colours inside the outline
 
 type Props = {
   analyser?: AnalyserNode | null;
-  colours?: readonly string[];
+  colours?: CoverColours;
   className?: string;
 };
 
