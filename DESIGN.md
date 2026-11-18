@@ -686,3 +686,9 @@ keeps Vaul's own timing (500ms, its iOS curve), because Vaul uses the same curve
 dialog fades and grows from 0.96 over `--duration-fast`. Under reduce motion the sheet and dialog appear without
 moving. Short messages sit bottom-right on laptops and across the bottom on phones (Sonner switches below 600px),
 above the pop-up, with a check or cross icon.
+
+Update 18 Nov 2026 (#63): the wave circle replaces the still ring in the solo stage. The canvas fills the stage
+(behind the disc); the outline is a light 18 % wash of the gradient with a 3px stroke on top. It follows the music
+during the round and the reveal, and idles (±3 % pulse) while loading or when no analyser is available. The time
+bar stays under the stage (not moved onto the circle). Analyser: fftSize 256 (128 bands), smoothing 0.8; the ring
+shows the lower 64 bands, mirrored left/right, with a small boost for higher bands so not only the top moves.

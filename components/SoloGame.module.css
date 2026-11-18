@@ -191,7 +191,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The stage: a fixed square where the wave circle (#63) is drawn. Base radius 34 %, disc 26 % (DESIGN.md). */
+/* The stage: a fixed square where the wave circle is drawn. Base radius 34 %, disc 26 % (DESIGN.md). */
 .stage {
   position: relative;
   width: 220px;
@@ -200,19 +200,11 @@
   flex-shrink: 0;
 }
 
-/* Placeholder ring in the wave colours until the canvas replaces it. The mask only cuts out the middle
-   (black/transparent are mask values here, not colours on screen). */
-.ring {
+/* The wave circle's canvas fills the stage, behind the disc. Its outline stays between 34 % and 48 % of the
+   stage, so it never reaches the answer buttons below. */
+.wave {
   position: absolute;
-  inset: 16%;
-  border-radius: var(--radius-full);
-  background: conic-gradient(
-    var(--color-wave-blue),
-    var(--color-wave-cyan),
-    var(--color-wave-violet),
-    var(--color-wave-blue)
-  );
-  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), black calc(100% - 3px));
+  inset: 0;
 }
 
 .disc {

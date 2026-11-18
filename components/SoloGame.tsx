@@ -18,6 +18,7 @@ import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
+import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
@@ -26,6 +27,7 @@ import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
 import styles from "./SoloGame.module.css";
+import WaveCircle from "./WaveCircle";
 
 // A tiny silent sound. Playing it once on each player during the Start tap "unlocks" the players on
 // phones, so the clips may start later without another tap.
@@ -45,6 +47,10 @@ export default function SoloGame() {
   });
   // One audio player per round, created during the Start tap.
   const playersRef = useRef<HTMLAudioElement[]>([]);
+  // Connects the players to the sound analyser for the wave circle (created in the first Start tap).
+  const waveAudioRef = useRef<WaveAudio | null>(null);
+  // The analyser once a clip is routed through it; null = the circle idles.
+  const [waveAnalyser, setWaveAnalyser] = useState<AnalyserNode | null>(null);
   // "gameId:round" an answer was already sent for – stops a click and the timer both sending one.
   const answeredRef = useRef<string | null>(null);
   // "gameId:round" whose start was already requested – stops a round being requested twice.
@@ -126,11 +132,18 @@ export default function SoloGame() {
       return;
     }
     pauseAll();
+    // Still inside the tap: start the sound analyser (phones allow this only in a tap) and let go of the
+    // previous game's players.
+    const waveAudio = (waveAudioRef.current ??= createWaveAudio());
+    waveAudio.detachAll();
+    waveAudio.unlock();
+    setWaveAnalyser(null);
     // Still inside the tap: create and unlock one player per round.
     const players = Array.from({ length: ROUNDS_PER_GAME }, (_, index) => {
       const player = new Audio();
       player.preload = "auto";
       player.addEventListener("error", () => handlePlayerError(player, index));
+      waveAudio.prepare(player); // before the first src, or the analyser reads only silence
       player.src = SILENT_SOUND;
       player.play().catch(() => {});
       return player;
@@ -175,6 +188,7 @@ export default function SoloGame() {
 
   function handleTapToStart() {
     if (state.screen !== "tap-to-start") return;
+    waveAudioRef.current?.unlock();
     playersRef.current[state.roundNumber - 1]?.play().catch(() => {});
     dispatch({ type: "tapped" });
   }
@@ -213,6 +227,9 @@ export default function SoloGame() {
         round = next.data;
         loadedRoundRef.current = { key: startingKey, round };
       }
+      // Route the clip through the analyser when the sound context runs; otherwise it plays as before.
+      const waveAudio = waveAudioRef.current;
+      if (waveAudio?.attach(player)) setWaveAnalyser(waveAudio.analyser());
       if (player.paused && !player.error) {
         try {
           player.currentTime = 0;
@@ -251,7 +268,13 @@ export default function SoloGame() {
   useEffect(() => {
     if (state.screen === "start" || state.screen === "results" || state.screen === "error") pauseAll();
   }, [state.screen]);
-  useEffect(() => () => pauseAll(), []);
+  useEffect(
+    () => () => {
+      pauseAll();
+      waveAudioRef.current?.close();
+    },
+    [],
+  );
 
   // What the current round asks. The server sends it with each round; without it (older data),
   // title/artist/year games fall back to the chosen mode and mixed games show no question.
@@ -324,12 +347,13 @@ export default function SoloGame() {
       )}
 
       {/* Every screen from loading to the reveal shares one frame: status line, the stage (where the wave
-          circle sits, #63) and what belongs under it. The stage stays in place, so the screens follow each
+          circle sits) and what belongs under it. The stage stays in place, so the screens follow each
           other calmly instead of jumping. */}
       {inPlay(state) && (
         <section className={styles.play}>
           <StatusLine state={state} />
-          <Stage>
+          {/* The circle follows the music only while a clip plays (round and reveal); otherwise it idles. */}
+          <Stage analyser={state.screen === "round" || state.screen === "reveal" ? waveAnalyser : null}>
             <StageCentre state={state} now={now} getReadyAt={getReadyAt} roundStartedAt={roundStartedAt} />
           </Stage>
 
@@ -485,13 +509,12 @@ function StatusLine({ state }: { state: InPlay }) {
   );
 }
 
-// The stage: a fixed square in the middle of the round. The wave circle (#63) goes here, behind the disc;
-// until then a still ring in the wave colours marks its place. The disc holds the seconds (or 3-2-1).
-function Stage({ children }: { children: React.ReactNode }) {
+// The stage: a fixed square in the middle of the round. The wave circle fills it, behind the disc; it uses the
+// app's own colours only (no song data during a round, CLAUDE.md rule 5). The disc holds the seconds (or 3-2-1).
+function Stage({ analyser, children }: { analyser: AnalyserNode | null; children: React.ReactNode }) {
   return (
     <div className={styles.stage}>
-      {/* Wave circle slot (#63): put the canvas here. It fills the stage; the disc stays on top. */}
-      <div className={styles.ring} aria-hidden="true" />
+      <WaveCircle analyser={analyser} className={styles.wave} />
       <div className={styles.disc}>{children}</div>
     </div>
   );

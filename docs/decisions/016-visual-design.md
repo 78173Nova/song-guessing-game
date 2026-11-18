@@ -88,3 +88,13 @@ code sits on a new `--color-qr-bg` token (white in both modes) with a white fram
 solo game's errors still show in the page (its files were being restyled in #61 at the same time); a later
 ticket can move them to `showError`. `npm audit --omit=dev` reports 0 vulnerabilities; the full `npm audit` still
 reports the 16 dev-tooling findings described under #61, none from these two packages.
+
+Update 18 Nov 2026 (#63): the wave circle is in the solo round, built by hand with no package:
+`lib/client/wave-shape.ts` (pure: frequency frame → 96 outline points, idle pulse, colour blend; tested),
+`lib/client/wave-audio.ts` (connects the round's audio players to one analyser) and `components/WaveCircle.tsx`
+(the canvas; also has an idle mode without analyser for the landing page and a still mode for reduce motion;
+colours can be passed in for the reveal, #64). The players now ask for cross-origin access (`crossOrigin =
+"anonymous"`), which the analyser needs. Limit: if Apple's clip server ever stopped sending the cross-origin
+header, the clips would fail to load and the rounds would be skipped; then `prepare()` in `wave-audio.ts` is the
+one line to remove, and the circle idles. A clip is routed through the analyser only when the sound context is
+already running, so the music never goes silent because of the circle.
