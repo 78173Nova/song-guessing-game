@@ -20,15 +20,6 @@
   text-align: left;
 }
 
-/* The line above "Start game": how many songs match (team feedback 18 Nov, point 8). */
-.filterNote {
-  width: 100%;
-  max-width: var(--width-form);
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
 /* Too few songs, or the chosen mode cannot start: the form error style (cross icon and danger colour, never
    colour alone), next to the settings it is about. */
 .filterProblem {

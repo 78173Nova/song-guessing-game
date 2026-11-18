@@ -110,8 +110,8 @@ export default function SoloGame() {
       current = false;
     };
   }, [genre, decade]);
-  // The line above "Start game", and why the chosen mode cannot start (it stays chosen, greyed out).
-  const line = matchLine(matching);
+  // The warning when too few songs match, and why the chosen mode cannot start (it stays chosen, greyed out).
+  const tooFew = matchLine(matching);
   const problem = modeProblem(matching, mode);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
@@ -369,12 +369,14 @@ export default function SoloGame() {
               notes={filterNotes(songCounts, { genre, decade })}
             />
           </div>
-          {/* How many songs match, and why the chosen mode cannot start: these belong to the settings above, so they
-              stay in the page like a field error. A refused start or a server error shows as a short message
+          {/* Too few matching songs, and why the chosen mode cannot start: these belong to the settings above, so
+              they stay in the page like a field error. A refused start or a server error shows as a short message
               (showError above). */}
-          <p className={line.tooFew ? styles.filterProblem : styles.filterNote} role="status">
-            {line.text}
-          </p>
+          {tooFew && (
+            <p className={styles.filterProblem} role="status">
+              {tooFew}
+            </p>
+          )}
           {problem && (
             <p className={styles.filterProblem} role="status">
               {problem}
@@ -383,7 +385,7 @@ export default function SoloGame() {
           <button
             className={`${shared.primary} ${shared.wide}`}
             onClick={handleStart}
-            disabled={line.tooFew || problem !== null}
+            disabled={tooFew !== null || problem !== null}
           >
             Start game
           </button>
