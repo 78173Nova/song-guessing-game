@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiAccountSettings } from "@/lib/client/account-api";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
@@ -27,12 +28,14 @@ import styles from "./Landing.module.css";
 
 
 // "Create a room": an account holder picks a nickname and the room settings (issue #34) and becomes the room
-// creator, a player like everyone else. The settings cannot be changed afterwards. A guest is sent to log in and
-// comes back here afterwards. The server checks the login and every setting again when creating.
+// creator, a player like everyone else. The settings cannot be changed afterwards. A guest sees "You need an
+// account" with Log in and Sign up, and comes back here after logging in. The server checks the login and every
+// setting again when creating.
 // The usual nickname (else the username) and the saved avatar are filled in (issue #44); an account without an
 // avatar picks one here once, and the server saves it.
 export default function CreateRoomForm() {
   const router = useRouter();
+  // undefined while asking the server, false for a guest.
   const [loggedIn, setLoggedIn] = useState<boolean | undefined>(undefined);
   const [nickname, setNickname] = useState("");
   const [avatar, setAvatar] = useState("");
@@ -46,7 +49,7 @@ export default function CreateRoomForm() {
   useEffect(() => {
     apiAccountSettings().then((account) => {
       if (account === null) {
-        router.replace("/login?next=/create");
+        setLoggedIn(false);
         return;
       }
       const start = nicknameScreenStart(account);
@@ -55,7 +58,7 @@ export default function CreateRoomForm() {
       setAskAvatar(start.askAvatar);
       setLoggedIn(true);
     });
-  }, [router]);
+  }, []);
 
   // How many songs match the chosen genres and decades, asked again on every change. A late reply for an older
   // choice is ignored.
@@ -72,11 +75,14 @@ export default function CreateRoomForm() {
 
   // Next.js keeps this page alive (hidden) after "Create the room" navigates to the lobby, so coming back to
   // /create would show the old "Creating…" button, disabled until a page refresh. Reset the button and any old
-  // error when the page is hidden. See node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md.
+  // error when the page is hidden. Also forget the login answer: a guest who leaves for Log in comes back logged
+  // in, and should see "One moment…" while the page asks again, not the old "You need an account".
+  // See node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md.
   useLayoutEffect(() => {
     return () => {
       setSending(false);
       setError("");
+      setLoggedIn(undefined);
     };
   }, []);
 
@@ -99,7 +105,24 @@ export default function CreateRoomForm() {
     setError(result.message);
   }
 
-  if (loggedIn !== true) return <p className={styles.hint} aria-busy="true">One moment…</p>;
+  if (loggedIn === undefined) return <p className={styles.hint} aria-busy="true">One moment…</p>;
+
+  // A guest: Log in or Sign up, and back here afterwards (Sign up remembers it through the verification email).
+  if (!loggedIn) {
+    return (
+      <>
+        <p className={styles.pitch}>You need an account to create a room. Joining a room works without one.</p>
+        <div className={styles.accountButtons}>
+          <Link href="/login?next=/create" className={styles.primary}>
+            Log in
+          </Link>
+          <Link href="/signup?next=/create" className={styles.secondary}>
+            Sign up
+          </Link>
+        </div>
+      </>
+    );
+  }
 
   return (
     <form className={styles.form} onSubmit={submit} noValidate>

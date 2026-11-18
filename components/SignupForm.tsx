@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiSignUp } from "@/lib/client/account-api";
+import { rememberNextPath } from "@/lib/client/next-path";
 import styles from "./Landing.module.css";
 
 // The sign-up form: email, username, password. The server checks every rule; the browser only sends the
@@ -14,6 +15,12 @@ export default function SignupForm() {
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Remember ?next= (e.g. /signup?next=/create from "Create a room"): the address loses it on the way through the
+  // verification email, and the first login afterwards goes there (lib/client/next-path.ts).
+  useEffect(() => {
+    rememberNextPath(new URLSearchParams(window.location.search).get("next"));
+  }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
