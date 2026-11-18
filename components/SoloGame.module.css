@@ -145,9 +145,29 @@
   color: var(--color-text-muted);
 }
 
+/* The song, with its Apple Music link under it (same look as the set summary in rooms). */
 .played {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.storeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.storeLink:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .playedPoints {

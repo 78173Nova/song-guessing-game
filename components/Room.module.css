@@ -466,7 +466,7 @@
   text-align: left;
 }
 
-/* Verdict (icon + word), the song (and its iTunes link under it), the points on the right. */
+/* Verdict (icon + word), the song (and its Apple Music link under it), the points on the right. */
 .summaryRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

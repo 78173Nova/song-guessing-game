@@ -32,6 +32,7 @@ export type PlayedRound = {
   artist: string;
   points: number;
   outcome: "correct" | "wrong" | "skipped" | "timeout";
+  storeUrl: string | null; // the song's Apple Music page, shown on the results; null when there is none
 };
 
 type Progress = { score: number; history: PlayedRound[] };
@@ -179,6 +180,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             artist: result.song.artist,
             points: result.points,
             outcome: outcomeOf(state.pending, result.correct),
+            storeUrl: result.song.storeUrl,
           },
         ],
       };

@@ -488,7 +488,20 @@ export default function SoloGame() {
                   {OUTCOME_WORD[played.outcome]}
                 </span>
                 <span className={styles.played}>
-                  <strong>{played.title}</strong> – {played.artist}
+                  <span>
+                    <strong>{played.title}</strong> – {played.artist}
+                  </span>
+                  {played.storeUrl && (
+                    <a
+                      className={styles.storeLink}
+                      href={played.storeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open ${played.title} in Apple Music`}
+                    >
+                      Open in Apple Music
+                    </a>
+                  )}
                 </span>
                 <span className={styles.playedPoints}>{played.points}</span>
               </li>
