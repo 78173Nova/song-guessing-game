@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pickCoverColours } from "./cover-colours";
+import { pickCoverColours, type CoverColours } from "./cover-colours";
 
 // The album cover's colours for the wave circle, once the answer is revealed (DESIGN.md, "The wave circle").
 // Pass the revealed song's artworkUrl (or null while no answer is revealed). Returns 2–3 hex colours for
@@ -9,8 +9,8 @@ import { pickCoverColours } from "./cover-colours";
 // or when it is nearly grey: then the circle keeps the app colours. It never throws.
 //
 // Only call it with the cover of a song whose answer is already revealed (CLAUDE.md rule 5).
-export function useCoverColours(artworkUrl: string | null | undefined): string[] | undefined {
-  const [loaded, setLoaded] = useState<{ url: string; colours: string[] | null } | null>(null);
+export function useCoverColours(artworkUrl: string | null | undefined): CoverColours | undefined {
+  const [loaded, setLoaded] = useState<{ url: string; colours: CoverColours | null } | null>(null);
 
   useEffect(() => {
     if (!artworkUrl) return;
@@ -37,12 +37,12 @@ const LOAD_TIMEOUT_MS = 5000;
 // it small on a canvas that is never shown, and picks the colours from its pixels. Resolves to null on any
 // failure: no browser, load error, timeout, or a server that refuses cross-origin reads (the canvas then
 // refuses to give out its pixels).
-export function loadCoverColours(url: string): Promise<string[] | null> {
+export function loadCoverColours(url: string): Promise<CoverColours | null> {
   if (typeof Image === "undefined" || typeof document === "undefined") return Promise.resolve(null);
   return new Promise((resolve) => {
     const image = new Image();
     const timer = setTimeout(() => finish(null), LOAD_TIMEOUT_MS);
-    function finish(colours: string[] | null) {
+    function finish(colours: CoverColours | null) {
       clearTimeout(timer);
       image.onload = null;
       image.onerror = null;

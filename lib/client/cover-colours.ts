@@ -21,11 +21,17 @@ const MAX_COLOURS = 3;
 // Two chosen colours are at least this far apart (straight-line distance between their red/green/blue values).
 export const MIN_COLOUR_DISTANCE = 64;
 
+/**
+ * The colours the wave circle shows for a revealed song: 2–3 hex colours ("#rrggbb"), most common first. Made by
+ * pickCoverColours, loaded by useCoverColours (lib/client/useCoverColours.ts) and drawn by WaveCircle.
+ */
+export type CoverColours = string[];
+
 type Rgb = [number, number, number];
 
 // `pixels`: red, green, blue, alpha (0–255) for each pixel, one after the other, like a canvas's getImageData.
 // Returns 2–3 hex colours, most common first, or null when the circle should keep the app colours.
-export function pickCoverColours(pixels: ArrayLike<number>): string[] | null {
+export function pickCoverColours(pixels: ArrayLike<number>): CoverColours | null {
   const groups = Array.from({ length: HUE_GROUPS }, () => ({ count: 0, sum: [0, 0, 0] as Rgb }));
   let visible = 0;
   let colourful = 0;

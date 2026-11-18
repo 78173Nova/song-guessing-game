@@ -40,6 +40,7 @@ import {
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
 import { standingsView } from "@/lib/client/standings-view";
+import type { CoverColours } from "@/lib/client/cover-colours";
 import { useCoverColours } from "@/lib/client/useCoverColours";
 import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
 import { avatarEmoji } from "@/lib/game/avatars";
@@ -763,7 +764,7 @@ function RoomStage({
   children,
 }: {
   analyser: AnalyserNode | null;
-  colours?: readonly string[];
+  colours?: CoverColours;
   children: React.ReactNode;
 }) {
   return (

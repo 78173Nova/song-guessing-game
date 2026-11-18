@@ -18,6 +18,7 @@ import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
+import type { CoverColours } from "@/lib/client/cover-colours";
 import { useCoverColours } from "@/lib/client/useCoverColours";
 import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
 import { DECADES, type Decade } from "@/lib/game/filters";
@@ -526,7 +527,7 @@ function Stage({
   children,
 }: {
   analyser: AnalyserNode | null;
-  colours: readonly string[] | undefined;
+  colours: CoverColours | undefined;
   children: React.ReactNode;
 }) {
   return (
