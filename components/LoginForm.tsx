@@ -62,6 +62,9 @@ export default function LoginForm() {
         id="login-name"
         className={styles.textInput}
         autoComplete="username"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         maxLength={254}
         value={login}
         onChange={(event) => setLogin(event.target.value)}

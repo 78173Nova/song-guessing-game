@@ -70,6 +70,9 @@ function DetailForm({
             className={styles.textInput}
             type={field.type}
             autoComplete={field.autoComplete}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             maxLength={field.maxLength}
             value={values[field.name]}
             onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))}
