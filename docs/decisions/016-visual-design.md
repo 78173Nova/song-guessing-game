@@ -75,3 +75,16 @@ itself (`respectMotionPreference`, on by default), so numbers then change withou
 reports 0 vulnerabilities; the full `npm audit` reports 16 high findings that were already there before this
 package, all from one `picomatch` advisory inside the dev tooling (vitest, eslint-config-next), with no fixed
 version yet.
+
+Update 18 Nov 2026 (#62): **Vaul 1.1.2** (the share pop-up: a bottom sheet that can be swiped down below 40rem, a
+centred dialog with no dragging from 40rem; Esc closes it and the focus goes back to the button that opened it) and
+**Sonner 2.0.8** (short messages, mounted once in `app/layout.tsx` as `components/MessageArea.tsx`; pages call
+`components/messages.ts`) are installed with exact versions. Vaul brings Radix's dialog with it as a sub-dependency;
+we do not use Radix directly. Short messages are used for "Link copied", for errors from buttons that are not about a
+form field (start, extend, leave, kick, play again, a refused answer, log out) and, as one lasting message that
+updates in place, for "can't reach the server" while the room or the public room list keeps asking; it goes away by
+itself when the connection is back. Field errors and the one server message per form stay where they were. The QR
+code sits on a new `--color-qr-bg` token (white in both modes) with a white frame as its quiet zone. Limit: the
+solo game's errors still show in the page (its files were being restyled in #61 at the same time); a later
+ticket can move them to `showError`. `npm audit --omit=dev` reports 0 vulnerabilities; the full `npm audit` still
+reports the 16 dev-tooling findings described under #61, none from these two packages.

@@ -679,3 +679,10 @@ with the seconds, 3-2-1 or the verdict icon on its inner disc, then the rest. Th
 stage that shrinks with `transform: scaleX()` (not an arc on the disc edge; #63 may move it onto the circle).
 On reveal the panel takes the place of the time bar and question, between the stage and the answers, as in the
 sketch; the answer buttons do not animate. The icons live in `components/icons/` (one file per icon).
+
+Update 18 Nov 2026 (#62): the share pop-up and short messages are built. New token `--color-qr-bg` (#ffffff in both
+modes): the QR code sits on it inside a white frame (`--space-4` padding) that adds a quiet zone. The bottom sheet
+keeps Vaul's own timing (500ms, its iOS curve), because Vaul uses the same curve when it finishes a drag; the laptop
+dialog fades and grows from 0.96 over `--duration-fast`. Under reduce motion the sheet and dialog appear without
+moving. Short messages sit bottom-right on laptops and across the bottom on phones (Sonner switches below 600px),
+above the pop-up, with a check or cross icon.
