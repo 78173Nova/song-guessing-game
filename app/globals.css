@@ -135,9 +135,10 @@
   }
 }
 
-/* Reduce motion: every movement timing becomes 0ms. --duration-wave-colour stays: a colour blend is not motion. */
+/* Reduce motion: every timing becomes 0ms, also the wave circle's colour blend (#64: the colour changes at once). */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --duration-wave-colour: 0ms;
     --duration-instant: 0ms;
     --duration-fast: 0ms;
     --duration-base: 0ms;
