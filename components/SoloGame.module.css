@@ -1,4 +1,10 @@
-/* Mobile first: one column, big touch targets. Wider screens get two answer columns. */
+/*
+ * The solo game (and, until #62 restyles them, the room game screens, which import this file as `game`).
+ * Mobile first: one column, big touch targets; from 40rem the answers sit in a 2 × 2 grid.
+ * Tokens only (app/globals.css). Only transform and opacity animate; every duration is a token, so
+ * "reduce motion" (durations become 0ms) turns all of it off. Delays are fractions of a duration token for
+ * the same reason.
+ */
 .game {
   width: 100%;
 }
@@ -7,241 +13,669 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: var(--space-5);
   text-align: center;
 }
 
 .intro {
-  font-size: 1.1rem;
-  line-height: 1.5;
-  max-width: 28rem;
+  max-width: var(--width-form);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  color: var(--color-text-muted);
 }
+
+/* ---------- Buttons ---------- */
 
 .primary,
 .secondary,
 .option {
   font: inherit;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform var(--duration-instant) var(--ease-out);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.option:focus-visible,
+.filters select:focus-visible,
+.song a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .primary {
-  min-height: 3.25rem;
-  padding: 0 2rem;
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-lg);
   font-weight: 600;
   border: none;
-  color: var(--accent-text);
-  background: var(--accent);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+}
+
+.wide {
+  width: 100%;
+  max-width: var(--width-form);
 }
 
 .secondary {
   display: block;
-  margin: 0 auto 1rem;
-  padding: 0.6rem 1.5rem;
-  border: 2px solid var(--accent);
-  color: var(--foreground);
-  background: transparent;
+  min-height: 52px;
+  margin: 0 auto var(--space-4);
+  padding: 0 var(--space-5);
+  font-size: var(--text-md);
+  font-weight: 600;
+  border: 2px solid var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+@media (hover: hover) {
+  .primary:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .secondary:hover,
+  .option:not(:disabled):hover {
+    border-color: var(--color-primary);
+  }
+}
+
+/* Press state: a small, quick squeeze so a tap visibly counts. */
+.primary:active,
+.secondary:active,
+.option:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.primary:active {
+  background: var(--color-primary-hover);
+}
+
+/* ---------- Start screen ---------- */
+
+/* Mode choice: 2 × 2 buttons, the chosen one filled with the soft violet and outlined. */
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--width-form);
+  border: none;
+}
+
+.modes legend {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.modes .option {
+  min-height: 52px;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Genre and decade dropdowns: side by side, stacked on very narrow phones. */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--width-form);
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.filters select {
+  min-height: 52px;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 400;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+/* ---------- The play frame: status line, stage, time bar, question, answers ---------- */
+
+.play {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
 }
 
 .status {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  min-height: 1.5rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  color: var(--color-text-muted);
 }
 
-.countdown {
+.score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.score .number {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--color-text);
+}
+
+/* Numbers that change keep their width, so nothing jumps while they roll. */
+.number {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The stage: a fixed square where the wave circle (#63) is drawn. Base radius 34 %, disc 26 % (DESIGN.md). */
+.stage {
   position: relative;
-  height: 1.75rem;
-  margin-bottom: 1rem;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--muted);
+  width: 220px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  flex-shrink: 0;
 }
 
-.bar {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s linear;
-}
-
-.countdown span {
+/* Placeholder ring in the wave colours until the canvas replaces it. The mask only cuts out the middle
+   (black/transparent are mask values here, not colours on screen). */
+.ring {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  font-weight: 600;
+  inset: 16%;
+  border-radius: var(--radius-full);
+  background: conic-gradient(
+    var(--color-wave-blue),
+    var(--color-wave-cyan),
+    var(--color-wave-violet),
+    var(--color-wave-blue)
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), black calc(100% - 3px));
 }
+
+.disc {
+  position: absolute;
+  inset: 24%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.seconds {
+  font-family: var(--font-display);
+  font-size: var(--text-number);
+  font-weight: 700;
+  line-height: var(--leading-number);
+}
+
+/* The last five seconds: the digits turn red (the number itself already says how little time is left). */
+.low {
+  color: var(--color-danger);
+}
+
+.sending {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  color: var(--color-text-muted);
+}
+
+.discIcon {
+  width: 44%;
+  height: 44%;
+  stroke-width: 2.5;
+  animation: pop var(--duration-base) var(--ease-out) both;
+}
+
+.discRight {
+  color: var(--color-success);
+}
+
+.discWrong {
+  color: var(--color-danger);
+}
+
+@media (min-width: 40rem) {
+  .stage {
+    width: 280px;
+  }
+}
+
+/* Time left: a thin bar that shrinks from the right with transform (never width). */
+.timeTrack {
+  width: 220px;
+  max-width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-alt);
+}
+
+.timeFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  transform-origin: left center;
+  transition: transform var(--duration-base) linear;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.question {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ---------- Answer buttons ---------- */
 
 .options {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.75rem;
+  gap: var(--space-3);
+  width: 100%;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 40rem) {
   .options {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 .option {
-  min-height: 4rem;
-  padding: 0.75rem 1rem;
-  font-size: 1.05rem;
-  border: 2px solid var(--muted);
-  color: var(--foreground);
-  background: var(--card);
-}
-
-.option:not(:disabled):hover {
-  border-color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 2px solid var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 .option:disabled {
   cursor: default;
 }
 
-/* The answer a room player tapped, before the round closes (components/Room.tsx). */
+.answerTitle {
+  min-width: 0;
+}
+
+/* What a mark says in words, next to its icon: "Locked in", "Right answer", "Your answer". */
+.mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  animation: pop var(--duration-fast) var(--ease-out) both;
+}
+
+/* The tapped answer (solo, while the server checks it; rooms, until the round closes). */
 .chosen {
-  border-color: var(--accent);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-weight: 700;
+}
+
+.chosen .mark {
+  color: var(--color-primary);
 }
 
 .correct {
-  border-color: var(--good);
-  background: var(--good-bg);
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.correct .mark {
+  color: var(--color-success);
+  animation-duration: var(--duration-base);
 }
 
 .wrong {
-  border-color: var(--bad);
-  background: var(--bad-bg);
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
 }
 
+.wrong .mark {
+  color: var(--color-danger);
+  animation-duration: var(--duration-base);
+}
+
+/* After the round, the answers that played no part step back. */
+.settled .option:not(.correct):not(.wrong) {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+/* ---------- Reveal ---------- */
+
+/* Shared with the room result screen. */
 .reveal {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
   text-align: center;
 }
 
 .verdict {
-  font-size: 1.3rem;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 650;
+}
+
+/* The solo reveal panel: verdict and points, the song, then "Next song". It fades in and rises 8px just
+   after the answer marks appear. */
+.revealPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  animation: riseIn var(--duration-base) var(--ease-out) both;
+  animation-delay: calc(var(--duration-base) / 3);
+}
+
+.verdictRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.verdictText {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: 650;
+}
+
+.verdictText[data-kind="right"] {
+  color: var(--color-success);
+}
+
+.verdictText[data-kind="wrong"],
+.verdictText[data-kind="timeout"] {
+  color: var(--color-danger);
+}
+
+/* A skipped round is not the player's fault: plain text, smaller. */
+.verdictText[data-kind="skipped"] {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.verdictIcon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+/* "+840 points" pops in last (scale 0.9 → 1), while the score at the top rolls up. */
+.earned {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  animation: pop var(--duration-base) var(--ease-out) both;
+  animation-delay: calc(var(--duration-base) * 2 / 3);
+}
+
+.earnedNumber {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
 .song {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   text-align: left;
 }
 
 .song img {
-  border-radius: 8px;
   flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+
+.songText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
   font-weight: 700;
 }
 
+.songMeta {
+  color: var(--color-text-muted);
+}
+
+/* The link keeps a 44px tap area without looking like a button. */
 .song a {
-  color: var(--accent);
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .points {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Results, errors, 3-2-1 ---------- */
 
 .results {
   width: 100%;
   list-style: none;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .results li {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--muted);
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Solo results: verdict (icon + word), song, points in a row; the song wraps under on narrow phones. */
+.soloResults li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+}
+
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 5.5rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.outcome[data-outcome="correct"] {
+  color: var(--color-success);
+}
+
+.outcome[data-outcome="skipped"] {
+  color: var(--color-text-muted);
+}
+
+.played {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.playedPoints {
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 24rem) {
+  .soloResults li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .played {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.finalHeading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.finalScore {
+  font-size: var(--text-number);
+  line-height: var(--leading-number);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
 .error {
-  color: var(--bad);
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: var(--width-form);
   font-weight: 600;
-  max-width: 28rem;
-  line-height: 1.5;
-}
-
-.bigNumber {
-  font-size: 5rem;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--accent);
-}
-
-/* Mode choice on the start screen: 2 × 2 buttons, the chosen one outlined. */
-.modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 28rem;
-  border: none;
-}
-
-.modes legend {
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.modes .option {
-  min-height: 3.25rem;
-}
-
-/* Genre and decade dropdowns: side by side, stacked on very narrow phones. */
-.filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 28rem;
-}
-
-.filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  font-weight: 600;
+  line-height: var(--leading-md);
   text-align: left;
+  color: var(--color-danger);
 }
 
-.filters select {
-  min-height: 3.25rem;
-  padding: 0 0.75rem;
-  font: inherit;
-  font-weight: 400;
-  border: 2px solid var(--muted);
-  border-radius: 12px;
-  color: var(--foreground);
-  background: var(--card);
+.errorBox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: var(--width-form);
+  padding: var(--space-4);
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  line-height: var(--leading-md);
+  text-align: left;
+  color: var(--color-text);
+  background: var(--color-danger-bg);
 }
 
-.chosen {
-  border-color: var(--accent);
-  font-weight: 700;
+.errorBox .inlineIcon {
+  color: var(--color-danger);
 }
 
-.question {
-  margin-bottom: 0.75rem;
-  font-size: 1.2rem;
-  text-align: center;
+.inlineIcon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 0.15em;
+}
+
+.primary .inlineIcon {
+  margin-top: 0;
+}
+
+/* 3-2-1 in the room game (the solo game shows it inside the stage). */
+.bigNumber {
+  font-family: var(--font-display);
+  font-size: var(--text-number);
+  line-height: var(--leading-number);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }

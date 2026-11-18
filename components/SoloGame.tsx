@@ -5,6 +5,7 @@
 // - loading, retrying and swapping clips is decided by prepareClip (lib/client/clip-loader.ts)
 // - the server calls are in lib/client/game-api.ts
 // - the server checks every answer; the browser never knows the correct answer before answering
+import NumberFlow from "@number-flow/react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   canPlayPreviews,
@@ -16,10 +17,14 @@ import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
 import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
+import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
 import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
+import CheckIcon from "./icons/CheckIcon";
+import CrossIcon from "./icons/CrossIcon";
+import PlayIcon from "./icons/PlayIcon";
 import styles from "./SoloGame.module.css";
 
 // A tiny silent sound. Playing it once on each player during the Start tap "unlocks" the players on
@@ -308,97 +313,114 @@ export default function SoloGame() {
           </div>
           {state.message && (
             <p className={styles.error} role="alert">
+              <CrossIcon className={styles.inlineIcon} />
               {state.message}
             </p>
           )}
-          <button className={styles.primary} onClick={handleStart}>
+          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
             Start game
           </button>
         </section>
       )}
 
-      {(state.screen === "creating" || state.screen === "first-clip") && (
-        <p className={styles.center} role="status">
-          Loading first song…
-        </p>
-      )}
+      {/* Every screen from loading to the reveal shares one frame: status line, the stage (where the wave
+          circle sits, #63) and what belongs under it. The stage stays in place, so the screens follow each
+          other calmly instead of jumping. */}
+      {inPlay(state) && (
+        <section className={styles.play}>
+          <StatusLine state={state} />
+          <Stage>
+            <StageCentre state={state} now={now} getReadyAt={getReadyAt} roundStartedAt={roundStartedAt} />
+          </Stage>
 
-      {state.screen === "get-ready" && (
-        <section className={styles.center} role="status">
-          <p className={styles.intro}>Get ready!</p>
-          <p className={styles.bigNumber}>
-            {Math.max(1, Math.ceil(GET_READY_SECONDS - (now - getReadyAt) / 1000))}
-          </p>
-        </section>
-      )}
-
-      {state.screen === "starting" && (
-        <p className={styles.center} role="status">
-          Round {state.roundNumber}…
-        </p>
-      )}
-
-      {state.screen === "clip-loading" && (
-        <p className={styles.center} role="status">
-          Loading next song…
-        </p>
-      )}
-
-      {state.screen === "tap-to-start" && (
-        <section className={styles.center}>
-          <button className={styles.primary} onClick={handleTapToStart}>
-            ▶ Tap to start
-          </button>
-        </section>
-      )}
-
-      {(state.screen === "round" || state.screen === "reveal") && (
-        <section>
-          <div className={styles.status}>
-            <span>
-              Round {state.round.round} / {state.round.totalRounds}
-            </span>
-            <span>Score {state.score}</span>
-          </div>
-
-          {state.screen === "round" && (
-            <Countdown left={state.pending === null ? secondsLeft(now - roundStartedAt) : null} />
+          {(state.screen === "creating" || state.screen === "first-clip") && (
+            <p className={styles.message} role="status">
+              Loading first song…
+            </p>
           )}
 
-          {/* The server says what each round asks – in mixed games it changes from round to round. */}
-          {questionType && <h2 className={styles.question}>{QUESTION_LABELS[questionType]}</h2>}
+          {state.screen === "get-ready" && (
+            <p className={styles.message} role="status">
+              Get ready!
+            </p>
+          )}
 
-          <div className={styles.options}>
-            {state.round.options.map((title, index) => (
-              <button
-                key={index}
-                className={optionClass(state, index)}
-                disabled={state.screen !== "round" || state.pending !== null}
-                onClick={() => state.screen === "round" && sendAnswer(state.gameId, state.round.round, index)}
-              >
-                {title}
+          {state.screen === "starting" && (
+            <p className={styles.message} role="status">
+              Round {state.roundNumber}…
+            </p>
+          )}
+
+          {state.screen === "clip-loading" && (
+            <p className={styles.message} role="status">
+              Loading next song…
+            </p>
+          )}
+
+          {state.screen === "tap-to-start" && (
+            <div className={styles.message}>
+              <p>Your browser needs one more tap to play the sound.</p>
+              <button className={`${styles.primary} ${styles.wide}`} onClick={handleTapToStart}>
+                <PlayIcon className={styles.inlineIcon} />
+                Tap to start
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {state.screen === "round" && (
+            <TimeBar
+              left={state.pending === null ? ROUND_SECONDS - (now - roundStartedAt) / 1000 : null}
+            />
+          )}
 
           {state.screen === "reveal" && <RevealPanel state={state} onNext={handleNext} />}
+
+          {/* The server says what each round asks – in mixed games it changes from round to round. */}
+          {state.screen === "round" && questionType && (
+            <h2 className={styles.question}>{QUESTION_LABELS[questionType]}</h2>
+          )}
+
+          {(state.screen === "round" || state.screen === "reveal") && (
+            <div className={state.screen === "reveal" ? `${styles.options} ${styles.settled}` : styles.options}>
+              {state.round.options.map((title, index) => (
+                <AnswerButton
+                  key={index}
+                  title={title}
+                  mark={optionMark(state, index)}
+                  disabled={state.screen !== "round" || state.pending !== null}
+                  onClick={() => state.screen === "round" && sendAnswer(state.gameId, state.round.round, index)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       {state.screen === "results" && (
         <section className={styles.center}>
-          <h2>Your score: {state.score}</h2>
-          <ol className={styles.results}>
+          <h2 className={styles.finalHeading}>
+            Your score
+            <span className={styles.finalScore}>{state.score}</span>
+          </h2>
+          <ol className={`${styles.results} ${styles.soloResults}`}>
             {state.history.map((played) => (
               <li key={played.round}>
-                <span>
-                  {OUTCOME_ICON[played.outcome]} {played.title} – {played.artist}
+                <span className={styles.outcome} data-outcome={played.outcome}>
+                  {played.outcome === "correct" ? (
+                    <CheckIcon className={styles.inlineIcon} />
+                  ) : (
+                    <CrossIcon className={styles.inlineIcon} />
+                  )}
+                  {OUTCOME_WORD[played.outcome]}
                 </span>
-                <span>{played.points}</span>
+                <span className={styles.played}>
+                  <strong>{played.title}</strong> – {played.artist}
+                </span>
+                <span className={styles.playedPoints}>{played.points}</span>
               </li>
             ))}
           </ol>
-          <button className={styles.primary} onClick={handleStart}>
+          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
             Play again
           </button>
           {/* Back to the start screen: mode, genre and decade stay as chosen, so they are preselected. */}
@@ -410,8 +432,11 @@ export default function SoloGame() {
 
       {state.screen === "error" && (
         <section className={styles.center} role="alert">
-          <p className={styles.error}>{state.message}</p>
-          <button className={styles.primary} onClick={handleStart}>
+          <p className={styles.errorBox}>
+            <CrossIcon className={styles.inlineIcon} />
+            {state.message}
+          </p>
+          <button className={`${styles.primary} ${styles.wide}`} onClick={handleStart}>
             Try again
           </button>
         </section>
@@ -420,47 +445,175 @@ export default function SoloGame() {
   );
 }
 
-const OUTCOME_ICON = { correct: "✅", wrong: "❌", skipped: "⏭", timeout: "⏱" } as const;
+const OUTCOME_WORD = { correct: "Right", wrong: "Wrong", skipped: "Skipped", timeout: "Time's up" } as const;
 
 const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
-function optionClass(state: GameState, index: number): string {
-  if (state.screen !== "reveal") return styles.option;
-  if (index === state.result.correctOption) return `${styles.option} ${styles.correct}`;
-  if (index === state.chosen) return `${styles.option} ${styles.wrong}`;
-  return styles.option;
+// The screens that show the stage (wave circle slot): from loading the first song to the reveal.
+const IN_PLAY = [
+  "creating",
+  "first-clip",
+  "get-ready",
+  "starting",
+  "tap-to-start",
+  "clip-loading",
+  "round",
+  "reveal",
+] as const;
+type InPlay = Extract<GameState, { screen: (typeof IN_PLAY)[number] }>;
+function inPlay(state: GameState): state is InPlay {
+  return (IN_PLAY as readonly string[]).includes(state.screen);
 }
 
-function Countdown({ left }: { left: number | null }) {
-  const shown = left ?? 0;
+// "Round 2 / 5" and the total score, which rolls up when points are earned.
+function StatusLine({ state }: { state: InPlay }) {
+  if (state.screen === "creating" || state.screen === "first-clip" || state.screen === "get-ready") {
+    return <div className={styles.status} aria-hidden="true" />;
+  }
+  const round = state.screen === "round" || state.screen === "reveal" ? state.round.round : state.roundNumber;
+  const total =
+    state.screen === "round" || state.screen === "reveal" ? state.round.totalRounds : state.previewUrls.length;
   return (
-    <div className={styles.countdown} aria-label={`${shown} seconds left`}>
-      <div className={styles.bar} style={{ width: `${(shown / ROUND_SECONDS) * 100}%` }} />
-      <span>{left === null ? "…" : `${shown} s`}</span>
+    <div className={styles.status}>
+      <span>
+        Round {round} / {total}
+      </span>
+      <span className={styles.score}>
+        Score <NumberFlow value={state.score} className={styles.number} />
+      </span>
     </div>
+  );
+}
+
+// The stage: a fixed square in the middle of the round. The wave circle (#63) goes here, behind the disc;
+// until then a still ring in the wave colours marks its place. The disc holds the seconds (or 3-2-1).
+function Stage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={styles.stage}>
+      {/* Wave circle slot (#63): put the canvas here. It fills the stage; the disc stays on top. */}
+      <div className={styles.ring} aria-hidden="true" />
+      <div className={styles.disc}>{children}</div>
+    </div>
+  );
+}
+
+// What sits inside the disc on each screen.
+function StageCentre({
+  state,
+  now,
+  getReadyAt,
+  roundStartedAt,
+}: {
+  state: InPlay;
+  now: number;
+  getReadyAt: number;
+  roundStartedAt: number;
+}) {
+  if (state.screen === "get-ready") {
+    const left = Math.max(1, Math.ceil(GET_READY_SECONDS - (now - getReadyAt) / 1000));
+    return <NumberFlow value={left} className={`${styles.number} ${styles.seconds}`} aria-hidden="true" />;
+  }
+  if (state.screen === "tap-to-start") return <PlayIcon className={styles.discIcon} />;
+  if (state.screen === "round") {
+    const left = state.pending === null ? secondsLeft(now - roundStartedAt) : null;
+    return (
+      <div role="timer" aria-label={left === null ? "Answer sent" : `${left} seconds left`}>
+        {left === null ? (
+          <span className={styles.sending} aria-hidden="true">
+            …
+          </span>
+        ) : (
+          <NumberFlow
+            value={left}
+            className={`${styles.number} ${styles.seconds} ${left <= 5 ? styles.low : ""}`}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+    );
+  }
+  if (state.screen === "reveal") {
+    const { kind } = verdictOf(state.chosen, state.result.correct);
+    return kind === "right" ? (
+      <CheckIcon className={`${styles.discIcon} ${styles.discRight}`} />
+    ) : (
+      <CrossIcon className={`${styles.discIcon} ${styles.discWrong}`} />
+    );
+  }
+  return null;
+}
+
+// A thin bar under the stage that empties over the 15 seconds. It shrinks with transform (not width).
+function TimeBar({ left }: { left: number | null }) {
+  return (
+    <div className={styles.timeTrack} aria-hidden="true">
+      <div className={styles.timeFill} style={{ transform: `scaleX(${timeLeftFraction(left)})` }} />
+    </div>
+  );
+}
+
+const MARK_LABEL = { none: null, chosen: "Locked in", correct: "Right answer", wrong: "Your answer" } as const;
+
+// One answer button. After the round, the right answer gets a check and the player's own wrong pick a
+// cross, each with a word, so the result never depends on colour alone.
+function AnswerButton({
+  title,
+  mark,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  mark: OptionMark;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const markClass = { none: "", chosen: styles.chosen, correct: styles.correct, wrong: styles.wrong }[mark];
+  return (
+    <button className={`${styles.option} ${styles.answer} ${markClass}`} disabled={disabled} onClick={onClick}>
+      <span className={styles.answerTitle}>{title}</span>
+      {mark !== "none" && (
+        <span className={styles.mark}>
+          {mark === "correct" && <CheckIcon />}
+          {mark === "wrong" && <CrossIcon />}
+          {MARK_LABEL[mark]}
+        </span>
+      )}
+    </button>
   );
 }
 
 function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
   const { result, chosen } = state;
   const isLast = state.round.round >= state.round.totalRounds;
-  let verdict = result.correct ? "✅ Right!" : "❌ Wrong";
-  if (chosen === "timeout") verdict = "⏱ Time's up!";
-  if (chosen === "skip") verdict = "The preview could not be played – this round was skipped (0 points).";
+  const verdict = verdictOf(chosen, result.correct);
 
   return (
-    <div className={styles.reveal} role="status">
-      <p className={styles.verdict}>{verdict}</p>
+    <div className={styles.revealPanel} role="status">
+      <div className={styles.verdictRow}>
+        <p className={styles.verdictText} data-kind={verdict.kind}>
+          {verdict.kind === "right" ? (
+            <CheckIcon className={styles.verdictIcon} />
+          ) : (
+            <CrossIcon className={styles.verdictIcon} />
+          )}
+          {verdict.text}
+        </p>
+        <p className={styles.earned}>
+          <span className={styles.earnedNumber}>+{result.points}</span> points
+        </p>
+      </div>
       <div className={styles.song}>
         {result.song.artworkUrl && (
           // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
           // eslint-disable-next-line @next/next/no-img-element
           <img src={result.song.artworkUrl} alt={`Cover of ${result.song.title}`} width={96} height={96} />
         )}
-        <div>
+        <div className={styles.songText}>
           <p className={styles.title}>{result.song.title}</p>
-          <p>{result.song.artist}</p>
-          {result.song.year !== undefined && <p>{result.song.year}</p>}
+          <p className={styles.songMeta}>
+            {result.song.artist}
+            {result.song.year !== undefined && ` · ${result.song.year}`}
+          </p>
           {result.song.storeUrl && (
             <a href={result.song.storeUrl} target="_blank" rel="noopener noreferrer">
               Open in Apple Music
@@ -468,9 +621,8 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
           )}
         </div>
       </div>
-      <p className={styles.points}>+{result.points} points</p>
-      <button className={styles.primary} onClick={onNext}>
-        {isLast ? "See results" : "Next"}
+      <button className={`${styles.primary} ${styles.wide}`} onClick={onNext}>
+        {isLast ? "See results" : "Next song"}
       </button>
     </div>
   );

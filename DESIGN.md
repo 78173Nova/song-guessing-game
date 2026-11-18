@@ -666,3 +666,10 @@ line-height tokens `--leading-xs` … `--leading-number` carry the line heights 
 under reduce motion `--duration-wave-colour` keeps its value (only the movement timings become `0ms`), because
 the circle still crossfades its colour on reveal. To add a text/background pair, add a row to the
 "Contrast pairs" table: `tests/client/design-tokens.test.ts` reads that table and checks the row in the given mode.
+
+Update 18 Nov 2026 (#61): the solo round is one frame from "Loading first song…" to the reveal: status line,
+the stage (a fixed 220/280px square where the wave circle goes, #63; until then a still ring in the wave colours)
+with the seconds, 3-2-1 or the verdict icon on its inner disc, then the rest. The time left is a thin bar under the
+stage that shrinks with `transform: scaleX()` (not an arc on the disc edge; #63 may move it onto the circle).
+On reveal the panel takes the place of the time bar and question, between the stage and the answers, as in the
+sketch; the answer buttons do not animate. The icons live in `components/icons/` (one file per icon).
