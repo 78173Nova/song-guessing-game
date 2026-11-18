@@ -62,6 +62,24 @@ function typesFor(mode: Mode): readonly QuestionType[] {
   return mode === "mixed" ? QUESTION_TYPES : [mode];
 }
 
+// What the solo start screen learns about the songs that match its genre + decade (team feedback 18 Nov, point 7):
+// only three numbers, nothing about single songs. Titles and artists are counted like the answer options ("Queen" =
+// "queen ").
+export type MatchingCounts = { songs: number; titles: number; artists: number };
+
+export function countMatching(songs: SongForGame[]): MatchingCounts {
+  return { songs: songs.length, titles: differentOptions(songs, "title"), artists: differentOptions(songs, "artist") };
+}
+
+// True if a game in this mode can start with songs that have these numbers: the same rule as buildRounds
+// (5 songs, and 4 different titles / artists for every question type the mode asks; mixed asks both).
+export function modeFits(counts: MatchingCounts, mode: Mode): boolean {
+  if (counts.songs < ROUNDS_PER_GAME) return false;
+  return typesFor(mode).every(
+    (type) => type === "year" || (type === "title" ? counts.titles : counts.artists) >= OPTIONS_PER_ROUND,
+  );
+}
+
 // Picks ROUNDS_PER_GAME (or settings.rounds) different songs and gives each round 1 correct + 3 wrong options, shuffled.
 // Mixed mode picks the question type of each round at random.
 export function buildRounds(

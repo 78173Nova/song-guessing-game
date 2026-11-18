@@ -1,9 +1,9 @@
 // The duel layout of a room round (issues #39, #66), for a game with exactly two players: the opponent's side on
 // top in cyan, facing the viewer; the wave circle in the middle with the seconds inside it; the viewer's side at
 // the bottom in violet, just above the answer buttons (which Room.tsx shows below, the same as on the Multiplayer
-// game board). On a laptop the two sides stand left and right of the circle. The opponent gets a check and the
-// word "Answered" once they have answered, never what they answered. Which side shows what:
-// lib/client/room-duel.ts.
+// game board). On a laptop the two sides stand left and right of the circle. Once the opponent has answered they
+// get the word "Answered" on a neutral grey pill (no tick, no green: team feedback, PR #74), never what they
+// answered. Which side shows what: lib/client/room-duel.ts.
 //
 // The circle uses the app's own colours only (CLAUDE.md rule 5: nothing about the song before the answer); the
 // cover's colours appear on the result screen, in Room.tsx.
@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import { duelSides, type ScoreMemory } from "@/lib/client/room-duel";
 import { avatarEmoji } from "@/lib/game/avatars";
 import AwayIcon from "./icons/AwayIcon";
-import CheckIcon from "./icons/CheckIcon";
 import TimeBar from "./TimeBar";
 import WaveCircle from "./WaveCircle";
 import styles from "./RoomDuel.module.css";
@@ -66,7 +65,6 @@ export default function RoomDuel({
                 </p>
                 {opponent.answered && (
                   <span className={styles.answered}>
-                    <CheckIcon size={16} />
                     Answered
                   </span>
                 )}
@@ -112,7 +110,6 @@ export default function RoomDuel({
             </p>
             {iAnswered && (
               <span className={styles.answered}>
-                <CheckIcon size={16} />
                 Answered
               </span>
             )}

@@ -88,3 +88,19 @@ Update 15 Nov 2026: avoiding the songs of recent games, and "Change settings".
 - **Random choice:** without filters, `buildRounds` shuffles all playable songs fairly (Fisher–Yates) and takes 5.
   A test with a fixed random seed checks that every playable song gets played over 120 games and songs without a
   clip never do.
+
+Update 18 Nov 2026: solo settings as tiles, and greyed-out modes (team feedback 18 Nov, points 7 and 8, `feature/solo-settings`).
+- **Decision:** the solo start screen uses the tile rows of "Create a room" (now `components/TileGroup.tsx`, shared by
+  the room form, the room list and the solo screen) instead of buttons and dropdowns, still single choice. A new
+  `GET /api/games/matching-songs?genre=…&decade=…` sends only three numbers for the chosen filters: playable songs,
+  different titles, different artists. The screen shows "12 songs match – 5 will be played" and greys out the modes
+  that cannot start (title: fewer than 4 titles, artist: fewer than 4 artists, mixed: either). If a filter change
+  breaks the chosen mode, it stays chosen but greyed out, "Start game" is disabled and a line says why.
+- **Why:** the same look in solo and rooms, and the player sees in advance what would be refused. `modeFits` sits
+  next to `buildRounds`, and a test checks that both always agree, so the screen and the server cannot drift apart.
+  Keeping the chosen mode (instead of switching it) means nothing changes without the player noticing.
+- **Alternatives:** extending `song-counts` (one reply would have two shapes); sending title and artist counts for
+  every genre + decade (more data for a rare case); switching to an available mode automatically (easy to miss).
+- **Limits:** the server still decides: `POST /api/games` refuses such a game with `too-few-songs` on its own. If the
+  numbers cannot be loaded, nothing is greyed out. With today's catalogue no combination with 5+ songs has fewer than
+  4 titles or artists, so mode tiles only grey out when the song list changes.

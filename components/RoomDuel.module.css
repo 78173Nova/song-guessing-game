@@ -87,7 +87,8 @@
   color: var(--color-primary);
 }
 
-/* Answered: check icon and the word, on the success tint (never colour alone, never which answer). */
+/* Answered: the word on a neutral grey pill, never a tick or the success green, so it does not hint at right or
+   wrong (team feedback, PR #74), and never which answer. */
 .answered,
 .away {
   display: inline-flex;
@@ -102,9 +103,9 @@
 }
 
 .answered {
-  color: var(--color-success);
-  background: var(--color-success-bg);
-  box-shadow: 0 0 0 1px var(--color-success);
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
 }
 
 /* Away: the away icon and the word, muted, with a dashed outline (the same as an away seat on the board). */

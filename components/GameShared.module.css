@@ -79,7 +79,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .primary:hover {
+  .primary:not(:disabled):hover {
     background: var(--color-primary-hover);
   }
 
@@ -90,14 +90,21 @@
 }
 
 /* Press state: a small, quick squeeze so a tap visibly counts. */
-.primary:active,
+.primary:not(:disabled):active,
 .secondary:active,
 .option:not(:disabled):active {
   transform: scale(0.97);
 }
 
-.primary:active {
+.primary:not(:disabled):active {
   background: var(--color-primary-hover);
+}
+
+/* "Start game" while the chosen settings cannot start a game (the note above says why). */
+.primary:disabled {
+  color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+  cursor: not-allowed;
 }
 
 /* An icon in a line of text or a button, e.g. the play icon in "Tap to start". */

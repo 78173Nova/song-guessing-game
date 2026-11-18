@@ -716,7 +716,8 @@ export async function getRoomState(
     // How many players the game started with (null in the lobby). With 2 the page shows the duel layout
     // (issue #39), also after one of them has left.
     startingPlayers: room.startingPlayers,
-    // Who has answered the round on screen, for the ticks on the game board (issue #38). Never what they chose.
+    // Who has answered the round on screen, for the grey "has answered" marker on the game board (issue #38).
+    // Never what they chose.
     answered: game.players
       .filter((player) => currentAnswers.some((a) => a.playerId === player.id))
       .map((player) => player.nickname),

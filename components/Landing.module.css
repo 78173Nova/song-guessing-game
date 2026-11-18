@@ -521,6 +521,34 @@
   color: var(--color-primary);
 }
 
+/* A tile that cannot be chosen (solo start screen, team feedback 18 Nov, point 7): faded, dashed outline (so it
+   is not shown by fading alone), no hover or press. It can still show as selected. The note under the row says
+   why. Disabled controls are exempt from the WCAG contrast minimum. */
+.tile:disabled {
+  opacity: 0.45;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:disabled:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .tileOn:disabled:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+.tile:disabled:active {
+  transform: none;
+}
+
+.tileNote {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* ---------- Avatar picker ---------- */
 
 .avatarPicker {

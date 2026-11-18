@@ -14,6 +14,7 @@ type FakeTrack = {
   previewUrl?: string;
   artworkUrl100?: string;
   trackViewUrl?: string;
+  trackExplicitness?: string;
 };
 
 function track(artistName: string, trackName: string, extra: Partial<FakeTrack> = {}): FakeTrack {
@@ -190,6 +191,50 @@ describe("lookupPreview – picking the right track", () => {
   it("returns not-found when iTunes has no results", async () => {
     const result = await lookupPreview({ artist: "Nobody", title: "Nothing" }, { fetchFn: fakeItunes([]) });
     expect(result).toEqual({ ok: false, reason: "not-found", message: PREVIEW_NOT_FOUND_MESSAGE });
+  });
+});
+
+describe("lookupPreview – no explicit clips (decision 005, update 18 Nov 2026)", () => {
+  const song = { artist: "Jack Harlow", title: "First Class" };
+
+  it("skips an explicit clip and takes the cleaned one", async () => {
+    const cleaned = track("Jack Harlow", "First Class", {
+      trackExplicitness: "cleaned",
+      collectionName: "Clean",
+      previewUrl: "https://audio.example.com/first-class-clean.m4a",
+    });
+    const fetchFn = fakeItunes([
+      track("Jack Harlow", "First Class", { trackExplicitness: "explicit", collectionName: "Explicit" }),
+      cleaned,
+    ]);
+    const result = await lookupPreview(song, { fetchFn });
+    expect(result).toMatchObject({ ok: true, previewUrl: cleaned.previewUrl });
+  });
+
+  it("accepts a clip marked notExplicit or cleaned", async () => {
+    for (const trackExplicitness of ["notExplicit", "cleaned"]) {
+      const fetchFn = fakeItunes([track("Jack Harlow", "First Class", { trackExplicitness })]);
+      expect(await lookupPreview(song, { fetchFn }), trackExplicitness).toMatchObject({ ok: true });
+    }
+  });
+
+  it("returns not-found when the only matching clip is explicit", async () => {
+    const fetchFn = fakeItunes([track("Jack Harlow", "First Class", { trackExplicitness: "explicit" })]);
+    expect(await lookupPreview(song, { fetchFn })).toEqual({
+      ok: false,
+      reason: "not-found",
+      message: PREVIEW_NOT_FOUND_MESSAGE,
+    });
+  });
+
+  it("skips a clip with an unknown explicitness value, to be safe", async () => {
+    const fetchFn = fakeItunes([track("Jack Harlow", "First Class", { trackExplicitness: "Explicit!" })]);
+    expect(await lookupPreview(song, { fetchFn })).toMatchObject({ ok: false, reason: "not-found" });
+  });
+
+  it("accepts a result without the explicitness field (iTunes does not always send it)", async () => {
+    const fetchFn = fakeItunes([track("Jack Harlow", "First Class")]);
+    expect(await lookupPreview(song, { fetchFn })).toMatchObject({ ok: true });
   });
 });
 

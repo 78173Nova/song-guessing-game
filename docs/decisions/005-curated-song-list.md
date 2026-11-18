@@ -81,3 +81,24 @@ As planned above, the decade is calculated from the year: `decadeOf` in `lib/gam
 The filter runs after `listSongsWithPreview`, so a song is only played if it is in the catalogue, has a preview
 **and** matches genre and decade (the catalogue and preview rules live in `listSongsWithPreview`). The player can
 choose 1960s … 2020s, so *Jailhouse Rock* (1957, decade 1950) only plays under "Any".
+
+## Update 18 Nov 2026: clean clips allowed for the 2020s (feature/filter-gaps)
+- **Decision:** for songs from the 2020s, what counts is the clip the game plays, not the original recording:
+  a song is allowed if its iTunes clip is marked `trackExplicitness` "notExplicit" or "cleaned". Songs from the
+  1960s–2010s keep the rule above (no explicit originals). `lookupPreview` (`lib/music/itunes.ts`) now skips every
+  result marked "explicit" or with an unknown value, for every song, so the seed can never store an explicit clip.
+  A result without the field is accepted, because iTunes does not always send it.
+- **Why:** most 2020s hip-hop hits have an explicit original, so the decade had 1 hip-hop song and the
+  hip-hop + 2020s filter could never start a game. The players only ever hear the clip, so a cleaned clip keeps the
+  game fine for class and the big screen. Checking the field in code means a clip that is looked up again later
+  (e.g. after Apple removed the old one) cannot come back explicit.
+- **How the songs were checked:** the real `lookupPreview` was run on 24 candidates and the explicitness of the
+  clip it picked was noted (23 "cleaned", 1 without a preview). Karin chose 6 and left out songs whose clean edit
+  still has heavy themes (e.g. *Not Like Us*) or that would be confusing in the game (*Houdini* by Eminem next to
+  Dua Lipa's *Houdini*, *Like That*).
+- **Alternatives:** keep the old rule (2020s hip-hop stays unplayable); add the iTunes search option `explicit=No`
+  (filters on Apple's side, but cannot be tested without calling iTunes, and hides why a song was skipped).
+- **Limits:** "cleaned" only removes words; themes stay, so each new 2020s song still needs a human check. The rule
+  is not checked automatically for older decades: the earlier explicit songs were removed by hand.
+- **How it could change:** if the team wants one rule for every decade, the "clean clip" rule could replace the
+  "no explicit original" rule everywhere, after a check of each added song.

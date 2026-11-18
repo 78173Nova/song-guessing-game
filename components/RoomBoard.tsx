@@ -1,6 +1,6 @@
 // The game board of a Multiplayer room round (issue #38): the song as the top half of the wave circle, which
 // ripples to the clip that is playing, with the seconds left inside it; every other player's nickname around it
-// with a check once they have answered; and the viewer's own nickname, larger, just above the answer buttons.
+// in neutral grey once they have answered; and the viewer's own nickname, larger, just above the answer buttons.
 // Nobody sees what anyone else answered: the room state only says who. Where each nickname sits is worked out in
 // lib/client/room-board.ts.
 //
@@ -9,7 +9,6 @@ import NumberFlow from "@number-flow/react";
 import { BOARD, boardSeats, SEAT, SONG_RADIUS } from "@/lib/client/room-board";
 import { avatarEmoji } from "@/lib/game/avatars";
 import AwayIcon from "./icons/AwayIcon";
-import CheckIcon from "./icons/CheckIcon";
 import TimeBar from "./TimeBar";
 import WaveCircle from "./WaveCircle";
 import styles from "./RoomBoard.module.css";
@@ -68,12 +67,9 @@ export default function RoomBoard({
                   {avatarEmoji(avatars[seat.nickname])}
                 </span>
                 <span className={styles.name}>{seat.nickname}</span>
-                {/* The marks come after the name, so a screen reader says "Mila, has answered". */}
-                {seat.answered && (
-                  <span className={styles.mark} role="img" aria-label="has answered">
-                    <CheckIcon size={12} className={styles.icon} />
-                  </span>
-                )}
+                {/* After the name, so a screen reader says "Mila, has answered". No tick: the grey label is the
+                    only visible sign, the same for a right and a wrong answer (team feedback, PR #74). */}
+                {seat.answered && <span className={styles.srOnly}>, has answered</span>}
                 {isAway && (
                   <span className={styles.mark} role="img" aria-label="away">
                     <AwayIcon size={12} className={styles.icon} />
@@ -109,10 +105,7 @@ export default function RoomBoard({
         <span className={styles.name}>{me}</span>
         <span className={styles.you}>(you)</span>
         {iAnswered && (
-          <span className={styles.meAnswered}>
-            <CheckIcon size={18} />
-            Answered
-          </span>
+          <span className={styles.meAnswered}>Answered</span>
         )}
       </p>
     </div>

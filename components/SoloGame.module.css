@@ -9,63 +9,34 @@
 
 /* ---------- Start screen ---------- */
 
-/* Mode choice: 2 × 2 buttons (the shared answer-button style), the chosen one filled with the soft violet and
-   outlined. */
-.modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  width: 100%;
-  max-width: var(--width-form);
-  border: none;
-}
-
-.modes legend {
-  margin-bottom: var(--space-3);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.modes button {
-  min-height: 52px;
-  justify-content: center;
-  text-align: center;
-}
-
-/* Genre and decade dropdowns: side by side, stacked on very narrow phones. */
-.filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--space-3);
-  width: 100%;
-  max-width: var(--width-form);
-}
-
-.filters label {
+/* Mode, genre and decade tiles (TileGroup, team feedback 18 Nov, point 8): the tile rows from "Create a room",
+   left-aligned in a column as wide as a form. */
+.settings {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--width-form);
   text-align: left;
 }
 
-.filters select {
-  min-height: 52px;
-  padding: 0 var(--space-3);
-  font: inherit;
-  font-size: var(--text-md);
-  font-weight: 400;
-  border: 2px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface);
+/* The line above "Start game": how many songs match (team feedback 18 Nov, point 8). */
+.filterNote {
+  width: 100%;
+  max-width: var(--width-form);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
-.filters select:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
+/* Too few songs, or the chosen mode cannot start: the form error style (cross icon and danger colour, never
+   colour alone), next to the settings it is about. */
+.filterProblem {
+  composes: error from "./Landing.module.css";
+  width: 100%;
+  max-width: var(--width-form);
+  margin: 0;
+  text-align: left;
 }
 
 /* ---------- The play frame: status line, seconds, time bar ---------- */

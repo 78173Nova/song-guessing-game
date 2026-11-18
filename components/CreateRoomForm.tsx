@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiAccountSettings } from "@/lib/client/account-api";
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
@@ -22,17 +23,19 @@ import { markShareOnArrival } from "@/lib/client/share";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
-import CheckIcon from "./icons/CheckIcon";
+import TileGroup from "./TileGroup";
 import styles from "./Landing.module.css";
 
 
 // "Create a room": an account holder picks a nickname and the room settings (issue #34) and becomes the room
-// creator, a player like everyone else. The settings cannot be changed afterwards. A guest is sent to log in and
-// comes back here afterwards. The server checks the login and every setting again when creating.
+// creator, a player like everyone else. The settings cannot be changed afterwards. A guest sees "You need an
+// account" with Log in and Sign up, and comes back here after logging in. The server checks the login and every
+// setting again when creating.
 // The usual nickname (else the username) and the saved avatar are filled in (issue #44); an account without an
 // avatar picks one here once, and the server saves it.
 export default function CreateRoomForm() {
   const router = useRouter();
+  // undefined while asking the server, false for a guest.
   const [loggedIn, setLoggedIn] = useState<boolean | undefined>(undefined);
   const [nickname, setNickname] = useState("");
   const [avatar, setAvatar] = useState("");
@@ -46,7 +49,7 @@ export default function CreateRoomForm() {
   useEffect(() => {
     apiAccountSettings().then((account) => {
       if (account === null) {
-        router.replace("/login?next=/create");
+        setLoggedIn(false);
         return;
       }
       const start = nicknameScreenStart(account);
@@ -55,7 +58,7 @@ export default function CreateRoomForm() {
       setAskAvatar(start.askAvatar);
       setLoggedIn(true);
     });
-  }, [router]);
+  }, []);
 
   // How many songs match the chosen genres and decades, asked again on every change. A late reply for an older
   // choice is ignored.
@@ -69,6 +72,19 @@ export default function CreateRoomForm() {
       current = false;
     };
   }, [genres, decades]);
+
+  // Next.js keeps this page alive (hidden) after "Create the room" navigates to the lobby, so coming back to
+  // /create would show the old "Creating…" button, disabled until a page refresh. Reset the button and any old
+  // error when the page is hidden. Also forget the login answer: a guest who leaves for Log in comes back logged
+  // in, and should see "One moment…" while the page asks again, not the old "You need an account".
+  // See node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md.
+  useLayoutEffect(() => {
+    return () => {
+      setSending(false);
+      setError("");
+      setLoggedIn(undefined);
+    };
+  }, []);
 
   const change = (part: Partial<RoomSettings>) => setSettings((old) => ({ ...old, ...part }));
   const needed = totalRoundsOf(settings);
@@ -89,7 +105,24 @@ export default function CreateRoomForm() {
     setError(result.message);
   }
 
-  if (loggedIn !== true) return <p className={styles.hint} aria-busy="true">One moment…</p>;
+  if (loggedIn === undefined) return <p className={styles.hint} aria-busy="true">One moment…</p>;
+
+  // A guest: Log in or Sign up, and back here afterwards (Sign up remembers it through the verification email).
+  if (!loggedIn) {
+    return (
+      <>
+        <p className={styles.pitch}>You need an account to create a room. Joining a room works without one.</p>
+        <div className={styles.accountButtons}>
+          <Link href="/login?next=/create" className={styles.primary}>
+            Log in
+          </Link>
+          <Link href="/signup?next=/create" className={styles.secondary}>
+            Sign up
+          </Link>
+        </div>
+      </>
+    );
+  }
 
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
@@ -118,7 +151,7 @@ export default function CreateRoomForm() {
 
       <p className={styles.hint}>These settings cannot be changed once the room is created.</p>
 
-      <Choice
+      <TileGroup
         legend="Room type"
         options={[
           { value: "duel", label: "Duel (2 players)" },
@@ -127,7 +160,7 @@ export default function CreateRoomForm() {
         selected={(value) => settings.type === value}
         onTap={(value) => change({ type: value as RoomSettings["type"] })}
       />
-      <Choice
+      <TileGroup
         legend="Who can find the room?"
         options={[
           { value: "public", label: "Public (in the room list)" },
@@ -136,31 +169,31 @@ export default function CreateRoomForm() {
         selected={(value) => (value === "private") === isPrivate}
         onTap={(value) => setIsPrivate(value === "private")}
       />
-      <Choice
+      <TileGroup
         legend="What do you guess?"
         options={MODES.map((mode) => ({ value: mode, label: MODE_LABELS[mode] }))}
         selected={(value) => settings.mode === value}
         onTap={(value) => change({ mode: value as Mode })}
       />
-      <Choice
+      <TileGroup
         legend="Genres"
         options={[{ value: "any", label: "Any" }, ...GENRES.map((genre) => ({ value: genre, label: GENRE_LABELS[genre] }))]}
         selected={(value) => isTileSelected<Genre>(genres, value as Genre)}
         onTap={(value) => change({ genres: toggleTile<Genre>(genres, value as Genre) as TileChoice<Genre> })}
       />
-      <Choice
+      <TileGroup
         legend="Decades"
         options={[{ value: "any", label: "Any" }, ...DECADES.map((decade) => ({ value: String(decade), label: `${decade}s` }))]}
         selected={(value) => isTileSelected<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade))}
         onTap={(value) => change({ decades: toggleTile<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade)) })}
       />
-      <Choice
+      <TileGroup
         legend="Songs per set"
         options={SONGS_PER_SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
         selected={(value) => String(settings.songsPerSet) === value}
         onTap={(value) => change({ songsPerSet: Number(value) as RoomSettings["songsPerSet"] })}
       />
-      <Choice
+      <TileGroup
         legend="Number of sets"
         options={SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
         selected={(value) => String(settings.sets) === value}
@@ -181,36 +214,5 @@ export default function CreateRoomForm() {
         {sending ? "Creating…" : "Create the room"}
       </button>
     </form>
-  );
-}
-
-// A row of tiles: tapping one calls onTap; `selected` says which are on.
-export function Choice({
-  legend,
-  options,
-  selected,
-  onTap,
-}: {
-  legend: string;
-  options: { value: string; label: string }[];
-  selected: (value: string) => boolean;
-  onTap: (value: string) => void;
-}) {
-  return (
-    <fieldset className={styles.tiles}>
-      <legend className={styles.codeLabel}>{legend}</legend>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={selected(option.value) ? `${styles.tile} ${styles.tileOn}` : styles.tile}
-          aria-pressed={selected(option.value)}
-          onClick={() => onTap(option.value)}
-        >
-          {selected(option.value) && <CheckIcon size={16} className={styles.tileCheck} />}
-          {option.label}
-        </button>
-      ))}
-    </fieldset>
   );
 }

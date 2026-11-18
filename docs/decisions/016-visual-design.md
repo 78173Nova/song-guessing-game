@@ -156,3 +156,9 @@ the button stays, so the player can still recover after the message has gone. Al
 room games share one stage, one time bar, one stylesheet (`GameShared.module.css`) and one audio hook
 (`useWaveAudio`); the motion rule now says that short hover/press colour transitions are allowed; and a shared
 rank in the standings is visible on screen ("=2"), not only to screen readers.
+
+Update 18 Nov 2026 (merge of `main`): the "has answered" mark is neutral grey with no tick, on the board, beside your own
+name and in the duel, as the team decided in PR #74 (a tick or the success green read as "they answered right"). It
+stays readable without colour: a bold name plus hidden "has answered" text on the board, and the word "Answered" on the
+pills. The solo settings tiles from `main` (team feedback points 7 and 8) use the shared tile style; their notes about
+too few songs use the form error style, while a refused start still shows as a short message.

@@ -14,16 +14,25 @@ import {
   withTimeout,
 } from "@/lib/client/clip-loader";
 import { ROUND_SECONDS, secondsLeft } from "@/lib/client/countdown";
-import { apiAnswer, apiNextRound, apiReplace, apiStartGame } from "@/lib/client/game-api";
+import { canChoose, filterNotes } from "@/lib/client/filter-choices";
+import {
+  apiAnswer,
+  apiNextRound,
+  apiReplace,
+  apiSoloMatchingSongs,
+  apiSongCounts,
+  apiStartGame,
+} from "@/lib/client/game-api";
+import { canPickMode, decadeFromTile, genreFromTile, matchLine, modeNotes, modeProblem } from "@/lib/client/solo-settings";
 import { rememberGame } from "@/lib/client/recent-games";
 import { gameReducer, initialState, type Answer, type GameState, type RoundInfo } from "@/lib/client/game-state";
 import { optionMark, verdictOf, type OptionMark } from "@/lib/client/solo-view";
 import { useCoverColours } from "@/lib/client/useCoverColours";
 import { useWaveAudio } from "@/lib/client/useWaveAudio";
-import { DECADES, type Decade } from "@/lib/game/filters";
+import { DECADES, type Decade, type SongCount } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
-import { ROUNDS_PER_GAME } from "@/lib/game/rounds";
+import { ROUNDS_PER_GAME, type MatchingCounts } from "@/lib/game/rounds";
 import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
@@ -31,6 +40,7 @@ import { showError } from "./messages";
 import GameStage from "./GameStage";
 import shared from "./GameShared.module.css";
 import styles from "./SoloGame.module.css";
+import TileGroup from "./TileGroup";
 import TimeBar from "./TimeBar";
 
 // A tiny silent sound. Playing it once on each player during the Start tap "unlocks" the players on
@@ -74,6 +84,35 @@ export default function SoloGame() {
   // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
   // a reload forgets them.
   const recentGamesRef = useRef<string[]>([]);
+  // Playable songs per genre and decade, so choices with too few songs are greyed out (spec 003, "filter gaps").
+  // null until loaded, or if loading failed: then nothing is greyed out and the server still checks the start.
+  const [songCounts, setSongCounts] = useState<SongCount[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiSongCounts().then((counts) => {
+      if (!cancelled) setSongCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Songs, different titles and different artists for the chosen genre + decade (team feedback 18 Nov, point 7),
+  // asked again on every change; a late reply for an older choice is ignored. null until loaded, or if loading
+  // failed: then no mode is greyed out and the server still checks the start.
+  const [matching, setMatching] = useState<MatchingCounts | null>(null);
+  useEffect(() => {
+    let current = true;
+    apiSoloMatchingSongs({ genre, decade }).then((counts) => {
+      if (current) setMatching(counts);
+    });
+    return () => {
+      current = false;
+    };
+  }, [genre, decade]);
+  // The line above "Start game", and why the chosen mode cannot start (it stays chosen, greyed out).
+  const line = matchLine(matching);
+  const problem = modeProblem(matching, mode);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -300,51 +339,52 @@ export default function SoloGame() {
           <p className={shared.intro}>
             Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
-          <fieldset className={styles.modes}>
-            <legend>What do you want to guess?</legend>
-            {MODES.map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={m === mode ? `${shared.option} ${shared.chosen}` : shared.option}
-                aria-pressed={m === mode}
-                onClick={() => setMode(m)}
-              >
-                {MODE_LABELS[m]}
-              </button>
-            ))}
-          </fieldset>
-          <div className={styles.filters}>
-            <label>
-              Genre
-              <select
-                value={genre ?? ""}
-                onChange={(e) => setGenre(GENRES.find((g) => g === e.target.value))}
-              >
-                <option value="">Any</option>
-                {GENRES.map((g) => (
-                  <option key={g} value={g}>
-                    {GENRE_LABELS[g]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Decade
-              <select
-                value={decade ?? ""}
-                onChange={(e) => setDecade(DECADES.find((d) => String(d) === e.target.value))}
-              >
-                <option value="">Any</option>
-                {DECADES.map((d) => (
-                  <option key={d} value={d}>
-                    {d}s
-                  </option>
-                ))}
-              </select>
-            </label>
+          {/* Mode, genre and decade as tile rows (team feedback 18 Nov, point 8); choices with too few songs are
+              greyed out with a note saying why (point 7). */}
+          <div className={styles.settings}>
+            <TileGroup
+              legend="What do you want to guess?"
+              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m) }))}
+              selected={(value) => value === mode}
+              onTap={(value) => setMode(MODES.find((m) => m === value) ?? "title")}
+              notes={modeNotes(matching)}
+            />
+            <TileGroup
+              legend="Genre"
+              options={[
+                { value: "any", label: "Any" },
+                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }) })),
+              ]}
+              selected={(value) => value === (genre ?? "any")}
+              onTap={(value) => setGenre(genreFromTile(value))}
+            />
+            <TileGroup
+              legend="Decade"
+              options={[
+                { value: "any", label: "Any" },
+                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }) })),
+              ]}
+              selected={(value) => value === String(decade ?? "any")}
+              onTap={(value) => setDecade(decadeFromTile(value))}
+              notes={filterNotes(songCounts, { genre, decade })}
+            />
           </div>
-          <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
+          {/* How many songs match, and why the chosen mode cannot start: these belong to the settings above, so they
+              stay in the page like a field error. A refused start or a server error shows as a short message
+              (showError above). */}
+          <p className={line.tooFew ? styles.filterProblem : styles.filterNote} role="status">
+            {line.text}
+          </p>
+          {problem && (
+            <p className={styles.filterProblem} role="status">
+              {problem}
+            </p>
+          )}
+          <button
+            className={`${shared.primary} ${shared.wide}`}
+            onClick={handleStart}
+            disabled={line.tooFew || problem !== null}
+          >
             Start game
           </button>
         </section>

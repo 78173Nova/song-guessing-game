@@ -54,15 +54,12 @@
   box-sizing: border-box;
 }
 
-/* Answered: check icon, bold name, success colours (never colour alone). */
+/* Answered: neutral grey and a bold name, never the success green and never a tick (team feedback, PR #74: a tick
+   or green reads as "they got it right"). Screen readers hear "has answered" (.srOnly). */
 .answered {
   font-weight: 700;
-  border-color: var(--color-success);
-  background: var(--color-success-bg);
-}
-
-.answered .icon {
-  color: var(--color-success);
+  border-color: var(--color-text-muted);
+  background: var(--color-surface-alt);
 }
 
 /* Away: muted, dashed outline and the away icon. */
@@ -73,7 +70,7 @@
   background: var(--color-surface);
 }
 
-/* The answered / away mark: a small badge on the label's top-left corner, so it takes no room from the nickname
+/* The away mark: a small badge on the label's top-left corner, so it takes no room from the nickname
    (with 25 players a label is only about 50px wide on a phone). */
 .mark {
   position: absolute;
@@ -85,18 +82,6 @@
   background: var(--color-surface);
 }
 
-/* Answered and away at once (an away player who answered before losing the connection): the second badge sits on
-   the top-right corner, so the two never cover each other. */
-.mark + .mark {
-  left: auto;
-  right: -0.35em;
-}
-
-.answered .mark {
-  background: var(--color-success-bg);
-  box-shadow: 0 0 0 1px var(--color-success);
-}
-
 .away .mark {
   box-shadow: 0 0 0 1px var(--color-border-strong);
 }
@@ -105,6 +90,16 @@
   width: 1em;
   height: 1em;
   stroke-width: 3;
+}
+
+/* Text only for screen readers ("has answered"). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .away .icon {
@@ -205,13 +200,18 @@
   color: var(--color-primary);
 }
 
+/* "Answered" next to your own name: a neutral grey pill with the word, no tick and no green (team feedback,
+   PR #74), the same as for every other player. */
 .meAnswered {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-success);
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
 }

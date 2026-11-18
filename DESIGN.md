@@ -752,3 +752,11 @@ Update 18 Nov 2026 (#57, review): a shared rank in the standings is visible on s
 shows as "=2" (`rankText`, `lib/client/standings-view.ts`) on the podium block and in the list row alike, so when more
 than three players share podium ranks the tied player in the list shows the same "=1" and never looks lower-ranked.
 The list's rank column is 2.75rem wide so "=25" fits.
+
+Update 18 Nov 2026 (merge of `main`): "has answered" no longer uses a tick or the success colours, following the team
+feedback in PR #74 ("no indication of how they answer": a tick or green reads as "they got it right"). On the board an
+answered seat is a neutral grey label (`--color-surface-alt`, `--color-text-muted` outline) with a bold name, and screen
+readers hear "has answered"; your own name and the duel show the word "Answered" on a neutral grey pill, with no icon.
+This replaces the "✓ icon" in the board sketch above. The solo start screen now uses tile rows (`TileGroup`, shared
+with "Create a room" and the room list) for mode, genre and decade instead of buttons and dropdowns. Tiles that cannot
+be chosen are faded with a dashed outline, and the "too few songs" / mode notes use the form error style.

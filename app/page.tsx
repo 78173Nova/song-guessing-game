@@ -39,7 +39,7 @@ export default function Home() {
             <Link href="/solo" className={`${styles.primary} ${styles.big}`}>
               Play solo
             </Link>
-            {/* A guest is sent to log in first and comes back to /create afterwards (app/create/page.tsx). */}
+            {/* A guest is asked to log in or sign up first, then comes back to /create (app/create/page.tsx). */}
             <Link href="/create" className={`${styles.secondary} ${styles.big}`}>
               Create a room
             </Link>
