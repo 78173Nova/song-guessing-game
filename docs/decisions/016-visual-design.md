@@ -68,3 +68,10 @@ On the landing page only "Play solo" is a filled button (One Violet Rule), so "C
 button and Log in / Sign up became quiet text buttons. Error lines get their cross icon from CSS, so every error on
 every screen looks the same without changing the components. Account forms still show the server's one message per
 form right above its button: the server does not say which field it is about.
+
+Update 18 Nov 2026 (#61): NumberFlow is installed as `@number-flow/react` 0.6.2 (exact version, adds only
+`number-flow` and `esm-env`). It rolls the solo countdown, the 3-2-1 and the score; it follows "reduce motion" by
+itself (`respectMotionPreference`, on by default), so numbers then change without rolling. `npm audit --omit=dev`
+reports 0 vulnerabilities; the full `npm audit` reports 16 high findings that were already there before this
+package, all from one `picomatch` advisory inside the dev tooling (vitest, eslint-config-next), with no fixed
+version yet.
