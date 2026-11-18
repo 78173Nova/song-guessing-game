@@ -64,6 +64,11 @@ export default function RoomBoard({
                 style={{ left: across(seat.x), top: down(seat.y), width: across(SEAT.width), height: down(SEAT.height) }}
                 title={isAway ? `${seat.nickname} – away, not connected` : seat.nickname}
               >
+                <span className={styles.avatar} aria-hidden="true">
+                  {avatarEmoji(avatars[seat.nickname])}
+                </span>
+                <span className={styles.name}>{seat.nickname}</span>
+                {/* The marks come after the name, so a screen reader says "Mila, has answered". */}
                 {seat.answered && (
                   <span className={styles.mark} role="img" aria-label="has answered">
                     <CheckIcon size={12} className={styles.icon} />
@@ -74,10 +79,6 @@ export default function RoomBoard({
                     <AwayIcon size={12} className={styles.icon} />
                   </span>
                 )}
-                <span className={styles.avatar} aria-hidden="true">
-                  {avatarEmoji(avatars[seat.nickname])}
-                </span>
-                <span className={styles.name}>{seat.nickname}</span>
               </li>
             );
           })}

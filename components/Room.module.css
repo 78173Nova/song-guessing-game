@@ -209,7 +209,7 @@
   white-space: nowrap;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .control:hover:not(:disabled) {
     color: var(--color-text);
     text-decoration-color: currentColor;

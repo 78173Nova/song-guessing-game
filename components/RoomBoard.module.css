@@ -12,7 +12,7 @@
 
 .board {
   position: relative;
-  width: min(100%, 34rem, 62vh);
+  width: min(100%, 34rem, 62svh);
   aspect-ratio: 100 / 80;
   /* Lets the labels size their text by the board's width (cqw). */
   container-type: inline-size;
@@ -83,6 +83,13 @@
   padding: 0.1em;
   border-radius: var(--radius-full);
   background: var(--color-surface);
+}
+
+/* Answered and away at once (an away player who answered before losing the connection): the second badge sits on
+   the top-right corner, so the two never cover each other. */
+.mark + .mark {
+  left: auto;
+  right: -0.35em;
 }
 
 .answered .mark {
@@ -169,7 +176,7 @@
 
 /* Time left: the board's base line. It shrinks from the right with transform, never width. */
 .timeTrack {
-  width: min(100%, 34rem, 62vh);
+  width: min(100%, 34rem, 62svh);
   height: 6px;
   overflow: hidden;
   border-radius: var(--radius-full);

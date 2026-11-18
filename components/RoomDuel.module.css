@@ -163,7 +163,7 @@
    answers still fit. */
 .song {
   position: relative;
-  width: min(220px, 56vw, 26vh);
+  width: min(220px, 56vw, 26svh);
   aspect-ratio: 1;
   flex-shrink: 0;
 }
@@ -245,7 +245,7 @@
   }
 
   .song {
-    width: min(220px, 30vh);
+    width: min(220px, 30svh);
   }
 
   .scoreNumber {
