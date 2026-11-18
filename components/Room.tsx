@@ -40,6 +40,7 @@ import {
 import { nicknameScreenStart } from "@/lib/client/nickname-screen";
 import { takeShareOnArrival } from "@/lib/client/share";
 import { standingsView } from "@/lib/client/standings-view";
+import { useCoverColours } from "@/lib/client/useCoverColours";
 import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { QUESTION_LABELS } from "@/lib/game/modes";
@@ -543,6 +544,8 @@ function GameScreen({
 }) {
   // The round whose result, summary or standings are on screen (what "Tap to continue" skips).
   const closedRound = state.round?.status === "closed" ? state.round.number : null;
+  // The album cover's colours for the circle, only once the answer is revealed (null otherwise, CLAUDE.md rule 5).
+  const coverColours = useCoverColours(screen.kind === "result" ? screen.song.artworkUrl : null);
   const skip = (step: SkipStep) => {
     if (closedRound !== null) onContinue(closedRound, step);
   };
@@ -604,8 +607,8 @@ function GameScreen({
       const verdict = { right: "Right!", wrong: "Wrong", timeout: "No answer" }[kind];
       return (
         <section className={game.play}>
-          {/* The same circle as in the solo reveal; the clip keeps playing. */}
-          <RoomStage analyser={analyser}>
+          {/* The same circle as in the solo reveal; the clip keeps playing, and the circle takes the cover's colours. */}
+          <RoomStage analyser={analyser} colours={coverColours}>
             {kind === "right" ? (
               <CheckIcon className={`${game.discIcon} ${game.discRight}`} />
             ) : (
@@ -740,8 +743,8 @@ function GameScreen({
 }
 
 // The stage of the room result: the wave circle (behind) and a solid disc in front, the same as the solo stage.
-// colours: the circle's colours. Leave it out for the app's own colours. The album cover's colours (#64) may
-// only be passed here, on the result screen, once the answer is revealed (CLAUDE.md rule 5).
+// colours: the circle's colours; undefined keeps the app's own colours. The album cover's colours (#64) are only
+// passed here, on the result screen, once the answer is revealed (CLAUDE.md rule 5).
 function RoomStage({
   analyser,
   colours,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AccountButtons from "@/components/AccountButtons";
 import RoomCodeForm from "@/components/RoomCodeForm";
+import WaveCircle from "@/components/WaveCircle";
 import BoltIcon from "@/components/icons/BoltIcon";
 import HeadphonesIcon from "@/components/icons/HeadphonesIcon";
 import PeopleIcon from "@/components/icons/PeopleIcon";
@@ -12,8 +13,10 @@ export default function Home() {
   return (
     <div className={styles.landing}>
       <main className={styles.landingMain}>
-        {/* The wave circle goes here (#64); until then a still ring keeps its place. */}
-        <div className={styles.circleSlot} aria-hidden="true" />
+        {/* The wave circle idles in the app colours: no analyser (no sound here) and no colours. */}
+        <div className={styles.circleSlot}>
+          <WaveCircle />
+        </div>
 
         <div className={styles.landingColumn}>
           <h1 className={styles.landingTitle}>Song Guessing Game</h1>

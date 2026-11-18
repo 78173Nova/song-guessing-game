@@ -7,8 +7,9 @@
 // - analyser: the sound analyser of the playing clip (lib/client/wave-audio.ts). null = nothing to follow:
 //   a slow idle pulse (used on the landing page, while loading, and when sound is blocked).
 // - colours: hex colours for the ring. Leave it out for the app's own wave colours (the CSS tokens), which is
-//   the only choice while a round is open (CLAUDE.md rule 5). A new list blends in over --duration-wave-colour.
-// - "Reduce motion" on: the ring stays still as a plain circle; only a colour change still blends.
+//   the only choice while a round is open (CLAUDE.md rule 5). A new list blends in over --duration-wave-colour;
+//   leaving it out again blends back over --duration-base.
+// - "Reduce motion" on: the ring stays still as a plain circle, and a colour change happens at once.
 //
 // Performance (animation-performance): the drawing runs on requestAnimationFrame only while the canvas is on
 // screen and the tab is visible, never through React state, and stops entirely when nothing moves.
@@ -50,7 +51,7 @@ export default function WaveCircle({ analyser = null, colours, className }: Prop
     let onScreen = true;
     let frame = 0;
     let appColours = readAppColours(canvas);
-    const blendMs = readDuration(canvas, "--duration-wave-colour");
+    let blendMs = 0;
     // Colour blend: from `from` to `to`, started at `blendStart`. `shown` is what is on screen now.
     let shown = appColours;
     let from = shown;
@@ -65,6 +66,11 @@ export default function WaveCircle({ analyser = null, colours, className }: Prop
         from = shown;
         to = target;
         blendStart = now;
+        // Into new colours (the cover's on reveal) over --duration-wave-colour; back to the app colours faster,
+        // over --duration-base, so no album colour is left once the next round starts (DESIGN.md, "What moves").
+        // Under "reduce motion" both tokens are 0ms (app/globals.css): the colour changes at once. Read at the
+        // start of each blend, so a change of that setting counts from the next blend.
+        blendMs = readDuration(canvas!, target === appColours ? "--duration-base" : "--duration-wave-colour");
       }
       const progress = blendMs > 0 ? (now - blendStart) / blendMs : 1;
       blending = progress < 1;

@@ -99,6 +99,18 @@ header, the clips would fail to load and the rounds would be skipped; then `prep
 one line to remove, and the circle idles. A clip is routed through the analyser only when the sound context is
 already running, so the music never goes silent because of the circle.
 
+Update 18 Nov 2026 (#64): the wave circle shows the album cover's colours on the solo reveal and idles on the
+landing page. `lib/client/cover-colours.ts` (`pickCoverColours`, pure, tested) picks 2–3 colours from the
+cover's pixels: it skips nearly grey, black and white pixels, sorts the rest into 12 hue groups and takes the
+biggest, never two that look nearly the same; a cover with too little colour gives null (the app colours stay).
+`lib/client/useCoverColours.ts` (`useCoverColours(artworkUrl)`) loads the cover as a separate cross-origin image,
+draws it 32 × 32 on a hidden canvas and returns the colours, or undefined while loading or on any failure; the
+room screens can use the same hook. No package. Two changes to earlier choices: under "reduce motion" the colour
+now changes at once (`--duration-wave-colour` becomes 0ms too, as the ticket asks), and the circle goes back to
+the app colours over `--duration-base` instead of the 900ms blend, so no album colour is left when the next round
+starts. Limit: the cover is downloaded twice (once for the picture, once with cross-origin access for the
+pixels); both are small and usually come from the browser cache.
+
 Update 18 Nov 2026 (#65): the room screens use the tokens; no new package. The lobby shows the room code, the
 countdown (display font) and the settings at the top, then the players as rows (own row soft violet with "(you)",
 away players muted with the away icon and the word "away"); the room creator's Extend and Kick, and Leave, are
@@ -109,7 +121,7 @@ a bar under the board (transform, not width). The answered and away marks are sm
 so with 25 players they take no room from the name. Rooms reuse `wave-audio.ts` the same way as the solo game
 (unlock in the Join / Start now / Play again tap, prepare players before a clip, attach when a clip starts); a
 player that loaded a clip before any tap (e.g. after a reload) is never routed through the analyser, so its sound
-cannot go silent, and the circle idles. The room result shows the same stage as the solo reveal, with a `colours`
-hook-up point for the cover colours (#64). Standings: the top three on a podium (winner in the middle, block height
+cannot go silent, and the circle idles. The room result shows the same stage as the solo reveal, and its circle takes
+the cover colours from `useCoverColours` (#64); the board during a round never gets them. Standings: the top three on a podium (winner in the middle, block height
 by rank, so equal points share both rank and height) from `lib/client/standings-view.ts` (pure, tested); totals
 roll up from 0 with NumberFlow (straight to the number with reduce motion). The duel layout is left to #66.
