@@ -90,7 +90,7 @@
    the canvas from its centre, so the outer 15 % above and below is empty: a negative margin gives that space
    back to the page. */
 .circleSlot {
-  --circle-size: min(220px, 55vw, 26dvh);
+  --circle-size: min(220px, 55vw, 26svh);
   width: var(--circle-size);
   margin-block: calc(-0.12 * var(--circle-size));
   flex: none;
@@ -252,7 +252,7 @@
   text-underline-offset: 0.2em;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .primary:hover:not(:disabled) {
     background: var(--color-primary-hover);
   }
@@ -350,7 +350,7 @@
   color: var(--color-text-muted);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .textInput:hover,
   .codeInput:hover {
     border-color: var(--color-text-muted);
@@ -409,7 +409,7 @@
   text-underline-offset: 0.2em;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .textLink:hover {
     text-decoration-color: currentColor;
   }
@@ -499,7 +499,7 @@
     border-color var(--duration-instant) var(--ease-out);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .tile:hover {
     border-color: var(--color-primary);
   }
@@ -570,7 +570,7 @@
   height: 1px;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .avatarOption:hover {
     border-color: var(--color-border-strong);
   }
@@ -635,7 +635,7 @@
     border-color var(--duration-instant) var(--ease-out);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .roomEntry:hover {
     border-color: var(--color-primary);
   }

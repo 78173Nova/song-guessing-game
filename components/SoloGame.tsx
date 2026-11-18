@@ -646,7 +646,16 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
         {result.song.artworkUrl && (
           // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={result.song.artworkUrl} alt={`Cover of ${result.song.title}`} width={96} height={96} />
+          <img
+            src={result.song.artworkUrl}
+            alt={`Cover of ${result.song.title}`}
+            width={96}
+            height={96}
+            // A cover that fails to load is left out, instead of a broken-image icon.
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
         )}
         <div className={styles.songText}>
           <p className={styles.title}>{result.song.title}</p>

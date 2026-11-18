@@ -636,7 +636,16 @@ function GameScreen({
               {screen.song.artworkUrl && (
                 // A plain <img>: the cover comes straight from Apple's servers, no image processing needed.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={screen.song.artworkUrl} alt={`Cover of ${screen.song.title}`} width={96} height={96} />
+                <img
+                  src={screen.song.artworkUrl}
+                  alt={`Cover of ${screen.song.title}`}
+                  width={96}
+                  height={96}
+                  // A cover that fails to load is left out, instead of a broken-image icon.
+                  onError={(event) => {
+                    event.currentTarget.hidden = true;
+                  }}
+                />
               )}
               <div className={game.songText}>
                 <p className={game.title}>{screen.song.title}</p>

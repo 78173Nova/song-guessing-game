@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import SoloGame from "@/components/SoloGame";
 import styles from "../page.module.css";
 
@@ -12,7 +13,7 @@ export default function SoloPage() {
       <main className={styles.main}>
         <header className={styles.header}>
           <Link href="/" className={styles.back}>
-            ← Home
+            <ArrowLeftIcon /> Home
           </Link>
           <h1 className={styles.heading}>Song Guessing Game</h1>
         </header>

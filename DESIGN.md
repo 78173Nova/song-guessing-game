@@ -716,3 +716,16 @@ a small "Score" label, in `--text-number` (capped at 2.75rem side by side on a l
 circle sits between them, `min(220px, 56vw, 26vh)` on phones and `min(220px, 30vh)` from 48rem, with the seconds
 on a solid disc (inset 24 %), "Round n / N" under it and the board's time bar under the duel. Scores roll from the
 value seen last round to the new one when a round starts (NumberFlow; at once with reduce motion).
+
+Update 18 Nov 2026 (#67): stress, phone and accessibility pass. The old colour names (`--background`, `--foreground`,
+`--card`, `--muted`, `--accent`, `--accent-text`, `--good`, `--good-bg`, `--bad`, `--bad-bg`) are removed from
+`app/globals.css`; nothing used them any more, so the "Old names → new names" table above is history now. Phone
+basics are set once in `app/globals.css`: no tap highlight, no text inflation in landscape, `touch-action:
+manipulation` on links and controls, and button labels are not selectable. Hover styles only apply to a precise
+pointer (`(hover: hover) and (pointer: fine)`), so a tapped button never keeps its hover look. Sizes that follow the
+screen height use `svh` (the height with the browser bars showing), so the board, the duel circle and the landing
+circle never grow when the address bar hides. A cover that fails to load is left out instead of showing a broken
+image. On the board the answered/away badges come after the nickname (a screen reader says the name first), and a
+player who is both gets the second badge on the other corner. The solo game keeps its errors in the page (start
+screen and error screen) instead of short messages: each one belongs to the button right under it ("Start game",
+"Try again") and should not disappear after a few seconds.
