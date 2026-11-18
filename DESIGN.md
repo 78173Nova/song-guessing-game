@@ -729,3 +729,9 @@ image. On the board the answered/away badges come after the nickname (a screen r
 player who is both gets the second badge on the other corner. The solo game keeps its errors in the page (start
 screen and error screen) instead of short messages: each one belongs to the button right under it ("Start game",
 "Try again") and should not disappear after a few seconds.
+
+Update 18 Nov 2026 (#57, review): the motion rule, said precisely. Short colour transitions on hover/press states
+are allowed (`--duration-instant`, as the token table already says: "hover colour"); anything that moves uses only
+`transform` and `opacity` (and the wave circle on its canvas). This matches the CSS: the landing and form buttons,
+inputs, tiles and avatar options fade their border or background colour over `--duration-instant`; the game and
+room buttons change colour at once and only their press scale moves.

@@ -1,8 +1,9 @@
 /*
  * The solo game (and, until #62 restyles them, the room game screens, which import this file as `game`).
  * Mobile first: one column, big touch targets; from 40rem the answers sit in a 2 × 2 grid.
- * Tokens only (app/globals.css). Only transform and opacity animate; every duration is a token, so
- * "reduce motion" (durations become 0ms) turns all of it off. Delays are fractions of a duration token for
+ * Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour transitions on
+ * hover/press are allowed (--duration-instant). Every duration is a token, so "reduce motion" (durations become
+ * 0ms) turns all of it off. Delays are fractions of a duration token for
  * the same reason.
  */
 .game {

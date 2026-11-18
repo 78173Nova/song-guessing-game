@@ -2,8 +2,9 @@
  * The room screens (#65): the lobby, the room game screens around the Multiplayer game board, the standings
  * podium and the set summary. The board itself is RoomBoard.module.css; buttons, forms, the stage, answer
  * buttons and the reveal pieces come from Landing.module.css and SoloGame.module.css, so every screen looks the
- * same. Tokens only (app/globals.css). Only transform and opacity animate, with duration tokens, so "reduce
- * motion" (durations 0ms) turns it all off.
+ * same. Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour
+ * transitions on hover/press are allowed (--duration-instant). Duration tokens only, so "reduce motion"
+ * (durations 0ms) turns it all off.
  */
 
 /* Text only screen readers hear, e.g. "shared rank". */

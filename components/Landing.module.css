@@ -2,7 +2,8 @@
  * The landing page and every form screen (sign up, log in, password, email links, create and join a room,
  * Account settings, avatar picker, "Coming soon"), plus a few pieces the room screens borrow (#60).
  * Rules from DESIGN.md: tokens only (no raw colours), labels above fields, errors right below with a cross icon,
- * 52px buttons and inputs, every control at least 44 × 44px, one filled violet button per screen. Mobile first;
+ * 52px buttons and inputs, every control at least 44 × 44px, one filled violet button per screen. Anything that
+ * moves uses only transform and opacity; hover/press colours fade over --duration-instant. Mobile first;
  * the one layout breakpoint is 40rem (640px).
  */
 
