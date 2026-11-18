@@ -42,7 +42,7 @@ import { takeShareOnArrival } from "@/lib/client/share";
 import { standingsView } from "@/lib/client/standings-view";
 import type { CoverColours } from "@/lib/client/cover-colours";
 import { useCoverColours } from "@/lib/client/useCoverColours";
-import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
+import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { avatarEmoji } from "@/lib/game/avatars";
 import { QUESTION_LABELS } from "@/lib/game/modes";
 import { MAX_PLAYERS_BY_TYPE, totalRoundsOf } from "@/lib/game/room-settings";
@@ -956,40 +956,37 @@ function useRoomClips(
   const wantedRef = useRef<{ number: number; startsAt: number } | null>(null);
   const [blocked, setBlocked] = useState(false); // the browser refused to start a clip without a tap
   const [problem, setProblem] = useState("");
-  const waveAudioRef = useRef<WaveAudio | null>(null);
-  // The analyser once a clip is routed through it; null = the circle idles.
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  // The wave circle's sound analyser (lib/client/useWaveAudio.ts); analyser = null while the circle idles.
+  const { analyser, unlock: unlockWave, resume: resumeWave, prepare: prepareWave, attach: attachWave } = useWaveAudio();
 
   const players = useCallback((count: number) => {
     while (playersRef.current.length < count) {
       const player = new Audio();
       player.preload = "auto";
-      waveAudioRef.current?.prepare(player); // before its first src (does nothing before the first tap)
+      prepareWave(player); // before its first src (does nothing before the first tap)
       playersRef.current.push(player);
     }
     return playersRef.current;
-  }, []);
+  }, [prepareWave]);
 
   // Called inside a tap (Join, Start now): plays a silent sound on every player so later clips may start alone.
   // Also starts the sound analyser for the wave circle, which phones allow only in a tap.
   const unlock = useCallback(() => {
-    const waveAudio = (waveAudioRef.current ??= createWaveAudio());
-    waveAudio.unlock();
+    unlockWave();
     for (const player of players(MAX_ROUNDS)) {
       if (player.src && player.src !== SILENT_SOUND) continue;
-      waveAudio.prepare(player); // before the next src, or the analyser reads only silence
+      prepareWave(player); // before the next src, or the analyser reads only silence
       player.src = SILENT_SOUND;
       player.play().catch(() => {});
     }
-  }, [players]);
+  }, [players, unlockWave, prepareWave]);
 
   // Start a loaded clip; route it through the analyser first when the sound context runs (otherwise it plays as
   // before and the circle idles).
   const start = useCallback((player: HTMLAudioElement, startsAt: number) => {
-    const waveAudio = waveAudioRef.current;
-    if (waveAudio?.attach(player)) setAnalyser(waveAudio.analyser());
+    attachWave(player);
     startClip(player, startsAt, setBlocked);
-  }, []);
+  }, [attachWave]);
 
   // Load every clip in advance, one after another, like the solo game (load → try once more → swap the song →
   // give up). After a swap only the changed clip loads again, so the clip that is playing is not interrupted.
@@ -1039,24 +1036,18 @@ function useRoomClips(
   // "Tap to hear the music": the tap may also wake the sound analyser.
   const playFromTap = useCallback(
     (number: number, startsAt: number) => {
-      waveAudioRef.current?.unlock();
+      resumeWave();
       play(number, startsAt);
     },
-    [play],
+    [play, resumeWave],
   );
 
   const stopAll = useCallback(() => {
     wantedRef.current = null;
     playersRef.current.forEach((player) => player.pause());
   }, []);
-  // No music after leaving the page, and no sound context left open.
-  useEffect(
-    () => () => {
-      stopAll();
-      waveAudioRef.current?.close();
-    },
-    [stopAll],
-  );
+  // No music after leaving the page (useWaveAudio closes the sound context itself).
+  useEffect(() => () => stopAll(), [stopAll]);
 
   return { unlock, play, playFromTap, stopAll, blocked, problem, analyser };
 }

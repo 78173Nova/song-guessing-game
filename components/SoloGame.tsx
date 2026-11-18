@@ -20,7 +20,7 @@ import { gameReducer, initialState, type Answer, type GameState, type RoundInfo 
 import { optionMark, timeLeftFraction, verdictOf, type OptionMark } from "@/lib/client/solo-view";
 import type { CoverColours } from "@/lib/client/cover-colours";
 import { useCoverColours } from "@/lib/client/useCoverColours";
-import { createWaveAudio, type WaveAudio } from "@/lib/client/wave-audio";
+import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
@@ -50,9 +50,10 @@ export default function SoloGame() {
   // One audio player per round, created during the Start tap.
   const playersRef = useRef<HTMLAudioElement[]>([]);
   // Connects the players to the sound analyser for the wave circle (created in the first Start tap).
-  const waveAudioRef = useRef<WaveAudio | null>(null);
-  // The analyser once a clip is routed through it; null = the circle idles.
-  const [waveAnalyser, setWaveAnalyser] = useState<AnalyserNode | null>(null);
+  // waveAnalyser: the analyser once a clip is routed through it; null = the circle idles.
+  const wave = useWaveAudio();
+  const waveAnalyser = wave.analyser;
+  const attachWave = wave.attach;
   // "gameId:round" an answer was already sent for – stops a click and the timer both sending one.
   const answeredRef = useRef<string | null>(null);
   // "gameId:round" whose start was already requested – stops a round being requested twice.
@@ -136,16 +137,14 @@ export default function SoloGame() {
     pauseAll();
     // Still inside the tap: start the sound analyser (phones allow this only in a tap) and let go of the
     // previous game's players.
-    const waveAudio = (waveAudioRef.current ??= createWaveAudio());
-    waveAudio.detachAll();
-    waveAudio.unlock();
-    setWaveAnalyser(null);
+    wave.detachAll();
+    wave.unlock();
     // Still inside the tap: create and unlock one player per round.
     const players = Array.from({ length: ROUNDS_PER_GAME }, (_, index) => {
       const player = new Audio();
       player.preload = "auto";
       player.addEventListener("error", () => handlePlayerError(player, index));
-      waveAudio.prepare(player); // before the first src, or the analyser reads only silence
+      wave.prepare(player); // before the first src, or the analyser reads only silence
       player.src = SILENT_SOUND;
       player.play().catch(() => {});
       return player;
@@ -190,7 +189,7 @@ export default function SoloGame() {
 
   function handleTapToStart() {
     if (state.screen !== "tap-to-start") return;
-    waveAudioRef.current?.unlock();
+    wave.resume();
     playersRef.current[state.roundNumber - 1]?.play().catch(() => {});
     dispatch({ type: "tapped" });
   }
@@ -230,8 +229,7 @@ export default function SoloGame() {
         loadedRoundRef.current = { key: startingKey, round };
       }
       // Route the clip through the analyser when the sound context runs; otherwise it plays as before.
-      const waveAudio = waveAudioRef.current;
-      if (waveAudio?.attach(player)) setWaveAnalyser(waveAudio.analyser());
+      attachWave(player);
       if (player.paused && !player.error) {
         try {
           player.currentTime = 0;
@@ -250,7 +248,7 @@ export default function SoloGame() {
       // A clip that was given up on: the round is skipped right away.
       if (player.error) sendAnswer(gameId, roundNumber, "skip");
     })();
-  }, [startingKey, sendAnswer]);
+  }, [startingKey, sendAnswer, attachWave]);
 
   // The 15-second countdown: ticks while the round is open, and sends "timeout" when it reaches 0.
   const roundKey = state.screen === "round" ? `${state.gameId}:${state.round.round}` : null;
@@ -266,17 +264,12 @@ export default function SoloGame() {
     return () => clearInterval(timer);
   }, [roundKey, pending, roundStartedAt, sendAnswer]);
 
-  // No music on the start, results and error screens, or after leaving the page.
+  // No music on the start, results and error screens, or after leaving the page (useWaveAudio closes the sound
+  // context itself).
   useEffect(() => {
     if (state.screen === "start" || state.screen === "results" || state.screen === "error") pauseAll();
   }, [state.screen]);
-  useEffect(
-    () => () => {
-      pauseAll();
-      waveAudioRef.current?.close();
-    },
-    [],
-  );
+  useEffect(() => () => pauseAll(), []);
 
   // What the current round asks. The server sends it with each round; without it (older data),
   // title/artist/year games fall back to the chosen mode and mixed games show no question.
