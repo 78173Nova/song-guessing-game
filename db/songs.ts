@@ -55,7 +55,7 @@ export const songList: SongInput[] = [
   { artist: "The Rolling Stones", title: "(I Can't Get No) Satisfaction", year: 1965, genre: "rock" },
   { artist: "The Who", title: "My Generation", year: 1965, genre: "rock" },
   { artist: "The Doors", title: "Light My Fire", year: 1967, genre: "rock" },
-  { artist: "Jimi Hendrix", title: "Purple Haze", year: 1967, genre: "rock" },
+  { artist: "The Jimi Hendrix Experience", title: "Purple Haze", year: 1967, genre: "rock" },
   { artist: "Jefferson Airplane", title: "Somebody to Love", year: 1967, genre: "rock" },
   { artist: "Steppenwolf", title: "Born to Be Wild", year: 1968, genre: "rock" },
   { artist: "Creedence Clearwater Revival", title: "Bad Moon Rising", year: 1969, genre: "rock" },
@@ -76,6 +76,10 @@ export const songList: SongInput[] = [
   { artist: "The Contours", title: "Do You Love Me", year: 1962, genre: "dance" },
   { artist: "Wilson Pickett", title: "Land of 1000 Dances", year: 1966, genre: "dance" },
   { artist: "Tommy James & the Shondells", title: "Mony Mony", year: 1968, genre: "dance" },
+  { artist: "Bob & Earl", title: "Harlem Shuffle", year: 1963, genre: "dance" },
+  { artist: "The Capitols", title: "Cool Jerk", year: 1966, genre: "dance" },
+  { artist: "Sly & The Family Stone", title: "Dance to the Music", year: 1967, genre: "dance" },
+  { artist: "Archie Bell & The Drells", title: "Tighten Up", year: 1968, genre: "dance" },
   { artist: "Patsy Cline", title: "Crazy", year: 1961, genre: "country" },
   { artist: "Johnny Cash", title: "Ring of Fire", year: 1963, genre: "country" },
   { artist: "Bob Dylan", title: "Blowin' in the Wind", year: 1963, genre: "country" },
@@ -84,6 +88,8 @@ export const songList: SongInput[] = [
   { artist: "Glen Campbell", title: "Wichita Lineman", year: 1968, genre: "country" },
   { artist: "Tammy Wynette", title: "Stand by Your Man", year: 1968, genre: "country" },
   { artist: "Simon & Garfunkel", title: "Mrs. Robinson", year: 1968, genre: "country" },
+  { artist: "Bobbie Gentry", title: "Ode to Billie Joe", year: 1967, genre: "country" },
+  { artist: "Merle Haggard", title: "Mama Tried", year: 1968, genre: "country" },
 
   // 1970s (spec 003, checked by Karin)
   { artist: "Elton John", title: "Your Song", year: 1970, genre: "pop" },
