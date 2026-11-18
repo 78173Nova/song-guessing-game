@@ -68,3 +68,16 @@ On the landing page only "Play solo" is a filled button (One Violet Rule), so "C
 button and Log in / Sign up became quiet text buttons. Error lines get their cross icon from CSS, so every error on
 every screen looks the same without changing the components. Account forms still show the server's one message per
 form right above its button: the server does not say which field it is about.
+
+Update 18 Nov 2026 (#62): **Vaul 1.1.2** (the share pop-up: a bottom sheet that can be swiped down below 40rem, a
+centred dialog with no dragging from 40rem; Esc closes it and the focus goes back to the button that opened it) and
+**Sonner 2.0.8** (short messages, mounted once in `app/layout.tsx` as `components/MessageArea.tsx`; pages call
+`components/messages.ts`) are installed with exact versions. Vaul brings Radix's dialog with it as a sub-dependency;
+we do not use Radix directly. Short messages are used for "Link copied", for errors from buttons that are not about a
+form field (start, extend, leave, kick, play again, a refused answer, log out) and, as one lasting message that
+updates in place, for "can't reach the server" while the room or the public room list keeps asking; it goes away by
+itself when the connection is back. Field errors and the one server message per form stay where they were. The QR
+code sits on a new `--color-qr-bg` token (white in both modes) with a white frame as its quiet zone. Limit: the
+solo game's errors still show in the page; they move to short messages when the solo screens are restyled (#61).
+`npm audit --omit=dev` reports 0 vulnerabilities; the full `npm audit` reports 16 high ones on the base branch
+already (a new `picomatch` advisory inside Vitest and the lint tooling), not from these two packages.

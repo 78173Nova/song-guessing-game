@@ -672,3 +672,10 @@ landing page and back links). The focus ring, `::selection`, `accent-color` and 
 `app/globals.css` for every element. The room code input uses the body font (Atkinson tells 0/O and 1/l apart);
 the large room code in the lobby keeps the display font. Until #64 adds the canvas, the landing page shows a still
 ring in the wave colours in the circle's place.
+
+Update 18 Nov 2026 (#62): the share pop-up and short messages are built. New token `--color-qr-bg` (#ffffff in both
+modes): the QR code sits on it inside a white frame (`--space-4` padding) that adds a quiet zone. The bottom sheet
+keeps Vaul's own timing (500ms, its iOS curve), because Vaul uses the same curve when it finishes a drag; the laptop
+dialog fades and grows from 0.96 over `--duration-fast`. Under reduce motion the sheet and dialog appear without
+moving. Short messages sit bottom-right on laptops and across the bottom on phones (Sonner switches below 600px),
+above the pop-up, with a check or cross icon.

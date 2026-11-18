@@ -28,6 +28,7 @@
   --color-wave-cyan: #0891b2;
   --color-wave-violet: #7c3aed;
   --color-backdrop: rgb(10 13 36 / 0.55);
+  --color-qr-bg: #ffffff; /* Behind the QR code in both modes: scanners need dark-on-light (#62) */
 
   /* Fonts (the --font-bricolage and --font-atkinson variables come from next/font in app/layout.tsx) */
   --font-display: var(--font-bricolage), system-ui, sans-serif;
@@ -127,6 +128,7 @@
     --color-wave-cyan: #33d1ea;
     --color-wave-violet: #9b6bff;
     --color-backdrop: rgb(0 0 0 / 0.65);
+    --color-qr-bg: #ffffff;
 
     --shadow-raised: 0 2px 8px rgb(0 0 0 / 0.4);
     --shadow-overlay: 0 16px 40px rgb(0 0 0 / 0.6);

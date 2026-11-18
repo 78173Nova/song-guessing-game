@@ -44,6 +44,7 @@ import { MIN_PLAYERS_TO_START, NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
 import RoomBoard from "./RoomBoard";
 import RoomDuel from "./RoomDuel";
+import { clearProblem, showError, showProblem } from "./messages";
 import SharePopup from "./SharePopup";
 import styles from "./Landing.module.css";
 import game from "./SoloGame.module.css";
@@ -58,6 +59,8 @@ const CLIP_LOAD_LIMIT_MS = 10_000; // one attempt to load one clip
 // The most rounds a room game can have (3 sets of 10 songs): one audio player each.
 const MAX_ROUNDS = 30;
 const SILENT_SOUND = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+// The id of the lasting "can't reach the server" message while polling (components/messages.ts).
+const CONNECTION_PROBLEM = "room-connection";
 
 // Getting into the room. Once "in", the screen comes from roomScreen.
 type Access = { kind: "loading" } | { kind: "gone"; message: string } | { kind: "join" } | { kind: "in" };
@@ -70,9 +73,8 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   const [nickname, setNickname] = useState("");
   const [avatar, setAvatar] = useState("");
   const [askAvatar, setAskAvatar] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); // the join form's error; other errors are short messages (#62)
   const [sending, setSending] = useState(false);
-  const [note, setNote] = useState(""); // e.g. "can't reach the server" while polling
   const [now, setNow] = useState(() => Date.now());
   const [shareOpen, setShareOpen] = useState(false);
   // A clip that will not load: ask the server to swap the song (once per round), or give up on this device.
@@ -95,11 +97,12 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
       const request = ++requestCount.current;
       const result = await apiRoomState(code, currentToken);
       if (result.ok) {
-        setNote("");
+        clearProblem(CONNECTION_PROBLEM);
         setAccess({ kind: "in" });
         dispatch({ type: "polled", request, state: result.state, receivedAt: Date.now() });
         return;
       }
+      if (result.reason !== "error") clearProblem(CONNECTION_PROBLEM);
       if (result.reason === "gone") setAccess({ kind: "gone", message: result.message });
       // Left the game or kicked (issue #40): no way back in. The token stays saved, so a join from this tab
       // sends it along and a kicked player is refused.
@@ -109,7 +112,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         if (currentToken !== null) forgetRoomToken(code);
         setToken(null);
         setAccess({ kind: "join" });
-      } else setNote(result.message); // keep showing the last state and try again on the next poll
+      } else showProblem(CONNECTION_PROBLEM, result.message); // keep the last state and try again on the next poll
     },
     [code],
   );
@@ -147,7 +150,10 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   useEffect(() => {
     if (!polling) return;
     const timer = setInterval(() => refresh(token), POLL_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      clearProblem(CONNECTION_PROBLEM); // no more polling, so no more news about the connection
+    };
   }, [polling, token, refresh]);
 
   // The local clock, while a game is on or the lobby countdown runs (issue #37).
@@ -202,10 +208,9 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     if (token === null) return;
     clips.unlock();
     setSending(true);
-    setError("");
     const result = await apiStartRoom(code, token);
     setSending(false);
-    if (!result.ok) setError(result.message);
+    if (!result.ok) showError(result.message);
     await refresh(token);
   }
 
@@ -215,7 +220,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     setSending(true);
     const result = await apiExtendCountdown(code, token);
     setSending(false);
-    setError(result.ok ? "" : result.message);
+    if (!result.ok) showError(result.message);
     await refresh(token);
   }
 
@@ -233,7 +238,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     const result = await apiLeaveRoom(code, token);
     setSending(false);
     if (!result.ok) {
-      setError(result.message);
+      showError(result.message);
       return;
     }
     forgetRoomToken(code);
@@ -252,8 +257,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     setSending(true);
     const result = await apiPlayAgain(code, token);
     setSending(false);
-    if (!result.ok) setError(result.message);
-    else setError("");
+    if (!result.ok) showError(result.message);
     await refresh(token);
   }
 
@@ -262,8 +266,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     if (token === null) return;
     if (!window.confirm(`Are you sure you want to kick ${player}?`)) return;
     const result = await apiKickPlayer(code, token, player);
-    if (!result.ok) setError(result.message);
-    else setError("");
+    if (!result.ok) showError(result.message);
     await refresh(token);
   }
 
@@ -273,7 +276,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     const result = await apiAnswerRoom(code, token, round, option);
     if (!result.ok) {
       dispatch({ type: "answer-refused", round });
-      setNote(result.message);
+      showError(result.message);
     }
   }
 
@@ -333,7 +336,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
 
   const message = (
     <p className={styles.error} role="alert">
-      {clips.problem || error || note}
+      {clips.problem}
     </p>
   );
 
