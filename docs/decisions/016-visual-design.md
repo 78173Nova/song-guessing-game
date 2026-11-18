@@ -75,3 +75,13 @@ itself (`respectMotionPreference`, on by default), so numbers then change withou
 reports 0 vulnerabilities; the full `npm audit` reports 16 high findings that were already there before this
 package, all from one `picomatch` advisory inside the dev tooling (vitest, eslint-config-next), with no fixed
 version yet.
+
+Update 18 Nov 2026 (#63): the wave circle is in the solo round, built by hand with no package:
+`lib/client/wave-shape.ts` (pure: frequency frame → 96 outline points, idle pulse, colour blend; tested),
+`lib/client/wave-audio.ts` (connects the round's audio players to one analyser) and `components/WaveCircle.tsx`
+(the canvas; also has an idle mode without analyser for the landing page and a still mode for reduce motion;
+colours can be passed in for the reveal, #64). The players now ask for cross-origin access (`crossOrigin =
+"anonymous"`), which the analyser needs. Limit: if Apple's clip server ever stopped sending the cross-origin
+header, the clips would fail to load and the rounds would be skipped; then `prepare()` in `wave-audio.ts` is the
+one line to remove, and the circle idles. A clip is routed through the analyser only when the sound context is
+already running, so the music never goes silent because of the circle.

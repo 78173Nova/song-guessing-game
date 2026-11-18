@@ -679,3 +679,9 @@ with the seconds, 3-2-1 or the verdict icon on its inner disc, then the rest. Th
 stage that shrinks with `transform: scaleX()` (not an arc on the disc edge; #63 may move it onto the circle).
 On reveal the panel takes the place of the time bar and question, between the stage and the answers, as in the
 sketch; the answer buttons do not animate. The icons live in `components/icons/` (one file per icon).
+
+Update 18 Nov 2026 (#63): the wave circle replaces the still ring in the solo stage. The canvas fills the stage
+(behind the disc); the outline is a light 18 % wash of the gradient with a 3px stroke on top. It follows the music
+during the round and the reveal, and idles (±3 % pulse) while loading or when no analyser is available. The time
+bar stays under the stage (not moved onto the circle). Analyser: fftSize 256 (128 bands), smoothing 0.8; the ring
+shows the lower 64 bands, mirrored left/right, with a small boost for higher bands so not only the top moves.
