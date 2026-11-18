@@ -55,6 +55,8 @@ The team are **programming beginners**: explain proposals in plain language befo
 ## Folder structure
 - `app/` – pages and server routes (`app/api/...`)
 - `components/` – reusable UI pieces (e.g. `SoloGame.tsx`, the solo game screens)
+- `components/icons/` – the hand-drawn inline SVG icons (one file per icon, shared frame in `IconBase.tsx`); see `DESIGN.md`
+- `DESIGN.md` – the accepted visual design: tokens, fonts, layouts, motion rules (decision 016)
 - `lib/game/` – game logic with no database or network access (build rounds, check answers, score) – easy to test
 - `lib/music/` – everything about the iTunes API (call, cache, error handling) – the only place that calls iTunes
 - `lib/accounts/` – account rules with no database or network (username/email/password checks, scrypt hashing, tokens, link lifetimes)
