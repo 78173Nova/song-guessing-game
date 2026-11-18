@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath } from "@/lib/client/next-path";
+import { rememberNextPath, safeNextPath, takeNextPath } from "@/lib/client/next-path";
+import type { KeyValueStorage } from "@/lib/client/share";
 
 // After logging in, the login page sends the person on to `?next=…` (e.g. back to "Create a room").
 // Only a page on this site may be the target, so a link like /login?next=https://evil.example cannot use
@@ -29,5 +30,38 @@ describe("safeNextPath", () => {
     ]) {
       expect(safeNextPath(target)).toBe("/");
     }
+  });
+});
+
+// A stand-in for the browser's localStorage.
+function fakeStorage(): KeyValueStorage {
+  const items = new Map<string, string>();
+  return {
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => void items.set(key, value),
+    removeItem: (key) => void items.delete(key),
+  };
+}
+
+// A guest on "Create a room" picks Sign up (/signup?next=/create). The address loses `next` on the way through
+// the verification email, so the sign-up page remembers it, and the first login afterwards goes to /create.
+describe("coming back to Create a room after signing up", () => {
+  it("sends the first login after signing up to the remembered page", () => {
+    const storage = fakeStorage();
+    rememberNextPath("/create", storage);
+    expect(takeNextPath(null, storage)).toBe("/create");
+  });
+
+  it("uses the remembered page only once", () => {
+    const storage = fakeStorage();
+    rememberNextPath("/create", storage);
+    takeNextPath(null, storage);
+    expect(takeNextPath(null, storage)).toBe("/");
+  });
+
+  it("never remembers a page on another site", () => {
+    const storage = fakeStorage();
+    rememberNextPath("https://evil.example", storage);
+    expect(takeNextPath(null, storage)).toBe("/");
   });
 });
