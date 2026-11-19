@@ -685,6 +685,20 @@ function GameScreen({
         </p>
       );
 
+    case "round-standings":
+      return (
+        <section className={shared.center}>
+          <h2 className={room.heading}>Standings after round {screen.number}</h2>
+          <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
+          <p className={room.waiting} role="status">
+            Next round in {screen.secondsToNext} s
+          </p>
+          <button type="button" className={shared.secondary} onClick={() => skip("standings")}>
+            Tap to continue
+          </button>
+        </section>
+      );
+
     case "set-summary":
       return (
         <section className={shared.center}>

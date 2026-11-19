@@ -502,7 +502,7 @@ Answered seats: ✓ icon + bold name. Away seats: muted + away icon. Nicknames t
 Laptop: the two sides sit left and right of the circle instead of above and below.
 ```
 
-**Standings** (after a set and at the end)
+**Standings** (after a set and at the end; in a Multiplayer game with 3 or more players also after each round)
 
 ```
 ┌──────────────────────────────────┐
