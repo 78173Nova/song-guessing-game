@@ -9,11 +9,19 @@
 //
 // Flow: lobby → get-ready (round 1 is coming) → round → result (5 s, or until "Tap to continue")
 //       → next-starting → round → …
+//       In a Multiplayer game with 3 or more players, the standings (with "Next round in … s") take the place of
+//       next-starting after each round inside a set: the time between rounds stays the same.
 //       After the last round of a set (issue #34): result → set summary (10 s) → set standings (5 s) → next-starting.
 //       After the last round of the game: result → final standings (5 s) → full summary, which stays.
 //       "Tap to continue" skips each of these early on this device only; the next round still starts on time.
 import { endsSet } from "../game/room-settings";
-import { FINAL_STANDINGS_SECONDS, RESULT_SECONDS, SET_STANDINGS_SECONDS, SET_SUMMARY_SECONDS } from "../game/rooms";
+import {
+  FINAL_STANDINGS_SECONDS,
+  hasRoundStandings,
+  RESULT_SECONDS,
+  SET_STANDINGS_SECONDS,
+  SET_SUMMARY_SECONDS,
+} from "../game/rooms";
 import { ANSWER_TIME_SECONDS } from "../game/scoring";
 import type { QuestionType } from "../game/modes";
 import type { RoomState, Song, Standing, SummaryItem } from "./room-api";
@@ -66,6 +74,8 @@ export type RoomScreen =
       score: number;
     }
   | { kind: "next-starting"; number: number }
+  // After a round inside a set, in a Multiplayer game with 3 or more players: instead of "Next round starting…".
+  | { kind: "round-standings"; number: number; standings: Standing[]; me: string; secondsToNext: number }
   | { kind: "set-summary"; set: number; songs: SummaryItem[] }
   | { kind: "set-standings"; set: number; standings: Standing[]; me: string }
   | { kind: "final"; standings: Standing[]; me: string }
@@ -223,6 +233,7 @@ export function roomScreen(view: RoomView, localNow: number): RoomScreen {
     };
   }
 
+  const nextStarting: RoomScreen = { kind: "next-starting", number: next?.number ?? round.number + 1 };
   const songsPerSet = state.settings?.songsPerSet;
   if (summary !== undefined && songsPerSet !== undefined && endsSet(round.number, songsPerSet)) {
     const set = round.number / songsPerSet;
@@ -233,8 +244,19 @@ export function roomScreen(view: RoomView, localNow: number): RoomScreen {
     if (shows("standings", summaryEnds + SET_STANDINGS_SECONDS * 1000)) {
       return { kind: "set-standings", set, standings: state.standings, me: state.me.nickname };
     }
+    return nextStarting; // the set standings were just shown: no round standings after them
   }
-  return { kind: "next-starting", number: next?.number ?? round.number + 1 };
+  const game = { type: state.settings?.type, startingPlayers: state.startingPlayers };
+  if (next !== null && hasRoundStandings(game) && !view.skipped.includes(`${round.number}:standings`)) {
+    return {
+      kind: "round-standings",
+      number: round.number,
+      standings: state.standings,
+      me: state.me.nickname,
+      secondsToNext: secondsUntil(Date.parse(next.startsAt), serverNow),
+    };
+  }
+  return nextStarting;
 }
 
 // Could this device not load the clip of round `number`? Then the round plays without music here and the page

@@ -1,5 +1,6 @@
 // The rules for rooms (spec 002, decision 012). Plain functions: no database, no network.
 import { parseAnswerInput } from "./answers";
+import type { RoomType } from "./room-settings";
 import { ANSWER_TIME_SECONDS } from "./scoring";
 
 // A room closes this long after it was created, whatever happens in it.
@@ -81,6 +82,12 @@ export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 3;
 export const SET_SUMMARY_SECONDS = 10;
 export const SET_STANDINGS_SECONDS = 5;
 export const SET_BREAK_SECONDS = SET_SUMMARY_SECONDS + SET_STANDINGS_SECONDS;
+// Does this game show the standings after each round inside a set (instead of "Next round starting…", in the same
+// time)? Only a Multiplayer room whose game started with 3 or more players (the board layout). A duel shows both
+// scores during every round instead, and the last round of a set or game has its own standings.
+export function hasRoundStandings(game: { type?: RoomType; startingPlayers?: number | null }): boolean {
+  return game.type === "multiplayer" && (game.startingPlayers ?? 0) >= 3;
+}
 // After the last round of the game: the final standings, then the full summary, which stays.
 export const FINAL_STANDINGS_SECONDS = 5;
 // When a round's song is swapped (issue #41), every device needs this long to load the new clip. A round that would

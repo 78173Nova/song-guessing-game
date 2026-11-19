@@ -603,6 +603,18 @@ function GameScreen({
         </p>
       );
 
+    case "round-standings":
+      return (
+        <section className={game.center}>
+          <h2>Standings after round {screen.number}</h2>
+          <Standings standings={screen.standings} me={screen.me} avatars={state.avatars} />
+          <p role="status">Next round in {screen.secondsToNext} s</p>
+          <button type="button" className={game.secondary} onClick={() => skip("standings")}>
+            Tap to continue
+          </button>
+        </section>
+      );
+
     case "set-summary":
       return (
         <section className={game.center}>

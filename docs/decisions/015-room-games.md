@@ -142,3 +142,18 @@ the layout does not switch when a player leaves. The page picks the layout with 
   When the state shows the lobby with a higher `gameNumber`, `roomReducer` accepts it (a started game otherwise
   never goes back to the lobby) and forgets the last game's taps and skips.
 - **Limits:** with few matching songs the 4th or 5th game repeats songs from earlier games.
+
+## Update 19 Nov 2026: standings after every round
+- **Decision:** a Multiplayer game that started with 3 or more players (`hasRoundStandings`, lib/game/rooms.ts) shows
+  the standings after each round inside a set, with "Next round in … s", in place of "Next round starting…". The
+  time between rounds stays 8 s (result 5 s, then the standings until the next round starts). "Tap to continue"
+  skips them on this device only. The last round of a set keeps set summary → set standings, the last round of
+  the game goes straight to the final standings, and duels show both scores during the round instead.
+- **Why:** with the default of 1 set, players saw the standings only once, at the end. Players skip through
+  standings quickly (as in Kahoot), so the game should not get slower for them.
+- **Alternatives:** 5 s of standings with 13 s between rounds: readable for big rooms, but every game gets about
+  20 s longer.
+- **Limits:** the standings show for about 3 s, less on a device that sees the result late; in a room with many
+  players there is no time to read the whole list.
+- **How it could change:** if players want more time, add it to the server's gap (`nextRoundStartsAt`) for games
+  where `hasRoundStandings` is true.
