@@ -10,8 +10,11 @@ import { DECADES, type Decade } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, type Mode } from "@/lib/game/modes";
 import TileGroup from "./TileGroup";
+import { clearProblem, showProblem } from "./messages";
 import styles from "./Landing.module.css";
 
+// The id of the lasting message while the list cannot be loaded (components/messages.ts).
+const LIST_PROBLEM = "room-list-connection";
 const ANY_FILTER: RoomListFilter = { type: "multiplayer", mode: "any", genres: "any", decades: "any" };
 
 // The "Join a room" list (issue #36): the public rooms in the lobby that are not full, narrowed by the Duel/Multiplayer
@@ -20,7 +23,6 @@ const ANY_FILTER: RoomListFilter = { type: "multiplayer", mode: "any", genres: "
 export default function RoomList() {
   const [filter, setFilter] = useState<RoomListFilter>(ANY_FILTER);
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
-  const [error, setError] = useState("");
   // This device's clock for the countdowns in the list (issue #37). Set when a list arrives, never while the page
   // is rendered on the server. The countdowns run on the server's clock: `offset` is how far it is ahead.
   const [now, setNow] = useState(0);
@@ -36,9 +38,9 @@ export default function RoomList() {
         setRooms(result.rooms);
         setOffset(serverClockOffset(result.serverNow, receivedAt));
         setNow(receivedAt);
-        setError("");
+        clearProblem(LIST_PROBLEM);
       } else {
-        setError(result.message); // the last list stays until the next try works
+        showProblem(LIST_PROBLEM, result.message); // the last list stays until the next try works
       }
     };
     load();
@@ -46,6 +48,7 @@ export default function RoomList() {
     return () => {
       current = false;
       clearInterval(timer);
+      clearProblem(LIST_PROBLEM);
     };
   }, [filter]);
 
@@ -61,8 +64,8 @@ export default function RoomList() {
   const { genres, decades } = filter;
 
   return (
-    <section className={styles.form} aria-labelledby="room-list-title">
-      <h2 id="room-list-title" className={styles.codeLabel}>
+    <section className={`${styles.form} ${styles.section}`} aria-labelledby="room-list-title">
+      <h2 id="room-list-title" className={styles.sectionTitle}>
         Public rooms
       </h2>
       <TileGroup
@@ -93,9 +96,6 @@ export default function RoomList() {
         onTap={(value) => change({ decades: toggleTile<Decade>(decades, value === "any" ? "any" : (Number(value) as Decade)) })}
       />
 
-      <p className={styles.error} role="alert">
-        {error}
-      </p>
       {rooms === null ? (
         <p className={styles.hint} aria-busy="true">
           Looking for rooms…

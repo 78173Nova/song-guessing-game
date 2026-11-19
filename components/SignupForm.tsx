@@ -63,6 +63,9 @@ export default function SignupForm() {
         id="signup-username"
         className={styles.textInput}
         autoComplete="username"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         maxLength={20}
         value={username}
         onChange={(event) => setUsername(event.target.value)}

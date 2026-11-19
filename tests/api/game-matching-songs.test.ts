@@ -6,7 +6,7 @@ import { createTestDb } from "../helpers/test-db";
 
 // GET /api/games/matching-songs?genre=…&decade=… – for the chosen genre + decade, only three numbers: playable
 // songs, different titles, different artists (team feedback 18 Nov, point 7). The solo start screen uses them for
-// the line "12 songs match – 5 will be played" and to grey out modes that cannot start. Against PGlite, no network.
+// the "Only 3 songs match …" message and to grey out modes that cannot start. Against PGlite, no network.
 let db: Db;
 
 const SONGS: SongInput[] = [

@@ -1,8 +1,8 @@
 // Room settings (issue #34): chosen by the room creator when creating a room, fixed afterwards.
 // Plain functions: no database, no network.
-import { DECADES, decadeOf, type Decade } from "./filters";
-import { GENRES, type Genre } from "./genres";
-import { isMode, type Mode } from "./modes";
+import { DECADES, decadeOf, type Decade } from "./filters.ts";
+import { GENRES, type Genre } from "./genres.ts";
+import { isMode, type Mode } from "./modes.ts";
 
 export const ROOM_TYPES = ["duel", "multiplayer"] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];

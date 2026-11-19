@@ -56,13 +56,13 @@ function DetailForm({
   }
 
   return (
-    <form className={styles.form} onSubmit={submit} noValidate aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className={styles.codeLabel}>
+    <form className={`${styles.form} ${styles.section}`} onSubmit={submit} noValidate aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className={styles.sectionTitle}>
         {title}
       </h2>
       {fields.map((field) => (
         <div key={field.name} className={styles.form}>
-          <label htmlFor={`${id}-${field.name}`} className={styles.hint}>
+          <label htmlFor={`${id}-${field.name}`} className={styles.codeLabel}>
             {field.label}
           </label>
           <input
@@ -70,6 +70,9 @@ function DetailForm({
             className={styles.textInput}
             type={field.type}
             autoComplete={field.autoComplete}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             maxLength={field.maxLength}
             value={values[field.name]}
             onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))}

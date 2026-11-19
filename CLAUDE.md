@@ -50,11 +50,16 @@ The team are **programming beginners**: explain proposals in plain language befo
   (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
 - Create the team accounts (already verified) from `TEAM_ACCOUNTS`: `npm run db:team-accounts`
   (uses `DATABASE_URL` and `TEAM_ACCOUNTS` from `.env.local`; safe to run again)
+- Both `db:` scripts run with plain Node, which needs `.ts` in relative imports (`"./genres.ts"`, not
+  `"./genres"`). Write it in every file under `lib/` the scripts load; `tests/db/script-imports.test.ts`
+  fails when one is missing
 - CI: `.github/workflows/ci.yml` runs `npm ci`, lint, type check, tests and build on every pull request
 
 ## Folder structure
 - `app/` – pages and server routes (`app/api/...`)
 - `components/` – reusable UI pieces (e.g. `SoloGame.tsx`, the solo game screens)
+- `components/icons/` – the hand-drawn inline SVG icons (one file per icon, shared frame in `IconBase.tsx`); see `DESIGN.md`
+- `DESIGN.md` – the accepted visual design: tokens, fonts, layouts, motion rules (decision 016)
 - `lib/game/` – game logic with no database or network access (build rounds, check answers, score) – easy to test
 - `lib/music/` – everything about the iTunes API (call, cache, error handling) – the only place that calls iTunes
 - `lib/accounts/` – account rules with no database or network (username/email/password checks, scrypt hashing, tokens, link lifetimes)

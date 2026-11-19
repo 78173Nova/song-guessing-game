@@ -5,7 +5,7 @@
 import { DECADES, MIN_MATCHING_SONGS, tooFewSongsMessage, type Decade } from "../game/filters";
 import { GENRES, type Genre } from "../game/genres";
 import type { Mode } from "../game/modes";
-import { modeFits, OPTIONS_PER_ROUND, ROUNDS_PER_GAME, type MatchingCounts } from "../game/rounds";
+import { modeFits, OPTIONS_PER_ROUND, type MatchingCounts } from "../game/rounds";
 import { MODE_LABELS } from "./room-list";
 
 // A tile's value → the filter. "any" (or anything that is not a tile) = no filter.
@@ -17,11 +17,11 @@ export function decadeFromTile(value: string): Decade | undefined {
   return DECADES.find((decade) => String(decade) === value);
 }
 
-// The line above "Start game". tooFew = fewer than 5 songs match: shown as an error, Start is disabled.
-export function matchLine(counts: MatchingCounts | null): { text: string; tooFew: boolean } {
-  if (counts === null) return { text: `${ROUNDS_PER_GAME} songs will be played.`, tooFew: false };
-  if (counts.songs < MIN_MATCHING_SONGS) return { text: tooFewSongsMessage(counts.songs), tooFew: true };
-  return { text: `${counts.songs} songs match – ${ROUNDS_PER_GAME} will be played.`, tooFew: false };
+// The warning above "Start game" when fewer than 5 songs match: shown as an error, Start is disabled.
+// null = nothing to show (enough songs, or the numbers are not loaded): the number of matching songs is not shown.
+export function matchLine(counts: MatchingCounts | null): string | null {
+  if (counts === null || counts.songs >= MIN_MATCHING_SONGS) return null;
+  return tooFewSongsMessage(counts.songs);
 }
 
 // With fewer than 5 songs the filters are the problem (the match line says so), not the mode.

@@ -102,3 +102,32 @@ choose 1960s … 2020s, so *Jailhouse Rock* (1957, decade 1950) only plays under
   is not checked automatically for older decades: the earlier explicit songs were removed by hand.
 - **How it could change:** if the team wants one rule for every decade, the "clean clip" rule could replace the
   "no explicit original" rule everywhere, after a check of each added song.
+
+## Update 18 Nov 2026: at least 10 songs per genre + decade (feature/fill-combos)
+- **Decision:** every genre + decade combination has at least 10 songs, except hip-hop in the 1960s and 1970s.
+  75 songs were added (413 in total); a test in `tests/db/song-list.test.ts` checks the rule. *Purple Haze* is now
+  listed under "The Jimi Hendrix Experience", as on iTunes.
+- **Why:** 30 combinations had fewer than 10 songs (2020s country: 6), so a filtered game played almost the same
+  5 songs every time, and the wrong options came from very few songs.
+- **How the songs were checked:** same rules as the update of 15 Nov (year rule, well known, no explicit original
+  before the 2020s, clean clip in the 2020s, no artist more than 3 times). Claude drafted each decade and ran the
+  real `lookupPreview` on every candidate; Karin checked every line. New: titles must be easy to tell apart in
+  title mode – no title that equals or starts like one in the list, and no shared first word (ignoring "The" and
+  "A") with a title in the same genre + decade.
+- **Alternatives:** a lower minimum (5 is enough to start a game, but gives no variety); leaving the filters small
+  and only greying them out (the player could still pick a dull combination).
+- **Limits:** 10 songs still means a player who repeats one filter hears songs again after two games; the
+  "avoid recent songs" rule helps only for the last 3 games.
+- **How it could change:** raise the minimum per combination when the list grows.
+
+### Songs we decided not to use (do not suggest them again)
+- *I'm Good (Blue)* (David Guetta & Bebe Rexha): same melody as *Blue (Da Ba Dee)*, which is in the list (removed 15 Nov).
+- *Baby Don't Hurt Me* (David Guetta, Anne-Marie & Coi Leray): samples *What Is Love*, which is in the list.
+- *Big Energy* (Latto), *Super Freaky Girl* (Nicki Minaj), *Rich Flex* (Drake & 21 Savage), *Not Like Us*
+  (Kendrick Lamar), *Tomorrow 2* (GloRilla & Cardi B): the clean edit still has heavy themes.
+- *Houdini* by Eminem: Dua Lipa's *Houdini* is in the list.
+- *Like That* (Future, Metro Boomin & Kendrick Lamar), *Let's Dance* (Chris Montez), *Let's Stay Together*
+  (Al Green), *Twist and Shout* (The Isley Brothers), *Jesus, Take the Wheel* (Carrie Underwood): too similar to
+  titles in the same genre + decade, confusing in title mode.
+- *Lean On* (Major Lazer & DJ Snake): starts like *Lean on Me*.
+- *Satisfaction* (Benny Benassi): same title as the Rolling Stones' *(I Can't Get No) Satisfaction*.

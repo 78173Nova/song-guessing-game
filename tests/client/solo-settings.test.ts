@@ -29,25 +29,21 @@ describe("genreFromTile / decadeFromTile – one tile = one choice", () => {
   });
 });
 
-describe("matchLine – the line above 'Start game'", () => {
-  it("enough songs: how many match and that 5 will be played", () => {
-    expect(matchLine(counts(12, 12, 9))).toEqual({ text: "12 songs match – 5 will be played.", tooFew: false });
-    expect(matchLine(counts(5, 5, 5))).toEqual({ text: "5 songs match – 5 will be played.", tooFew: false });
+// Changed 18 Nov 2026: the "12 songs match – 5 will be played" line is gone. Only the "too few" message is left.
+describe("matchLine – the warning above 'Start game' when too few songs match", () => {
+  it("enough songs: no line at all (the number of matching songs is not shown)", () => {
+    expect(matchLine(counts(12, 12, 9))).toBeNull();
+    expect(matchLine(counts(5, 5, 5))).toBeNull();
   });
 
-  it("fewer than 5 songs: the same message the server sends, marked as too few", () => {
-    expect(matchLine(counts(3, 3, 3))).toEqual({
-      text: "Only 3 songs match these filters – try 'Any' for genre or decade.",
-      tooFew: true,
-    });
-    expect(matchLine(counts(0, 0, 0))).toEqual({
-      text: "No songs match these filters – try 'Any' for genre or decade.",
-      tooFew: true,
-    });
+  it("fewer than 5 songs: the same message the server sends", () => {
+    expect(matchLine(counts(3, 3, 3))).toBe("Only 3 songs match these filters – try 'Any' for genre or decade.");
+    expect(matchLine(counts(4, 4, 4))).toBe("Only 4 songs match these filters – try 'Any' for genre or decade.");
+    expect(matchLine(counts(0, 0, 0))).toBe("No songs match these filters – try 'Any' for genre or decade.");
   });
 
-  it("numbers not loaded (yet, or failed): only says how many will be played, nothing is blocked", () => {
-    expect(matchLine(null)).toEqual({ text: "5 songs will be played.", tooFew: false });
+  it("numbers not loaded (yet, or failed): no line, nothing is blocked", () => {
+    expect(matchLine(null)).toBeNull();
   });
 });
 

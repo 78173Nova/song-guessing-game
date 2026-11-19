@@ -1,6 +1,6 @@
 // Building a game: which songs are played and which 4 options each round shows.
 // The options are titles, artists or years, depending on the round's question type (spec 003).
-import { QUESTION_TYPES, wrongYears, type Mode, type QuestionType } from "./modes";
+import { QUESTION_TYPES, wrongYears, type Mode, type QuestionType } from "./modes.ts";
 
 export const ROUNDS_PER_GAME = 5;
 export const OPTIONS_PER_ROUND = 4;

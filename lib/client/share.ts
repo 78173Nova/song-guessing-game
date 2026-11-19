@@ -61,3 +61,12 @@ export async function copyLink(
     return { ok: false, message: COPY_FAILED_MESSAGE };
   }
 }
+
+export const LINK_COPIED_MESSAGE = "Link copied";
+
+// The short message after "Copy link" (issue #62): a success message, or the reason it failed as an error message.
+export function copyMessage(
+  result: { ok: true } | { ok: false; message: string },
+): { kind: "success" | "error"; text: string } {
+  return result.ok ? { kind: "success", text: LINK_COPIED_MESSAGE } : { kind: "error", text: result.message };
+}

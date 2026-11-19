@@ -1,0 +1,7 @@
+/* The wave circle's canvas fills the square its parent gives it. The parent decides the size
+   (220px on phones, 280px on laptops, DESIGN.md); the canvas is drawn at the screen's pixel density. */
+.canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}

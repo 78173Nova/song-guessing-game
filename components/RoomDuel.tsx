@@ -1,10 +1,19 @@
-// The duel layout of a room round (issue #39), for a game with exactly two players: the opponent's nickname and
-// score at the top, facing the viewer; the song in the middle; the viewer's nickname and score at the bottom, just
-// above the answer buttons (which Room.tsx shows below, the same as on the Multiplayer game board). The opponent
-// turns grey once they have answered, never what they answered. Which side shows what: lib/client/room-duel.ts.
-import { ROUND_SECONDS } from "@/lib/client/countdown";
-import { duelSides } from "@/lib/client/room-duel";
+// The duel layout of a room round (issues #39, #66), for a game with exactly two players: the opponent's side on
+// top in cyan, facing the viewer; the wave circle in the middle with the seconds inside it; the viewer's side at
+// the bottom in violet, just above the answer buttons (which Room.tsx shows below, the same as on the Multiplayer
+// game board). On a laptop the two sides stand left and right of the circle. Once the opponent has answered they
+// get the word "Answered" on a neutral grey pill (no tick, no green: team feedback, PR #74), never what they
+// answered. Which side shows what: lib/client/room-duel.ts.
+//
+// The circle uses the app's own colours only (CLAUDE.md rule 5: nothing about the song before the answer); the
+// cover's colours appear on the result screen, in Room.tsx.
+import NumberFlow from "@number-flow/react";
+import { useEffect, useState } from "react";
+import { duelSides, type ScoreMemory } from "@/lib/client/room-duel";
 import { avatarEmoji } from "@/lib/game/avatars";
+import AwayIcon from "./icons/AwayIcon";
+import TimeBar from "./TimeBar";
+import WaveCircle from "./WaveCircle";
 import styles from "./RoomDuel.module.css";
 
 export default function RoomDuel({
@@ -18,6 +27,9 @@ export default function RoomDuel({
   number,
   totalRounds,
   secondsLeft,
+  timeLeft,
+  analyser,
+  scores,
 }: {
   players: string[];
   away: string[]; // players whose device has not asked for 5 s (issue #40)
@@ -29,72 +41,101 @@ export default function RoomDuel({
   number: number;
   totalRounds: number;
   secondsLeft: number;
+  timeLeft: number; // seconds left, not rounded, for the time bar under the duel
+  analyser: AnalyserNode | null; // the playing clip's sound analyser; null = the circle idles
+  scores: ScoreMemory; // the scores the viewer saw last, so each one rolls up after a round (issue #66)
 }) {
   const sides = duelSides({ players, away, me: { nickname: me }, standings }, answered);
-  const played = Math.min(1, Math.max(0, 1 - secondsLeft / ROUND_SECONDS));
+  const opponent = sides.opponent;
 
   return (
-    <div className={styles.duel}>
-      <div className={styles.opponent} aria-label="Your opponent">
-        {sides.opponent === null ? (
-          <p className={styles.name}>Your opponent has left</p>
-        ) : (
-          <>
-            <p className={styles.score} aria-label={`${sides.opponent.nickname}'s score`}>
-              {sides.opponent.score}
-            </p>
-            <p className={sides.opponent.answered ? `${styles.name} ${styles.answered}` : styles.name}>
-              {sides.opponent.answered && <span className={styles.srOnly}>has answered: </span>}
-              {sides.opponent.away && (
-                <span role="img" aria-label="away" title="Away – not connected">
-                  ⏳{" "}
-                </span>
-              )}
-              <span aria-hidden="true">{avatarEmoji(avatars[sides.opponent.nickname])} </span>
-              <span className={styles.nickname} title={sides.opponent.nickname}>
-                {sides.opponent.nickname}
-              </span>
-            </p>
-          </>
-        )}
-      </div>
+    <div className={styles.wrap}>
+      <div className={styles.duel}>
+        <section className={`${styles.side} ${styles.opponent}`} aria-label="Your opponent">
+          {opponent === null ? (
+            <p className={styles.gone}>Your opponent has left</p>
+          ) : (
+            <>
+              <div className={styles.who}>
+                <p className={styles.nameRow} title={opponent.nickname}>
+                  <span className={styles.avatar} aria-hidden="true">
+                    {avatarEmoji(avatars[opponent.nickname])}
+                  </span>
+                  <span className={styles.name}>{opponent.nickname}</span>
+                </p>
+                {opponent.answered && (
+                  <span className={styles.answered}>
+                    Answered
+                  </span>
+                )}
+                {opponent.away && (
+                  <span className={styles.away} title="Away – not connected">
+                    <AwayIcon size={16} />
+                    Away
+                  </span>
+                )}
+              </div>
+              <Score nickname={opponent.nickname} value={opponent.score} scores={scores} />
+            </>
+          )}
+        </section>
 
-      <div
-        className={styles.song}
-        role="timer"
-        aria-label={`Round ${number} of ${totalRounds}, ${secondsLeft} seconds left`}
-      >
-        {/* A full circle that fills up while the clip plays. */}
-        <svg viewBox="0 0 100 100" aria-hidden="true" className={styles.ring}>
-          <circle cx="50" cy="50" r="44" className={styles.track} pathLength={1} />
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            className={styles.progress}
-            pathLength={1}
-            strokeDasharray={`${played} 1`}
-            transform="rotate(-90 50 50)"
-          />
-        </svg>
-        <div className={styles.songText} aria-hidden="true">
-          <span className={styles.seconds}>{secondsLeft}</span>
-          <span className={styles.round}>
-            Round {number}/{totalRounds}
-          </span>
+        <div className={styles.centre}>
+          <div
+            className={styles.song}
+            role="timer"
+            aria-label={`Round ${number} of ${totalRounds}, ${secondsLeft} seconds left`}
+          >
+            <WaveCircle analyser={analyser} className={styles.wave} />
+            <div className={styles.disc} aria-hidden="true">
+              <NumberFlow
+                value={secondsLeft}
+                className={secondsLeft <= 5 ? `${styles.seconds} ${styles.low}` : styles.seconds}
+              />
+            </div>
+          </div>
+          <p className={styles.round} aria-hidden="true">
+            Round {number} / {totalRounds}
+          </p>
         </div>
-      </div>
 
-      <div className={styles.me}>
-        <p className={iAnswered ? `${styles.name} ${styles.answered}` : styles.name}>
-          {iAnswered && <span className={styles.srOnly}>you have answered: </span>}
-          <span aria-hidden="true">{avatarEmoji(avatars[sides.me.nickname])} </span>
-          <span className={styles.nickname}>{sides.me.nickname}</span>
-        </p>
-        <p className={styles.score} aria-label="Your score">
-          {sides.me.score}
-        </p>
+        <section className={`${styles.side} ${styles.me}`} aria-label="You">
+          <div className={styles.who}>
+            <p className={styles.nameRow} title={sides.me.nickname}>
+              <span className={styles.avatar} aria-hidden="true">
+                {avatarEmoji(avatars[sides.me.nickname])}
+              </span>
+              <span className={styles.name}>{sides.me.nickname}</span>
+              <span className={styles.you}>(you)</span>
+            </p>
+            {iAnswered && (
+              <span className={styles.answered}>
+                Answered
+              </span>
+            )}
+          </div>
+          <Score nickname={sides.me.nickname} value={sides.me.score} scores={scores} />
+        </section>
       </div>
+      {/* Time left: the same base line as under the game board, shrinking with transform (never width). */}
+      <TimeBar left={timeLeft} className={styles.timeTrack} />
     </div>
+  );
+}
+
+// A large score that rolls from the value the viewer saw last to the new one (NumberFlow), one frame after the
+// duel appears. With "reduce motion" on, NumberFlow shows the number straight away.
+function Score({ nickname, value, scores }: { nickname: string; value: number; scores: ScoreMemory }) {
+  const [shown, setShown] = useState(() => scores.startOf(nickname, value));
+  useEffect(() => {
+    scores.remember(nickname, value);
+    const frame = requestAnimationFrame(() => setShown(value));
+    return () => cancelAnimationFrame(frame);
+  }, [scores, nickname, value]);
+  return (
+    <p className={styles.score}>
+      <span className={styles.scoreLabel}>Score</span>
+      <NumberFlow value={shown} className={styles.scoreNumber} />
+    </p>
   );
 }

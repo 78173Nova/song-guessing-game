@@ -1,79 +1,167 @@
-/* The share pop-up of a room. Mobile first: nearly the full width on a phone. */
-.dialog {
-  width: calc(100% - 2rem);
-  max-width: 26rem;
-  margin: auto;
-  padding: 1.25rem 1.25rem 1.5rem;
+/* The share pop-up of a room (DESIGN.md "Share pop-up", issue #62): a Vaul bottom sheet below 40rem, a centred
+   dialog from 40rem. Vaul adds its own stylesheet after ours, so the rules that change its look use a doubled
+   class (.handle.handle) to be one step more specific than Vaul's attribute selectors. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--color-backdrop);
+}
+
+/* Phone: a sheet attached to the bottom edge, as wide as the screen, that follows the finger when dragged (Vaul). */
+.sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 51;
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  border: none;
-  border-radius: 20px;
-  color: var(--foreground);
-  background: var(--card);
+  gap: var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+  outline: none;
 }
 
-/* A closed <dialog> must stay hidden, even with display: flex above. */
-.dialog:not([open]) {
-  display: none;
-}
-
-.dialog::backdrop {
-  background: rgb(0 0 0 / 0.5);
+/* Vaul's drag handle: a short bar at the top that says "this can be pulled down". Its touch area is 44px tall. */
+.handle.handle {
+  flex: none;
+  width: 2.5rem;
+  height: 5px;
+  margin: 0 auto var(--space-1);
+  opacity: 1;
+  background: var(--color-border-strong);
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .title {
-  font-size: 1.3rem;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: var(--leading-xl);
 }
 
 .close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 2.75rem;
   height: 2.75rem;
   flex-shrink: 0;
-  font: inherit;
-  font-size: 1.25rem;
   border: none;
-  border-radius: 999px;
-  color: var(--foreground);
-  background: var(--muted);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  background: var(--color-surface-alt);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--duration-instant) var(--ease-out);
 }
 
-.close:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+.close:active {
+  transform: scale(0.94);
 }
 
-/* The full link, selectable so it can be copied by hand; long links wrap instead of widening the pop-up. */
+/* The full link, selectable so it can be copied by hand; long links wrap instead of widening the pop-up.
+   Marked data-vaul-no-drag in the markup, so selecting it does not move the sheet. */
 .link {
-  padding: 0.6rem 0.75rem;
-  border-radius: 12px;
-  background: var(--background);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
   overflow-wrap: anywhere;
   user-select: all;
 }
 
 .code {
+  font-family: var(--font-display);
   font-size: clamp(2.25rem, 12vw, 3rem);
   font-weight: 700;
   letter-spacing: 0.15em;
+  line-height: var(--leading-number);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-/* The QR code of the join link (#42): black on white with its quiet zone, whatever the theme, so phones can read it. */
+/* The QR code of the join link (#42): always dark on white, also in dark mode, because scanners need dark-on-light.
+   The white frame adds a quiet zone around the code's own small margin, so it stays readable on a dark sheet. */
+.qrFrame {
+  align-self: center;
+  width: min(15rem, 100%);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-qr-bg);
+}
+
 .qr {
   display: block;
-  width: min(14rem, 100%);
+  width: 100%;
   aspect-ratio: 1;
-  margin: 0 auto;
-  border-radius: 12px;
-  background: #fff;
+}
+
+/* Laptop: a centred dialog that does not move with the pointer; it fades and grows from 0.96 (DESIGN.md, Motion 6).
+   Vaul picks its slide animation with long attribute selectors; !important swaps in ours without copying them. */
+@media (min-width: 40rem) {
+  .sheet.sheet {
+    inset: 0;
+    width: min(var(--width-form), calc(100% - 2 * var(--space-5)));
+    height: fit-content;
+    max-height: calc(100dvh - 2 * var(--space-5));
+    margin: auto;
+    padding: var(--space-5);
+    border-radius: var(--radius-lg);
+    animation-duration: var(--duration-fast);
+  }
+
+  /* Vaul paints a strip below a bottom sheet so a pulled-up sheet never shows a gap; a dialog does not need it. */
+  .sheet.sheet::after {
+    content: none;
+  }
+
+  .sheet[data-state="open"] {
+    animation-name: dialog-in !important;
+    animation-timing-function: var(--ease-out) !important;
+  }
+
+  .sheet[data-state="closed"] {
+    animation-name: dialog-out !important;
+    animation-timing-function: var(--ease-in) !important;
+  }
+
+  .overlay {
+    animation-duration: var(--duration-fast) !important;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* Reduce motion: the sheet appears and disappears without sliding, the overlay without fading. (The laptop dialog's
+   duration token is 0ms then.) Dragging still works, because then the person moves the sheet. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .overlay {
+    animation-name: none !important;
+  }
 }

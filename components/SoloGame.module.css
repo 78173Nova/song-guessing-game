@@ -1,219 +1,205 @@
-/* Mobile first: one column, big touch targets. Wider screens get two answer columns. */
-.game {
-  width: 100%;
-}
+/*
+ * The solo game's own pieces: the start screen, the status line, the seconds inside the stage, the reveal panel
+ * and the results. The pieces it shares with the room game (buttons, stage, time bar, answers, reveal)
+ * are in GameShared.module.css.
+ * Tokens only (app/globals.css). Anything that moves uses only transform and opacity; short colour transitions on
+ * hover/press are allowed (--duration-instant). Every duration is a token, so "reduce motion" (durations become
+ * 0ms) turns all of it off. Delays are fractions of a duration token for the same reason.
+ */
 
-.center {
+/* ---------- Start screen ---------- */
+
+/* Mode, genre and decade tiles (TileGroup, team feedback 18 Nov, point 8): the tile rows from "Create a room",
+   left-aligned in a column as wide as a form. */
+.settings {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
-  text-align: center;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--width-form);
+  text-align: left;
 }
 
-.intro {
-  font-size: 1.1rem;
-  line-height: 1.5;
-  max-width: 28rem;
+/* Too few songs, or the chosen mode cannot start: the form error style (cross icon and danger colour, never
+   colour alone), next to the settings it is about. */
+.filterProblem {
+  composes: error from "./Landing.module.css";
+  width: 100%;
+  max-width: var(--width-form);
+  margin: 0;
+  text-align: left;
 }
 
-.primary,
-.secondary,
-.option {
-  font: inherit;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.primary {
-  min-height: 3.25rem;
-  padding: 0 2rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border: none;
-  color: var(--accent-text);
-  background: var(--accent);
-}
-
-.secondary {
-  display: block;
-  margin: 0 auto 1rem;
-  padding: 0.6rem 1.5rem;
-  border: 2px solid var(--accent);
-  color: var(--foreground);
-  background: transparent;
-}
+/* ---------- The play frame: status line, seconds, time bar ---------- */
 
 .status {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  min-height: 1.5rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  color: var(--color-text-muted);
 }
 
-.countdown {
-  position: relative;
-  height: 1.75rem;
-  margin-bottom: 1rem;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--muted);
+.score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 
-.bar {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s linear;
+.score .number {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--color-text);
 }
 
-.countdown span {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  font-weight: 600;
+/* Numbers that change keep their width, so nothing jumps while they roll. */
+.number {
+  font-variant-numeric: tabular-nums;
 }
 
-.options {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
+.seconds {
+  font-family: var(--font-display);
+  font-size: var(--text-number);
+  font-weight: 700;
+  line-height: var(--leading-number);
 }
 
-@media (min-width: 600px) {
-  .options {
-    grid-template-columns: 1fr 1fr;
-  }
+/* The last five seconds: the digits turn red (the number itself already says how little time is left). */
+.low {
+  color: var(--color-danger);
 }
 
-.option {
-  min-height: 4rem;
-  padding: 0.75rem 1rem;
-  font-size: 1.05rem;
-  border: 2px solid var(--muted);
-  color: var(--foreground);
-  background: var(--card);
+.sending {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  color: var(--color-text-muted);
 }
 
-.option:not(:disabled):hover {
-  border-color: var(--accent);
+/* The time bar under the stage, as wide as the stage on a phone. */
+.timeBar {
+  width: 220px;
+  max-width: 100%;
 }
 
-.option:disabled {
-  cursor: default;
-}
+/* ---------- Reveal ---------- */
 
-/* The answer a room player tapped, before the round closes (components/Room.tsx). */
-/* The line above "Start game": how many songs match (team feedback 18 Nov, point 8). */
-.filterNote {
-  max-width: 28rem;
-  margin: 0;
-  font-size: 0.9rem;
-  opacity: 0.75;
-}
-
-.chosen {
-  border-color: var(--accent);
-}
-
-.correct {
-  border-color: var(--good);
-  background: var(--good-bg);
-}
-
-.wrong {
-  border-color: var(--bad);
-  background: var(--bad-bg);
-}
-
-.reveal {
+/* The solo reveal panel: verdict and points, the song, then "Next song". It fades in and rises 8px just
+   after the answer marks appear. */
+.revealPanel {
+  composes: riseIn from "./GameShared.module.css";
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-  text-align: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--duration-base) / 3);
 }
 
-.verdict {
-  font-size: 1.3rem;
-  font-weight: 700;
-}
-
-.song {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  text-align: left;
-}
-
-.song img {
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.title {
-  font-weight: 700;
-}
-
-.song a {
-  color: var(--accent);
-  font-size: 0.9rem;
-}
-
-.points {
-  font-size: 1.1rem;
-  font-weight: 600;
-}
+/* ---------- Results ---------- */
 
 .results {
   width: 100%;
   list-style: none;
   text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .results li {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--muted);
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.error {
-  color: var(--bad);
+/* Solo results: verdict (icon + word), song, points in a row; the song wraps under on narrow phones. */
+.soloResults li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+}
+
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 5.5rem;
+  font-size: var(--text-sm);
   font-weight: 600;
-  max-width: 28rem;
-  line-height: 1.5;
+  color: var(--color-danger);
 }
 
-.bigNumber {
-  font-size: 5rem;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--accent);
+.outcome[data-outcome="correct"] {
+  color: var(--color-success);
 }
 
-/* Mode, genre and decade tiles on the start screen (team feedback 18 Nov, point 8): the tile rows from "Create a
-   room", left-aligned. */
-.settings {
+.outcome[data-outcome="skipped"] {
+  color: var(--color-text-muted);
+}
+
+/* The song, with its Apple Music link under it (same look as the set summary in rooms). */
+.played {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 28rem;
-  text-align: left;
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.chosen {
-  border-color: var(--accent);
+.storeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.storeLink:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.playedPoints {
   font-weight: 700;
+  text-align: right;
 }
 
-.question {
-  margin-bottom: 0.75rem;
-  font-size: 1.2rem;
-  text-align: center;
+@media (max-width: 24rem) {
+  .soloResults li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .played {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.finalHeading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.finalScore {
+  font-size: var(--text-number);
+  line-height: var(--leading-number);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }

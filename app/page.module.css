@@ -1,32 +1,66 @@
+/* The frame around the solo game (app/solo/page.tsx). Tokens only (app/globals.css). */
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem 1rem;
+  padding: var(--space-4);
+}
+
+@media (min-width: 40rem) {
+  .page {
+    padding: var(--space-5);
+  }
 }
 
 .main {
   width: 100%;
-  max-width: 40rem;
+  max-width: var(--width-game);
   flex: 1;
 }
 
+/* A quiet header: back link on the left, the name on the right, so the round below stands out. */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .back {
-  display: inline-block;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-  opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.back:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+  }
 }
 
 .heading {
-  font-size: 1.75rem;
-  text-align: center;
-  margin-bottom: 1.5rem;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: 700;
+  text-align: right;
 }
 
 .footer {
-  margin-top: 2rem;
-  font-size: 0.8rem;
-  opacity: 0.7;
+  margin-top: var(--space-6);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--color-text-muted);
 }

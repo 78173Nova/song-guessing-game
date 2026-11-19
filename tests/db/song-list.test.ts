@@ -72,4 +72,28 @@ describe("db/songs.ts – the seed song list", () => {
     const count = songList.filter((song) => song.genre === "hip-hop" && song.year >= 2020).length;
     expect(count).toBeGreaterThanOrEqual(5);
   });
+
+  // Every genre + decade filter can start a game with some variety (spec 003). Hip-hop barely existed
+  // before 1980, so the 1960s and 1970s hip-hop combinations are the only exceptions.
+  const MIN_PER_COMBINATION = 10;
+  const combinations = DECADES.flatMap((decade) => GENRES.map((genre) => ({ decade, genre })));
+  const isException = ({ decade, genre }: { decade: number; genre: string }) =>
+    genre === "hip-hop" && decade < 1980;
+
+  it.each(combinations.filter((c) => !isException(c)))(
+    "has at least 10 songs for genre $genre in the $decade decade",
+    ({ decade, genre }) => {
+      const count = songList.filter(
+        (song) => song.genre === genre && song.year >= decade && song.year <= decade + 9,
+      ).length;
+      expect(count).toBeGreaterThanOrEqual(MIN_PER_COMBINATION);
+    },
+  );
+
+  it("leaves out only hip-hop in the 1960s and 1970s from the 10-songs rule", () => {
+    expect(combinations.filter(isException)).toEqual([
+      { decade: 1960, genre: "hip-hop" },
+      { decade: 1970, genre: "hip-hop" },
+    ]);
+  });
 });
