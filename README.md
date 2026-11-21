@@ -1,7 +1,7 @@
 # Song Guessing Game
 
-A browser music quiz: you hear a 30-second preview of a well-known song and pick the right title from four
-options. Five rounds per game – the faster you answer, the more points you get.
+A browser music quiz: you hear a 30-second preview of a well-known song and pick the right title, artist or
+year from four options. Five rounds per game – the faster you answer, the more points you get.
 Team project for the course "Introduction to Programming".
 
 **Play it:** https://song-guessing-game-tawny.vercel.app
@@ -19,14 +19,34 @@ What we are building and who does what: [`docs/PLAN.md`](docs/PLAN.md) (scope an
 
 ## How a game works
 
-1. **Start game** – the server picks 5 songs and the browser loads the first clip ("Loading first song…").
+1. **Start game** – you choose a mode, a genre and a decade; the server picks 5 songs and the browser loads
+   the first clip ("Loading first song…").
 2. **3 – 2 – 1** – then the clip, the four answer buttons and the 15-second countdown start together.
-3. **Answer** – the server checks it: 100 points for the right title plus up to 50 for speed.
+3. **Answer** – the server checks it: 100 points for the right answer plus up to 50 for speed.
    You see right/wrong, the cover, the song and a link to Apple Music.
-4. **Results** – total score and the 5 songs, then **Play again**.
+4. **Results** – total score and the 5 songs, each with a link to Apple Music, then **Play again**
+   (same settings) or **Change settings**.
 
 The server decides everything (which songs, the options, right or wrong, the points). The browser never
 receives the correct answer before you have answered.
+
+## Modes and song catalogue
+
+Details: [spec 003](specs/003-catalogue-modes.md), decisions [005](docs/decisions/005-curated-song-list.md)
+(song list) and [013](docs/decisions/013-game-modes.md) (modes and filters).
+
+- **4 modes** – **Title** (the default), **Artist**, **Year** (the real year plus 3 calculated wrong years) and
+  **Mixed** (the server picks title, artist or year for each round).
+- **Genre and decade tiles** – one genre and one decade (1960s–2020s), both "Any" by default. Tiles that
+  would give too few songs are greyed out, with a short note why.
+- **Fewer repeats** – the server leaves out the songs of your last 3 games, as long as enough songs are left
+  to fill a game.
+- **413 songs** from 1960–2026 in 6 genres (Pop, Rock, Hip-hop, R&B / Soul, Dance / Electronic,
+  Country / Folk), with at least 10 songs for every genre and decade – except hip-hop before 1980.
+- **Year rule** – the year the recording was first released (album or single, whichever came first),
+  not when it became a hit or a remaster came out.
+- **No explicit clips** – the game never plays a clip marked explicit. Songs removed from the list are
+  marked as retired in the database and never played again.
 
 ## Tech stack
 
