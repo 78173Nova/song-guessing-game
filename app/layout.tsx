@@ -17,8 +17,8 @@ const body = Atkinson_Hyperlegible_Next({
 });
 
 export const metadata: Metadata = {
-  title: "Song Guessing Game",
-  description: "Hear a 30-second clip and guess the song.",
+  title: "SongSnap",
+  description: "SongSnap: hear a 30-second clip and guess the song.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

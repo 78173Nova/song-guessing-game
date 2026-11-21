@@ -4,7 +4,7 @@ import RoomList from "@/components/RoomList";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Join a room · Song Guessing Game" };
+export const metadata = { title: "Join a room · SongSnap" };
 
 // "Join a room": the room code box and the list of public rooms (issue #36). Private rooms are only reached by code,
 // link or QR code.

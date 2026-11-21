@@ -1,4 +1,4 @@
-# Song Guessing Game
+# SongSnap
 
 A browser music quiz: you hear a 30-second preview of a well-known song and pick the right title from four
 options. Five rounds per game – the faster you answer, the more points you get.

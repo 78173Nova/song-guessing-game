@@ -3,7 +3,7 @@ import AccountSettingsForm from "@/components/AccountSettingsForm";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Account settings · Song Guessing Game" };
+export const metadata = { title: "Account settings · SongSnap" };
 
 // Account settings (issue #44): the saved avatar and usual nickname. Reached from "Logged in as <username>" on the
 // front page. Only for a logged-in account: AccountSettingsForm sends a guest to log in first.
