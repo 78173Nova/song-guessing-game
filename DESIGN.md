@@ -487,19 +487,19 @@ Answered seats: ✓ icon + bold name. Away seats: muted + away icon. Nicknames t
 ```
 ┌──────────────────────────────────┐
 │ ┌──────────────────────────────┐ │  --color-secondary-soft
-│ │ 🐙 Jonas        ✓ answered   │ │
-│ │                    2 310     │ │  --text-number, tabular, NumberFlow
+│ │ 🐙 Jonas                     │ │  nickname on its own line, shrinks to fit
+│ │ Answered        Score 2 310  │ │  --text-2xl, tabular, NumberFlow
 │ └──────────────────────────────┘ │
 │           .-~~~~~~~-.            │
 │          (~    12    ~)          │  wave circle, seconds inside
 │           '-~~~~~~~-'            │
 │ ┌──────────────────────────────┐ │  --color-primary-soft
-│ │ 🦊 Mila (you)                │ │
-│ │                    1 980     │ │
+│ │ 🦊 Mila                      │ │
+│ │ (you)           Score 1 980  │ │
 │ └──────────────────────────────┘ │
 │  answers below (2 × 2 on laptop) │
 └──────────────────────────────────┘
-Laptop: the two sides sit left and right of the circle instead of above and below.
+Laptop: the same stack, centred (max 32rem); each side on one line: 🐙 Jonas · Answered · Score 2 310.
 ```
 
 **Standings** (after a set and at the end; in a Multiplayer game with 3 or more players also after each round)
@@ -760,3 +760,14 @@ readers hear "has answered"; your own name and the duel show the word "Answered"
 This replaces the "✓ icon" in the board sketch above. The solo start screen now uses tile rows (`TileGroup`, shared
 with "Create a room" and the room list) for mode, genre and decade instead of buttons and dropdowns. Tiles that cannot
 be chosen are faded with a dashed outline, and the "too few songs" / mode notes use the form error style.
+
+Update 22 Nov 2026 (team feedback point 8, duel on a laptop): this replaces the layout part of the #66 note. The duel
+no longer puts the two sides left and right of the circle on a laptop: it is the same stack as on the phone,
+centred at most 32rem wide. Each side keeps its colours, "(you)", "Answered" and "Away". On a phone a side has the
+nickname on its own line, then the marks and the score ("Score" label before the number, `--text-2xl`); on a laptop
+it is one line (nickname, marks, score at `min(--text-number, 3rem)`). A nickname (up to 20 characters) shrinks to fit
+its line instead of ending in "…": its length goes to the CSS as `--chars` and the size is the line width
+(container query units) shared by the characters, between `--text-sm` and `--text-xl` (`--text-2xl` on a laptop);
+"…" is only a safety net for very wide characters. On a laptop the circle is `clamp(120px, 100svh - 500px, 260px)`,
+so the answers stay visible at 1366 × 768. During a room game the panel's "Room" heading is hidden from sight (still
+read by screen readers) and the page has less space at the top, for the same reason.
