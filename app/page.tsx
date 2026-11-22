@@ -19,7 +19,7 @@ export default function Home() {
         </div>
 
         <div className={styles.landingColumn}>
-          <h1 className={styles.landingTitle}>Song Guessing Game</h1>
+          <h1 className={styles.landingTitle}>SongSnap</h1>
           <p className={styles.landingPitch}>Hear a few seconds of a hit song. Name it before anyone else does.</p>
 
           <ul className={styles.points}>

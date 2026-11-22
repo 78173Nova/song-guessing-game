@@ -3,7 +3,7 @@ import ConfirmEmailChange from "@/components/ConfirmEmailChange";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Confirm your new email · Song Guessing Game" };
+export const metadata = { title: "Confirm your new email · SongSnap" };
 
 // The page the email-change email links to (/confirm-email?token=…, issue #45). The token is handled in the
 // browser by ConfirmEmailChange, which sends it to the server and removes it from the address bar.

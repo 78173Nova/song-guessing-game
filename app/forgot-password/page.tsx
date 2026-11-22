@@ -3,7 +3,7 @@ import ForgotPasswordForm from "@/components/ForgotPasswordForm";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Forgot password · Song Guessing Game" };
+export const metadata = { title: "Forgot password · SongSnap" };
 
 // Ask for a password reset link by email (spec 004). Linked from /login and from the "already have an account" email.
 export default function ForgotPasswordPage() {

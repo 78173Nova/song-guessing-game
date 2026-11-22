@@ -3,7 +3,7 @@ import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import SoloGame from "@/components/SoloGame";
 import styles from "../page.module.css";
 
-export const metadata = { title: "Play solo · Song Guessing Game" };
+export const metadata = { title: "Play solo · SongSnap" };
 
 // The solo game, unchanged – it used to be the front page. The header stays small, so the round (countdown,
 // song area, answers) is what stands out.
@@ -15,7 +15,7 @@ export default function SoloPage() {
           <Link href="/" className={styles.back}>
             <ArrowLeftIcon /> Home
           </Link>
-          <h1 className={styles.heading}>Song Guessing Game</h1>
+          <h1 className={styles.heading}>SongSnap</h1>
         </header>
         <SoloGame />
       </main>

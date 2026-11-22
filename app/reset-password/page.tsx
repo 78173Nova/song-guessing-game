@@ -3,7 +3,7 @@ import ResetPasswordForm from "@/components/ResetPasswordForm";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Choose a new password · Song Guessing Game" };
+export const metadata = { title: "Choose a new password · SongSnap" };
 
 // The page the reset email links to (/reset-password?token=…). The token is handled in the browser by
 // ResetPasswordForm, which removes it from the address bar and sends it with the new password.

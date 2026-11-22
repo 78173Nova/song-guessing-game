@@ -5,7 +5,7 @@ import styles from "@/components/Landing.module.css";
 import { parseRoomCode, ROOM_CODE_RULE } from "@/lib/client/room-code";
 import { appUrl } from "@/lib/email/messages";
 
-export const metadata = { title: "Room · Song Guessing Game" };
+export const metadata = { title: "Room · SongSnap" };
 
 // One room: /join/<code>, from the room code box or a shared link. The code comes from the address bar,
 // so it is checked again here: someone can type any address by hand. The server checks it once more.

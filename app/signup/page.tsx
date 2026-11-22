@@ -3,7 +3,7 @@ import SignupForm from "@/components/SignupForm";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Sign up · Song Guessing Game" };
+export const metadata = { title: "Sign up · SongSnap" };
 
 // Sign up: an account is needed only to create a room (spec 004).
 export default function SignupPage() {

@@ -3,7 +3,7 @@ import LoginForm from "@/components/LoginForm";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import styles from "@/components/Landing.module.css";
 
-export const metadata = { title: "Log in · Song Guessing Game" };
+export const metadata = { title: "Log in · SongSnap" };
 
 // Log in with a username or email and a password (spec 004).
 export default function LoginPage() {
