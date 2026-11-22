@@ -165,6 +165,24 @@
   color: var(--color-text-muted);
 }
 
+/* The away icon pulses gently (DESIGN.md: the one exception to "only the circle moves on its own"), so players
+   notice someone dropped out. It stays still with reduce motion. Only opacity changes. */
+.away svg {
+  animation: awayPulse var(--duration-pulse) var(--ease-in-out) infinite;
+}
+
+@keyframes awayPulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .away svg {
+    animation: none;
+  }
+}
+
 .lobbyActions {
   display: flex;
   flex-direction: column;

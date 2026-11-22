@@ -312,7 +312,7 @@ describe("leave", () => {
     await state(room.code, ben);
     expect(await leave(room.code, anna)).toEqual({ status: 200, body: { left: true, roomClosed: false } });
 
-    wait(120); // Ben has long been away, and the whole game has run out
+    wait(130); // Ben has long been away, and the whole game has run out (it ends after 120 s)
     const reply = await state(room.code, cleo);
     expect(reply.status).toBe(200);
     expect(reply.body).toMatchObject({ status: "finished", players: ["Ben", "Cleo"], kickable: [] });
@@ -345,7 +345,7 @@ describe("leave", () => {
   it("also works after the game has finished: the player leaves the final standings", async () => {
     const room = await startedRoom("Anna", "Ben");
     const [anna, ben] = room.tokens;
-    wait(150); // the 5 rounds end after 112 s; the vote on "Play again" runs until 182 s (then the room closes, #43)
+    wait(150); // the 5 rounds end after 120 s; the vote on "Play again" runs until 190 s (then the room closes, #43)
     expect((await state(room.code, anna)).body.status).toBe("finished");
     await leave(room.code, ben);
     expect((await state(room.code, anna)).body.standings).toEqual([{ rank: 1, nickname: "Anna", score: 0 }]);
