@@ -75,6 +75,8 @@ export default function SoloGame() {
   const [getReadyAt, setGetReadyAt] = useState(0);
   const [roundStartedAt, setRoundStartedAt] = useState(0);
   const [now, setNow] = useState(0);
+  // "Leave game" was tapped and the question under the answers is showing. The game keeps running meanwhile.
+  const [askLeave, setAskLeave] = useState(false);
   // The mode chosen on the start screen. "Play again", "Try again" and "Change settings" keep it.
   const [mode, setMode] = useState<Mode>("title");
   // The filters chosen on the start screen (undefined = Any). "Play again", "Try again" and "Change settings"
@@ -120,7 +122,7 @@ export default function SoloGame() {
     answeredRef.current = key;
     dispatch({ type: "answer", answer });
     const result = await apiAnswer(gameId, round, answer);
-    dispatch(result.ok ? { type: "answer-result", result: result.data } : { type: "failed", message: result.message });
+    dispatch(result.ok ? { type: "answer-result", result: result.data } : { type: "failed", gameId, message: result.message });
   }, []);
 
   function pauseAll() {
@@ -191,11 +193,15 @@ export default function SoloGame() {
       return player;
     });
     playersRef.current = players;
+    setAskLeave(false);
     answeredRef.current = null;
     startedRef.current = null;
 
     dispatch({ type: "start" });
     const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current);
+    // The player left (or started again) while the game was being created: this game has no ID on screen yet, so
+    // its reply is dropped here.
+    if (playersRef.current !== players) return;
     if (!game.ok) {
       // Too few songs match the filters: back to the start screen, which says so.
       dispatch(game.tooFewSongs ? { type: "start-refused", message: game.message } : { type: "failed", message: game.message });
@@ -207,6 +213,7 @@ export default function SoloGame() {
 
     // Only the first clip is waited for. The 3-2-1 starts the moment it is ready.
     const first = await withTimeout(prepare(players, gameId, 0, previewUrls[0]), FIRST_CLIP_LIMIT_MS, { ok: false as const });
+    if (playersRef.current !== players) return; // left meanwhile
     if (!first.ok) {
       dispatch({ type: "clip-failed", gameId, index: 0 });
       return;
@@ -221,6 +228,18 @@ export default function SoloGame() {
       const result = await prepare(players, gameId, index, previewUrls[index]);
       dispatch({ type: result.ok ? "clip-ready" : "clip-failed", gameId, index });
     }
+  }
+
+  // "Leave game" (team feedback 22 Nov, point 2): after the question under the answers, stop the music and go back
+  // to the start screen; mode, genre and decade stay chosen. Forgetting the players makes the steps still running
+  // for this game (loading clips, starting a round) stop; late replies for it are ignored by gameReducer.
+  // The question is part of the page, not the browser's confirm(): Safari sometimes silenced the clip while its
+  // pop-up was open, and the pop-up froze the page's timers.
+  function handleLeave() {
+    setAskLeave(false);
+    pauseAll();
+    playersRef.current = [];
+    dispatch({ type: "reset" });
   }
 
   function handleNext() {
@@ -263,12 +282,14 @@ export default function SoloGame() {
       if (round === null) {
         const next = await apiNextRound(gameId);
         if (!next.ok) {
-          dispatch({ type: "failed", message: next.message });
+          dispatch({ type: "failed", gameId, message: next.message });
           return;
         }
         round = next.data;
         loadedRoundRef.current = { key: startingKey, round };
       }
+      // The player left while the round was on its way: its clip must not start on the start screen.
+      if (playersRef.current[roundNumber - 1] !== player) return;
       // Route the clip through the analyser when the sound context runs; otherwise it plays as before.
       attachWave(player);
       if (player.paused && !player.error) {
@@ -466,6 +487,26 @@ export default function SoloGame() {
                 />
               ))}
             </div>
+          )}
+
+          {/* Every screen of a running game, under the answers: leave it and go back to the settings. The question
+              replaces the button; music, timer and answers carry on while it shows. */}
+          {askLeave ? (
+            <div className={styles.leaveQuestion} role="group" aria-labelledby="leave-question">
+              <p id="leave-question">Leave this game? Your points from this game are lost.</p>
+              <div className={styles.leaveChoices}>
+                <button type="button" className={styles.leave} onClick={handleLeave}>
+                  Leave
+                </button>
+                <button type="button" className={styles.leave} onClick={() => setAskLeave(false)}>
+                  Keep playing
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className={styles.leave} onClick={() => setAskLeave(true)}>
+              Leave game
+            </button>
           )}
         </section>
       )}

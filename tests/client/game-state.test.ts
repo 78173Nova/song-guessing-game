@@ -198,3 +198,84 @@ describe("gameReducer – answering", () => {
     expect(gameReducer(starting, { type: "round-loaded", round: round(2) })).toBe(starting);
   });
 });
+
+// "Leave game" (team feedback 22 Nov, point 2): the button under the answers. After the player confirms, the page
+// sends "reset" – the same action as "Change settings" – and is back on the start screen with the settings kept.
+describe("gameReducer – leaving a game", () => {
+  const OTHER_GAME = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const inReveal = () => answerAndReveal(inRound1(), 1);
+
+  // Every screen of a running game, from "Loading first song…" to the reveal.
+  const runningScreens: [string, () => GameState][] = [
+    ["creating the game", () => run({ type: "start" })],
+    ["loading the first song", () => run({ type: "start" }, created)],
+    ["the 3-2-1", () => run({ type: "start" }, created, ready(0))],
+    ["starting round 1", () => run({ type: "start" }, created, ready(0), { type: "countdown-done" })],
+    ["tap to start", () => run({ type: "start" }, created, ready(0), { type: "countdown-done" }, { type: "autoplay-blocked" })],
+    ["loading the next song", () => from(inReveal(), { type: "next" })],
+    ["a round", inRound1],
+    ["a round with an answer on its way", () => from(inRound1(), { type: "answer", answer: 2 })],
+    ["the reveal", inReveal],
+  ];
+
+  it.each(runningScreens)("goes back to the start screen from %s", (_label, state) => {
+    expect(from(state(), { type: "reset" })).toEqual({ screen: "start" });
+  });
+
+  it("ignores every late reply of the left game: the start screen stays", () => {
+    const left = from(inRound1(), { type: "answer", answer: 2 }, { type: "reset" });
+    const late: GameAction[] = [
+      created,
+      ready(1),
+      { type: "clip-failed", gameId: GAME, index: 0 },
+      { type: "clip-replaced", gameId: GAME, index: 2, url: "https://new.example.com/x.m4a" },
+      { type: "countdown-done" },
+      { type: "autoplay-blocked" },
+      { type: "round-loaded", round: round(2) },
+      { type: "answer-result", result: result(1) },
+      { type: "start-refused", message: "Too few songs." },
+    ];
+    for (const action of late) expect(gameReducer(left, action)).toBe(left);
+  });
+
+  it("ignores a late error of the left game: no 'The game stopped' on the start screen", () => {
+    const left = from(inRound1(), { type: "reset" });
+    expect(gameReducer(left, { type: "failed", gameId: GAME, message: "Can't reach the server." })).toBe(left);
+  });
+
+  it("still shows an error of the running game, and an error before any game (e.g. an unsupported browser)", () => {
+    expect(from(inRound1(), { type: "failed", gameId: GAME, message: "Can't reach the server." })).toEqual({
+      screen: "error",
+      message: "Can't reach the server.",
+    });
+    expect(run({ type: "failed", message: "This browser cannot play the clips." })).toEqual({
+      screen: "error",
+      message: "This browser cannot play the clips.",
+    });
+  });
+
+  it("starts the next game cleanly: score 0, no history, every clip loading again", () => {
+    const left = from(inReveal(), { type: "reset" });
+    const next = from(left, { type: "start" }, { type: "game-created", gameId: OTHER_GAME, previewUrls: URLS });
+    expect(next).toEqual({
+      screen: "first-clip",
+      gameId: OTHER_GAME,
+      previewUrls: URLS,
+      ready: [false, false, false, false, false],
+      score: 0,
+      history: [],
+    });
+  });
+
+  it("does not let replies of the left game reach the next game", () => {
+    const next = from(
+      inRound1(),
+      { type: "reset" },
+      { type: "start" },
+      { type: "game-created", gameId: OTHER_GAME, previewUrls: URLS },
+    );
+    expect(gameReducer(next, ready(0))).toBe(next); // the old game's first clip
+    expect(gameReducer(next, { type: "clip-failed", gameId: GAME, index: 0 })).toBe(next);
+    expect(gameReducer(next, { type: "failed", gameId: GAME, message: "Can't reach the server." })).toBe(next);
+  });
+});

@@ -203,3 +203,60 @@
   font-variant-numeric: tabular-nums;
   color: var(--color-text);
 }
+
+/* "Leave game" under the answers: a quiet text button (DESIGN.md, "Quiet button / link"), the same as the room's
+   Leave, so it never competes with the answers. */
+.leave {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform var(--duration-instant) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .leave:hover {
+    color: var(--color-text);
+    text-decoration-color: currentColor;
+  }
+}
+
+.leave:active {
+  transform: scale(0.97);
+}
+
+.leave:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The question that replaces "Leave game": one quiet line and the two choices, centred under the answers. */
+.leaveQuestion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.leaveChoices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 var(--space-4);
+}
