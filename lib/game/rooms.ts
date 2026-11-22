@@ -74,19 +74,21 @@ export function isRoundClosed(
 export const FIRST_ROUND_DELAY_SECONDS = 5;
 // Every device shows a round's result for this long after it closes …
 export const RESULT_SECONDS = 5;
-// … and the next round starts this long after the close: the result, then a few seconds of
-// "Next round starting…", so a device that polls a little late still sees the start time before it comes.
-export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 3;
+// … and the next round starts this long after the close: the result, then 5 s of standings (team feedback point
+// 11; "Next round starting…" after a set break), so a device that polls a little late still sees the start time
+// before it comes.
+export const NEXT_ROUND_DELAY_SECONDS = RESULT_SECONDS + 5;
 // After the last round of a set (issue #34): each player's own set summary, then the standings. The next set
-// starts after the result, both of these and the same few seconds of "Next round starting…".
+// starts after the result, both of these and the same 5 s of "Next round starting…".
 export const SET_SUMMARY_SECONDS = 10;
 export const SET_STANDINGS_SECONDS = 5;
 export const SET_BREAK_SECONDS = SET_SUMMARY_SECONDS + SET_STANDINGS_SECONDS;
 // Does this game show the standings after each round inside a set (instead of "Next round starting…", in the same
-// time)? Only a Multiplayer room whose game started with 3 or more players (the board layout). A duel shows both
-// scores during every round instead, and the last round of a set or game has its own standings.
+// time)? Every room game once it has started: the board layout and, since team feedback point 12, the duel too
+// (a Duel room, or Multiplayer started with 2). Not before the start (no starting players yet) or when the room
+// type is unknown. The last round of a set or game has its own standings.
 export function hasRoundStandings(game: { type?: RoomType; startingPlayers?: number | null }): boolean {
-  return game.type === "multiplayer" && (game.startingPlayers ?? 0) >= 3;
+  return game.type !== undefined && (game.startingPlayers ?? 0) >= MIN_PLAYERS_TO_START;
 }
 // After the last round of the game: the final standings, then the full summary, which stays.
 export const FINAL_STANDINGS_SECONDS = 5;

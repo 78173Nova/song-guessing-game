@@ -157,3 +157,16 @@ the layout does not switch when a player leaves. The page picks the layout with 
   players there is no time to read the whole list.
 - **How it could change:** if players want more time, add it to the server's gap (`nextRoundStartsAt`) for games
   where `hasRoundStandings` is true.
+
+Update 22 Nov 2026 (team feedback points 11 and 12): 5 s of standings, and the duel shows them too.
+- **Decision:** the next round starts 10 s after a round closes instead of 8 s (`NEXT_ROUND_DELAY_SECONDS =
+  RESULT_SECONDS + 5`, lib/game/rooms.ts): the result for 5 s, then the standings for 5 s. The duel (a Duel room, or
+  Multiplayer started with 2) now shows the same standings between rounds, with both players' scores, instead of
+  "Next round starting…" (`hasRoundStandings` is true for every room game once it has started). The server still
+  decides the timing; "Tap to continue" still skips on this device only.
+- **Why:** the team found 3 s too short to read the standings, and in a duel the scores between rounds were missing
+  while the board games had them.
+- **Alternatives:** keep 8 s and shorten the result to 3 s: the result would be too short to see the right answer.
+- **Limits:** every game gets 2 s longer per round (10 s for 5 rounds). After a set break, "Next round starting…"
+  now also shows for 5 s instead of 3 s, because the set break uses the same delay.
+- **How it could change:** change the 5 in `NEXT_ROUND_DELAY_SECONDS`; the device follows the server's start time.

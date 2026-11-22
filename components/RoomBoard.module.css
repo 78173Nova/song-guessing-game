@@ -106,6 +106,24 @@
   color: var(--color-text-muted);
 }
 
+/* The away icon pulses gently (DESIGN.md: the one exception to "only the circle moves on its own"), so players
+   notice someone dropped out. It stays still with reduce motion. Only opacity changes. */
+.away .icon {
+  animation: awayPulse var(--duration-pulse) var(--ease-in-out) infinite;
+}
+
+@keyframes awayPulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .away .icon {
+    animation: none;
+  }
+}
+
 /* Long nicknames end in "…"; the full nickname shows when hovering (title). */
 .name {
   min-width: 0;

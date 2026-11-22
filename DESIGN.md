@@ -152,7 +152,8 @@ and colour that always comes with a word or an icon.
 - One display face with character (Bricolage Grotesque) for titles and numbers, one highly legible face
   (Atkinson Hyperlegible Next) for everything people read or type.
 - Flat, tonal surfaces. A shadow only on things that float above the page (pop-up, sheet, short message).
-- Motion only when the game or the player changes something. The circle is the only thing that moves on its own.
+- Motion only when the game or the player changes something. The circle is the only thing that moves on its own,
+  with one deliberate exception: the away icon pulses gently, so players notice someone dropped out.
 - The album's colours appear only after the answer: during a round the circle uses the app's own colours.
 
 ## Colors
@@ -502,7 +503,7 @@ Answered seats: ✓ icon + bold name. Away seats: muted + away icon. Nicknames t
 Laptop: the two sides sit left and right of the circle instead of above and below.
 ```
 
-**Standings** (after a set and at the end; in a Multiplayer game with 3 or more players also after each round)
+**Standings** (after a set and at the end; in every room game, duel included, also after each round)
 
 ```
 ┌──────────────────────────────────┐
@@ -590,6 +591,7 @@ canvas). Nothing moves on page load except the landing circle's idle pulse.
 | `--duration-base` | 240ms | Reveal panel in, correct/wrong marks, number roll per tick |
 | `--duration-slow` | 420ms | Standings rows, podium rise, sheet open |
 | `--duration-wave-colour` | 900ms | Circle blends from app colours to cover colours |
+| `--duration-pulse` | 2400ms | One slow pulse of the away icon (repeats while the player is away) |
 | `--stagger-step` | 40ms | Delay between standings rows (max 8 rows staggered, rest appear together) |
 | `--ease-out` | cubic-bezier(0.22, 1, 0.36, 1) | Things entering, number rolls (default) |
 | `--ease-in-out` | cubic-bezier(0.65, 0, 0.35, 1) | Things moving from one place to another, colour blends |
@@ -610,6 +612,10 @@ canvas). Nothing moves on page load except the landing circle's idle pulse.
    0.8s.
 6. **Pop-up / sheet:** dialog fades + scales 0.96 → 1 (fast); sheet slides up (slow) and follows the finger
    when dragged (Vaul).
+7. **Away icon:** pulses gently while a player is away (opacity 1 → 0.4 → 1, `--duration-pulse`, `--ease-in-out`,
+   repeating) in the lobby list, on the game board and in the duel. The one thing besides the circle that moves on
+   its own: a player who drops out is easy to miss, and the pulse draws the eye without a colour that could mean
+   right or wrong.
 
 The wave circle runs on `requestAnimationFrame` only while it is on screen and the tab is visible.
 
@@ -618,6 +624,8 @@ The wave circle runs on `requestAnimationFrame` only while it is on screen and t
 - All the movements above are turned off: duration tokens become `0ms` in a
   `@media (prefers-reduced-motion: reduce)` block, NumberFlow shows the new number directly, Sonner and Vaul
   appear without sliding (checked by hand in #66).
+- The away icon stays still (`animation: none`, and `--duration-pulse` is `0ms`); the word "Away" and the dashed
+  outline still say it.
 - The wave circle stays still as a plain ring. It still changes colour on reveal (colour is not motion), as a
   crossfade.
 - Nothing that carries information depends on motion: every state change is also a word, an icon or a colour.
@@ -760,3 +768,7 @@ readers hear "has answered"; your own name and the duel show the word "Answered"
 This replaces the "✓ icon" in the board sketch above. The solo start screen now uses tile rows (`TileGroup`, shared
 with "Create a room" and the room list) for mode, genre and decade instead of buttons and dropdowns. Tiles that cannot
 be chosen are faded with a dashed outline, and the "too few songs" / mode notes use the form error style.
+
+Update 22 Nov 2026 (team feedback point 10): the away icon pulses gently (opacity, `--duration-pulse` 2400ms,
+`--ease-in-out`) in the lobby list, on the game board and in the duel, and stays still with reduce motion. This is a
+deliberate exception to "the circle is the only thing that moves on its own" (see "What moves, when", point 7).
