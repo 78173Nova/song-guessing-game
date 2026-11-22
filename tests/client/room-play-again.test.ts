@@ -10,7 +10,7 @@ const T0 = Date.parse("2026-11-15T12:00:00.000Z");
 const iso = (ms: number) => new Date(ms).toISOString();
 const S = 1000;
 
-// Game 1 has just finished: its last round closed at T0, the vote ends 70 s later.
+// Game 1 has just finished: its last round closed at T0, the vote ends 80 s later (5 s result + 15 s final standings + 60 s).
 function finished(chosen: string[] = [], playAgain = true): RoomState {
   return {
     code: "482913",
@@ -20,7 +20,7 @@ function finished(chosen: string[] = [], playAgain = true): RoomState {
     answered: [],
     totalRounds: 3,
     gameNumber: 1,
-    playAgain: playAgain ? { endsAt: iso(T0 + 70 * S), chosen } : null,
+    playAgain: playAgain ? { endsAt: iso(T0 + 80 * S), chosen } : null,
     serverNow: iso(T0),
     previewUrls: ["a", "b", "c"],
     round: {
@@ -60,22 +60,22 @@ describe("roomScreen – the choice after a game", () => {
   it("offers Play again on the full summary, with the seconds left on the server's clock", () => {
     const view = run(polled(finished()));
     expect(roomScreen(view, T0 + 5 * S).kind).toBe("final"); // the final standings come first
-    expect(roomScreen(view, T0 + 10 * S)).toMatchObject({
+    expect(roomScreen(view, T0 + 20 * S)).toMatchObject({
       kind: "final-summary",
       playAgain: { secondsLeft: 60, chosen: false },
     });
-    expect(roomScreen(view, T0 + 69.5 * S)).toMatchObject({ playAgain: { secondsLeft: 1 } });
-    expect(roomScreen(view, T0 + 80 * S)).toMatchObject({ playAgain: { secondsLeft: 0 } });
+    expect(roomScreen(view, T0 + 79.5 * S)).toMatchObject({ playAgain: { secondsLeft: 1 } });
+    expect(roomScreen(view, T0 + 90 * S)).toMatchObject({ playAgain: { secondsLeft: 0 } });
   });
 
   it("says when this player has chosen Play again", () => {
     const view = run(polled(finished(["Ben"])));
-    expect(roomScreen(view, T0 + 10 * S)).toMatchObject({ playAgain: { chosen: true } });
+    expect(roomScreen(view, T0 + 20 * S)).toMatchObject({ playAgain: { chosen: true } });
   });
 
   it("offers nothing after the last game a room may host", () => {
     const view = run(polled(finished([], false)));
-    expect(roomScreen(view, T0 + 10 * S)).not.toHaveProperty("playAgain");
+    expect(roomScreen(view, T0 + 20 * S)).not.toHaveProperty("playAgain");
   });
 });
 

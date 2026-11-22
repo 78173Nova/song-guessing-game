@@ -83,7 +83,7 @@ Date: 16 Nov 2026 · Status: decided, built (issue #33)
 - **Sets:** after the last round of a set the next round starts 23 s after the close instead of 8 s (result 5 s +
   set summary 10 s + standings 5 s + 3 s), the same way as before: one later start time, no timer. Every state
   reply has `me.summary` (each closed round: title, artist, right/wrong, points, iTunes link). The page shows a
-  set's part after each set and all of it at the end, after 5 s of final standings. "Tap to continue" skips each
+  set's part after each set and all of it at the end, after 5 s of final standings (15 s since 22 Nov 2026, see the update below). "Tap to continue" skips each
   screen on that device only.
 - **Limits:** the next set starts at the same server time for everyone, so a player who skips the summary waits on
   "Next round starting…". A swapped song (#41) also matches the genres and decades and keeps the round's
@@ -170,3 +170,10 @@ Update 22 Nov 2026 (team feedback points 11 and 12): 5 s of standings, and the d
 - **Limits:** every game gets 2 s longer per round (10 s for 5 rounds). After a set break, "Next round starting…"
   now also shows for 5 s instead of 3 s, because the set break uses the same delay.
 - **How it could change:** change the 5 in `NEXT_ROUND_DELAY_SECONDS`; the device follows the server's start time.
+
+## Update 22 Nov 2026: final standings stay 15 s
+- **Decision:** the final standings after the last round stay 15 s instead of 5 s (`FINAL_STANDINGS_SECONDS`).
+- **Why:** 5 s was too short to look at the podium and your own rank. "Tap to continue" still skips them on that
+  device, so nobody has to wait.
+- **Limits:** the Play again vote now ends 80 s after the last round closes instead of 70 s, so players who do not
+  skip still get the full 60 s to choose. A room where somebody never chooses waits 10 s longer.
