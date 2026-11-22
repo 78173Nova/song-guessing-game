@@ -1,6 +1,6 @@
 # SongSnap
 
-A browser music quiz: you hear a 30-second preview of a well-known song and pick the right title, artist or
+A browser music quiz: you hear a well-known song and have 15 seconds to pick the right title, artist or
 year from four options. Five rounds per game – the faster you answer, the more points you get.
 Team project for the course "Introduction to Programming".
 

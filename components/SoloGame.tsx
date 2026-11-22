@@ -337,7 +337,7 @@ export default function SoloGame() {
       {state.screen === "start" && (
         <section className={shared.center}>
           <p className={shared.intro}>
-            Hear a 30-second clip and pick the right answer. {ROUNDS_PER_GAME} rounds – faster answers score more.
+            Hear a song and pick the right answer within {ROUND_SECONDS} seconds. {ROUNDS_PER_GAME} rounds – faster answers score more.
           </p>
           {/* Mode, genre and decade as tile rows (team feedback 18 Nov, point 8); choices with too few songs are
               greyed out with a note saying why (point 7). */}
