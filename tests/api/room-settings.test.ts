@@ -296,7 +296,7 @@ describe("song swap keeps the settings", () => {
 });
 
 describe("sets: the break after each set", () => {
-  it("starts the next round 8 s after a close within a set, and 23 s after the close of a set's last round", async () => {
+  it("starts the next round 10 s after a close within a set, and 25 s after the close of a set's last round", async () => {
     const room = await newRoom({ songsPerSet: 3, sets: 2 });
     const ben = await joined(room.code, "Ben");
     await startRoomGame(db, room.code, bearer(room.creatorToken), deps);
@@ -309,10 +309,10 @@ describe("sets: the break after each set", () => {
       starts.push(next.startsAt);
       clock = new Date(plus(next.startsAt, 15.001));
     }
-    expect(starts[1]).toBe(plus(starts[0], 15 + 8));
-    expect(starts[2]).toBe(plus(starts[1], 15 + 8));
-    // Round 3 ends set 1: result 5 s + set summary 10 s + standings 5 s + 3 s.
-    expect(starts[3]).toBe(plus(starts[2], 15 + 23));
+    expect(starts[1]).toBe(plus(starts[0], 15 + 10));
+    expect(starts[2]).toBe(plus(starts[1], 15 + 10));
+    // Round 3 ends set 1: result 5 s + set summary 10 s + standings 5 s + 5 s.
+    expect(starts[3]).toBe(plus(starts[2], 15 + 25));
   });
 });
 

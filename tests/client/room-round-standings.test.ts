@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { RoomState, SummaryItem } from "@/lib/client/room-api";
 import { initialRoomView, roomReducer, roomScreen, type RoomAction, type RoomView } from "@/lib/client/room-game";
 
-// The standings after each round: a Multiplayer game that started with 3 or more players shows them after the
-// result, instead of "Next round starting…", until the next round starts. The time between rounds stays the same
-// (8 s). No browser, no network: the local clock is a number we pass in.
+// The standings after each round: every room game (Multiplayer and duel) shows them after the result, instead of
+// "Next round starting…", until the next round starts (10 s after the close: 5 s result, 5 s standings). No browser, no network: the local clock is a number we pass in.
 
 const T0 = Date.parse("2026-11-15T12:00:00.000Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -29,7 +28,7 @@ const item = (round: number): SummaryItem => ({
 
 type Game = { type?: "multiplayer" | "duel"; startingPlayers?: number; status?: "playing" | "finished" };
 
-// 1 set of 5 songs. Round `number` closed at T0; the next round starts 8 s later.
+// 1 set of 5 songs. Round `number` closed at T0; the next round starts 10 s later.
 function closed(number: number, { type = "multiplayer", startingPlayers = 3, status = "playing" }: Game = {}): RoomState {
   return {
     code: "482913",
@@ -57,7 +56,7 @@ function closed(number: number, { type = "multiplayer", startingPlayers = 3, sta
     nextRound:
       status === "finished"
         ? null
-        : { number: number + 1, startsAt: iso(T0 + 8 * S), options: ["W", "X", "Y", "Z"], questionType: "title" },
+        : { number: number + 1, startsAt: iso(T0 + 10 * S), options: ["W", "X", "Y", "Z"], questionType: "title" },
     me: {
       nickname: "Ben",
       score: 300,
@@ -84,36 +83,48 @@ describe("roomScreen – the standings after each round", () => {
       number: 2,
       standings: STANDINGS,
       me: "Ben",
-      secondsToNext: 3,
+      secondsToNext: 5,
     });
-    expect(roomScreen(view, T0 + 7.5 * S)).toMatchObject({ kind: "round-standings", secondsToNext: 1 });
-    expect(roomScreen(view, T0 + 8 * S)).toMatchObject({ kind: "round", number: 3 });
+    expect(roomScreen(view, T0 + 9.5 * S)).toMatchObject({ kind: "round-standings", secondsToNext: 1 });
+    expect(roomScreen(view, T0 + 10 * S)).toMatchObject({ kind: "round", number: 3 });
   });
 
   it("'Tap to continue' skips the result and then the standings early, but the next round still starts on time", () => {
     let view = run(polled(closed(2)), { type: "continued", round: 2 });
-    expect(roomScreen(view, T0 + 1 * S)).toMatchObject({ kind: "round-standings", number: 2, secondsToNext: 7 });
+    expect(roomScreen(view, T0 + 1 * S)).toMatchObject({ kind: "round-standings", number: 2, secondsToNext: 9 });
 
     view = roomReducer(view, { type: "continued", round: 2, step: "standings" });
     expect(roomScreen(view, T0 + 2 * S)).toEqual({ kind: "next-starting", number: 3 });
-    expect(roomScreen(view, T0 + 7.9 * S).kind).toBe("next-starting");
-    expect(roomScreen(view, T0 + 8 * S)).toMatchObject({ kind: "round", number: 3 });
+    expect(roomScreen(view, T0 + 9.9 * S).kind).toBe("next-starting");
+    expect(roomScreen(view, T0 + 10 * S)).toMatchObject({ kind: "round", number: 3 });
   });
 
-  it("goes straight from the result to 'Next round starting…' in a duel: a Duel room, or Multiplayer started with 2", () => {
+  it("shows the same standings with both scores in a duel: a Duel room, or Multiplayer started with 2", () => {
+    const both = [
+      { rank: 1, nickname: "Ben", score: 300 },
+      { rank: 2, nickname: "Anna", score: 100 },
+    ];
     for (const game of [{ type: "duel", startingPlayers: 2 }, { type: "multiplayer", startingPlayers: 2 }] as Game[]) {
-      const view = run(polled(closed(2, game)));
-      expect(roomScreen(view, T0 + 5 * S)).toEqual({ kind: "next-starting", number: 3 });
+      const duel: RoomState = { ...closed(2, game), players: ["Anna", "Ben"], standings: both };
+      const view = run(polled(duel));
+      expect(roomScreen(view, T0 + 5 * S)).toEqual({
+        kind: "round-standings",
+        number: 2,
+        standings: both,
+        me: "Ben",
+        secondsToNext: 5,
+      });
+      expect(roomScreen(view, T0 + 10 * S)).toMatchObject({ kind: "round", number: 3 });
     }
   });
 
   it("keeps the break after the last round of a set: set summary, set standings, then no extra round standings", () => {
-    // 2 sets of 3 songs: round 3 ends set 1, and the next set starts 23 s after the close.
+    // 2 sets of 3 songs: round 3 ends set 1, and the next set starts 25 s after the close.
     const endOfSet: RoomState = {
       ...closed(3),
       settings: { type: "multiplayer", mode: "title", genres: "any", decades: "any", songsPerSet: 3, sets: 2 },
       totalRounds: 6,
-      nextRound: { number: 4, startsAt: iso(T0 + 23 * S), options: ["W", "X", "Y", "Z"], questionType: "title" },
+      nextRound: { number: 4, startsAt: iso(T0 + 25 * S), options: ["W", "X", "Y", "Z"], questionType: "title" },
     };
     const view = run(polled(endOfSet));
 
