@@ -10,10 +10,10 @@ Team project for the course "Introduction to Programming".
 
 | Name | Student number |
 |---|---|
-| Niklas `<surname>` | `<student number>` |
-| Jasper `<surname>` | `<student number>` |
-| Steinar `<surname>` | `<student number>` |
-| Karin `<surname>` | `<student number>` |
+| Niklas Liebich | 78173 |
+| Jasper Berndt | 70654 |
+| Steinar Guðmundsson | 83910 |
+| Karin Pernsteiner | 83911 |
 
 What we are building and who does what: [`docs/PLAN.md`](docs/PLAN.md) (scope and step-by-step plan).
 
