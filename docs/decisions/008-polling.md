@@ -46,3 +46,17 @@ schedules round 1 five seconds ahead, and each later round 8 seconds after the p
 (`GET /api/rooms/[code]`) carries `serverNow` and `nextRound.startsAt`; each device works out how far its own
 clock is off from `serverNow` and starts the clip it loaded in advance at that time. Pages now poll every second.
 The server still decides everything from timestamps whenever a device polls. Details: decision 015.
+
+## Update 22 Nov 2026: a load test for 25 players
+- **Decision:** `npm run load-test -- --room <code> --bots <1–24>` (`scripts/load-test.ts`) joins bots to a room
+  created on the real site. Each bot polls once a second like a phone, answers each round at a random moment
+  1–12 s after the start, and leaves when the game is over. The script prints count, failures, median, 95% and
+  slowest time per kind of request.
+- **Why:** the team has about 10 devices, a class has 25 players. Real phones plus bots fill a room, so we can see
+  on our own phones whether polling still feels smooth with a full room.
+- **Alternatives:** many browser tabs as players (no code, but background tabs get slowed down by the browser);
+  a load-testing tool such as k6 (one more tool to install and explain).
+- **Limits:** all bots run from one computer and one network, so it tests Vercel and Neon, not the classroom
+  Wi-Fi or 25 phones downloading clips. Bots do not load the clips. Only the option reading and the report
+  are tested automatically; the network part is checked by running it against a real room.
+- **How it could change:** more bots per room would need a bigger player limit; the script would stay the same.
