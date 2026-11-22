@@ -24,6 +24,7 @@ import { avatarEmoji } from "@/lib/game/avatars";
 import { NICKNAME_MAX_LENGTH } from "@/lib/game/rooms";
 import AvatarPicker from "./AvatarPicker";
 import TileGroup from "./TileGroup";
+import shared from "./GameShared.module.css";
 import styles from "./Landing.module.css";
 
 
@@ -210,7 +211,7 @@ export default function CreateRoomForm() {
       <p className={styles.error} role="alert">
         {error}
       </p>
-      <button type="submit" className={styles.primary} disabled={sending || tooFew}>
+      <button type="submit" className={`${shared.primary} ${shared.wide}`} disabled={sending || tooFew}>
         {sending ? "Creating…" : "Create the room"}
       </button>
     </form>

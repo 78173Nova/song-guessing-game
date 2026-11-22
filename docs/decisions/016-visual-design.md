@@ -168,3 +168,8 @@ the set summary in rooms (team feedback). The link wording is now "Open in Apple
 results, room reveal, set summary; aria-label "Open <title> in Apple Music"), because the links open music.apple.com.
 Before, the set summary said "Open in iTunes" and the reveals said "Open in Apple Music". The solo game keeps each
 round's link in its history when the answer comes back, so the results can show it; a song without a link shows none.
+
+Update 22 Nov 2026 (team request): "Create a room" and "Join a room" now use the solo start screen's frame: no panel, the
+small header (Home link left, page name right), one left-aligned column as wide as a form, tile rows 16px apart and the
+same wide start button (`components/RoomSelection.module.css`). The fields and what they do are unchanged. The other form
+screens and the room itself keep the panel.
