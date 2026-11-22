@@ -8,7 +8,7 @@ import PeopleIcon from "@/components/icons/PeopleIcon";
 import styles from "@/components/Landing.module.css";
 
 // The front page: what the game is, and every way in (solo, create a room, join a room, room code, account).
-// Layout from DESIGN.md: the wave circle above the title (left of it on a laptop), then one filled button.
+// Layout from DESIGN.md: the wave circle centred above the title (on a laptop too), then one filled button.
 export default function Home() {
   return (
     <div className={styles.landing}>
