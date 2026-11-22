@@ -2,10 +2,11 @@ import type { KeyValueStorage } from "@/lib/client/share";
 
 // Where the login page sends the person after logging in: the `?next=…` page (e.g. "/create"), or the front page.
 // Only a plain path on this site is allowed: it starts with one "/", not "//" or "/\" (browsers read both as
-// "another site"), and contains only ordinary URL characters. Anything else falls back to "/".
+// "another site"), has no "//" anywhere (the browser can tidy "/.//x" into "//x"), and contains only ordinary URL
+// characters. Anything else falls back to "/".
 export function safeNextPath(next: string | null | undefined): string {
   if (typeof next !== "string") return "/";
-  return /^\/(?![/\\])[A-Za-z0-9\-._~/?=&%]*$/.test(next) ? next : "/";
+  return !next.includes("//") && /^\/(?![/\\])[A-Za-z0-9\-._~/?=&%]*$/.test(next) ? next : "/";
 }
 
 // A guest who has no account yet goes "Create a room" → Sign up (/signup?next=/create) → the verification email

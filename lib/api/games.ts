@@ -29,6 +29,7 @@ import { parseStartInput } from "../game/modes";
 import { songPools } from "../game/recent-songs";
 import { buildReplacementRound, buildRounds, countMatching, ROUNDS_PER_GAME } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
+import { errorSummary } from "./shared";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
 
@@ -76,7 +77,7 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
   try {
     return await run();
   } catch (error) {
-    console.error("Game API error:", error);
+    console.error("Game API error:", errorSummary(error));
     return fail("server-error");
   }
 }

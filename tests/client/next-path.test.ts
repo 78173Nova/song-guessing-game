@@ -31,6 +31,18 @@ describe("safeNextPath", () => {
       expect(safeNextPath(target)).toBe("/");
     }
   });
+
+  // A path with "//" further in, which the browser can tidy up into "//evil.example" (security audit, 22 Nov).
+  it("refuses any target containing '//'", () => {
+    for (const target of ["/.//evil.example", "/././/evil.example", "/a/..//evil.example", "/create//evil.example"]) {
+      expect(safeNextPath(target)).toBe("/");
+    }
+  });
+
+  it("still accepts ordinary paths with a query", () => {
+    expect(safeNextPath("/create?from=share")).toBe("/create?from=share");
+    expect(safeNextPath("/join/482913")).toBe("/join/482913");
+  });
 });
 
 // A stand-in for the browser's localStorage.

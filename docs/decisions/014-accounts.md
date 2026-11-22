@@ -269,3 +269,21 @@ password guesses would cover log in and these routes together.
 
 ### How it could change
 Another email service would only replace `lib/email/brevo.ts`; the accounts API only knows the `EmailSender` type.
+
+## Update 22 Nov 2026: hardening after a security review
+A teammate's review of the account code led to four small changes, each with tests:
+- **A new password cancels a pending email change.** A password reset and a password change on Account settings
+  delete the account's email-change links that are not confirmed yet. Why: the notice to the old address tells the
+  owner to reset the password if the change was not theirs, so the reset must also stop the change. A change that
+  was already confirmed stays.
+- **No control characters in emails and logins.** Emails and logins with a control character (such as an invisible
+  NUL, which the database cannot store) are refused with the normal "valid email" message, and an email must stay
+  within 254 characters also once lowercased. Nicknames already followed the same rule.
+- **"Where to go after login" refuses any `//`**, not only at the start, so the target is always a page on this site.
+- **The server log gets only the kind of an unexpected error** (e.g. `NeonDbError 23514`), never its text, which
+  can contain an email or part of a hash (`errorSummary` in `lib/api/shared.ts`).
+
+### Limits
+- Someone who knows the password and confirms an email change at once is not stopped by a later reset; that would
+  need an undo link or a waiting time, which we did not build.
+- Further points from the review were judged too large for the deadline and are not changed here.

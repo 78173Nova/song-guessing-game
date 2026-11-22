@@ -7,6 +7,7 @@ import {
   forgotPassword,
   getAccountSettings,
   logIn,
+  resetPassword,
   signUp,
   verifyEmail,
   whoIsLoggedIn,
@@ -512,5 +513,68 @@ describe("what the replies never contain", () => {
       expect(text).not.toMatch(/scrypt|token|[0-9a-f]{64}|@/);
       expect(reply.setCookie).toBeUndefined();
     }
+  });
+});
+
+// A pending email change ends when the password changes (security audit, 22 Nov): someone who stole the password and
+// asked to move the account to their address loses that link once the owner resets or changes the password.
+describe("a new password cancels a pending email change", () => {
+  const NEW = "intruder@example.org";
+  const move = (session: string, email = NEW, password = ANNA_PASSWORD) =>
+    changeEmail(db, session, json({ email, password }), deps);
+  const confirm = (token: string) => confirmEmailChange(db, json({ token }), deps);
+  const linkTo = (address: string) => decodeURIComponent(sent.filter((e) => e.to === address).at(-1)!.text.match(/token=([^\s]+)/)![1]);
+  const LINK_UNKNOWN = { status: 404, body: { error: "link-unknown", message: expect.any(String) } };
+
+  // "Forgot password" for anna@example.com, then the reset link with a new password.
+  async function resetAnna(password: string) {
+    later(2 * MINUTE); // the email change took the address's email slot
+    await forgotPassword(db, json({ email: "anna@example.com" }), deps);
+    expect((await resetPassword(db, json({ token: linkTo("anna@example.com"), password }), deps)).status).toBe(200);
+  }
+
+  it("a password reset makes the email-change link stop working; the email stays", async () => {
+    await move(anna);
+    const link = linkTo(NEW);
+
+    await resetAnna("brand-new-secret");
+
+    expect(await confirm(link)).toEqual(LINK_UNKNOWN);
+    expect(await logInAs("anna@example.com", "brand-new-secret")).not.toBeNull();
+    expect(await logInAs(NEW, "brand-new-secret")).toBeNull();
+  });
+
+  it("changing the password on Account settings makes the email-change link stop working", async () => {
+    await move(anna);
+    const link = linkTo(NEW);
+
+    expect(
+      (await changePassword(db, anna, json({ currentPassword: ANNA_PASSWORD, newPassword: "brand-new-secret" }), deps)).status,
+    ).toBe(200);
+
+    expect(await confirm(link)).toEqual(LINK_UNKNOWN);
+    expect(await logInAs("anna@example.com", "brand-new-secret")).not.toBeNull();
+  });
+
+  it("does not undo an email change that was already confirmed", async () => {
+    await move(anna, "anna.new@example.org");
+    await confirm(linkTo("anna.new@example.org"));
+
+    later(2 * MINUTE);
+    await forgotPassword(db, json({ email: "anna.new@example.org" }), deps);
+    await resetPassword(db, json({ token: linkTo("anna.new@example.org"), password: "brand-new-secret" }), deps);
+
+    expect(await logInAs("anna.new@example.org", "brand-new-secret")).not.toBeNull();
+  });
+
+  it("leaves another account's pending email change working", async () => {
+    const bob = await account("bob@example.com", "Bob_7", "bob-secret-1");
+    await move(bob, "bob.new@example.org", "bob-secret-1");
+    const bobLink = linkTo("bob.new@example.org");
+
+    await resetAnna("brand-new-secret");
+
+    expect((await confirm(bobLink)).status).toBe(200);
+    expect(await logInAs("bob.new@example.org", "bob-secret-1")).not.toBeNull();
   });
 });

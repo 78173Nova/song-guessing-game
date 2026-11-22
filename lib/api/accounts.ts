@@ -51,7 +51,7 @@ import {
   verifyEmailMessage,
 } from "../email/messages";
 import { getEmailSender, type EmailSender } from "../email/sender";
-import { findBySession, isJsonObject, PLAYER_INPUT_ERRORS, sessionAccount } from "./shared";
+import { errorSummary, findBySession, isJsonObject, PLAYER_INPUT_ERRORS, sessionAccount } from "./shared";
 
 // setCookie is the value of a Set-Cookie header for the route to send (log in, log out). It is the only place a
 // session token leaves the server; the body never contains one.
@@ -161,7 +161,7 @@ export async function safely(run: () => Promise<ApiResult>): Promise<ApiResult> 
   try {
     return await run();
   } catch (error) {
-    console.error("Accounts API error:", error);
+    console.error("Accounts API error:", errorSummary(error));
     return fail("server-error");
   }
 }

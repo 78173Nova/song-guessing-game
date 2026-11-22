@@ -40,13 +40,18 @@ export function parseSignupInput(body: unknown): SignupInputResult {
 // a username from an email. The database checks the same pattern.
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 
-// Email: looks like one – exactly one @, a dot somewhere after it, no spaces, at most 254 characters.
+// Email: looks like one – exactly one @, a dot somewhere after it, no spaces, no control characters (the database
+// cannot store a NUL), at most 254 characters also once lowercased (a few letters, such as "İ", grow then).
 // Whether it really exists is shown only when someone opens the link we send to it.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAIL_LENGTH = 254;
+// \p{Cc} = every control character (NUL, tab, new line, bell, ...), the same rule as for nicknames.
+const CONTROL_CHARACTER = /\p{Cc}/u;
 
 export function isValidEmail(email: string): boolean {
-  return email.length <= MAX_EMAIL_LENGTH && EMAIL_PATTERN.test(email);
+  return (
+    email.toLowerCase().length <= MAX_EMAIL_LENGTH && EMAIL_PATTERN.test(email) && !CONTROL_CHARACTER.test(email)
+  );
 }
 
 // Password: 8–128 characters and no spaces (no whitespace at all: a space typed by mistake at the start or end
@@ -92,13 +97,15 @@ export type LoginInput = { by: "email" | "username"; value: string; password: st
 
 // Checks the login form: { login, password }. A login with @ is an email (stored lowercase), otherwise a
 // username (compared ignoring case). Values longer than any real email or password are refused here, so a
-// huge value never reaches scrypt.
+// huge value never reaches scrypt; a login with a control character is refused too, as the database cannot
+// compare a NUL.
 export function parseLoginInput(body: unknown): { ok: true; input: LoginInput } | { ok: false } {
   if (typeof body !== "object" || body === null) return { ok: false };
   const { login, password } = body as Record<string, unknown>;
   if (typeof login !== "string" || typeof password !== "string") return { ok: false };
   const value = login.trim();
   if (value.length > MAX_EMAIL_LENGTH || [...password].length > MAX_PASSWORD_LENGTH) return { ok: false };
+  if (CONTROL_CHARACTER.test(value)) return { ok: false };
   if (value.includes("@")) return { ok: true, input: { by: "email", value: value.toLowerCase(), password } };
   return { ok: true, input: { by: "username", value, password } };
 }
