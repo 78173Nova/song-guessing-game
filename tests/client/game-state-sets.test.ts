@@ -102,6 +102,18 @@ describe("gameReducer – sets in a solo game", () => {
     expect(from(once, { type: "next-set" })).toEqual(once);
   });
 
+  it("Leave game on the set summary goes back to the start screen, and late replies change nothing", () => {
+    const left = from(atFirstSummary(), { type: "reset" });
+    expect(left).toEqual({ screen: "start" });
+    expect(from(left, { type: "clip-ready", gameId: GAME, index: 3 }, { type: "next-set" })).toEqual({ screen: "start" });
+    expect(from(left, { type: "failed", message: "late", gameId: GAME })).toEqual({ screen: "start" });
+  });
+
+  it("a clip error of an earlier game does not interrupt the set summary", () => {
+    const summary = atFirstSummary();
+    expect(from(summary, { type: "failed", message: "old", gameId: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f" })).toEqual(summary);
+  });
+
   it("Next set on another screen, and a late answer or Next on the summary, change nothing", () => {
     const inRound = from(started(), { type: "round-loaded", round: roundInfo(1) });
     expect(from(inRound, { type: "next-set" })).toEqual(inRound);

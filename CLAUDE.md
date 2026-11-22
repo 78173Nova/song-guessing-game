@@ -50,7 +50,10 @@ The team are **programming beginners**: explain proposals in plain language befo
   (uses `DATABASE_URL` from `.env.local`; safe to run again; about 2 minutes on the first run)
 - Create the team accounts (already verified) from `TEAM_ACCOUNTS`: `npm run db:team-accounts`
   (uses `DATABASE_URL` and `TEAM_ACCOUNTS` from `.env.local`; safe to run again)
-- Both `db:` scripts run with plain Node, which needs `.ts` in relative imports (`"./genres.ts"`, not
+- Load test a Multiplayer room on the real site: create a room on your phone, then
+  `npm run load-test -- --room 123456 --bots 15` (1–24 bots; `--url` for another site, default the Vercel site).
+  The bots join, poll once a second, answer at random and leave; the script prints request times and failures
+- The `db:` scripts and the load test run with plain Node, which needs `.ts` in relative imports (`"./genres.ts"`, not
   `"./genres"`). Write it in every file under `lib/` the scripts load; `tests/db/script-imports.test.ts`
   fails when one is missing
 - CI: `.github/workflows/ci.yml` runs `npm ci`, lint, type check, tests and build on every pull request
@@ -69,6 +72,7 @@ The team are **programming beginners**: explain proposals in plain language befo
   (retry/swap), countdown – tested with Vitest
 - `lib/api/` – what each server route does step by step (validate, load, apply `lib/game/` rules, save, reply);
   the route files in `app/api/` only call it. Takes the database as a parameter, so it is tested with PGlite
+- `scripts/` – the load test (`load-test.ts`, sends requests like phones do) and its testable part (`load-test-plan.ts`)
 - `db/` – schema (`schema.sql`), seed script, song list and the team accounts script (`team-accounts.ts`)
 - `tests/` – tests
 - `specs/`, `docs/` – specs and documentation
