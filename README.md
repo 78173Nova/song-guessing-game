@@ -1,7 +1,8 @@
 # SongSnap
 
 A browser music quiz: you hear a well-known song and have 15 seconds to pick the right title, artist or
-year from four options. Five rounds per game – the faster you answer, the more points you get.
+year from four options – the faster you answer, the more points you get. A solo game has five rounds; a room
+game has 3 to 30 (songs per set × sets).
 Team project for the course "Introduction to Programming".
 
 **Play it:** https://song-guessing-game-tawny.vercel.app
@@ -48,6 +49,25 @@ Details: [spec 003](specs/003-catalogue-modes.md), decisions [005](docs/decision
 - **No explicit clips** – the game never plays a clip marked explicit. Songs removed from the list are
   marked as retired in the database and never played again.
 
+## Rooms and accounts
+
+Details: [spec 002](specs/002-room-core.md), [spec 004](specs/004-accounts-landing.md), decisions
+[012](docs/decisions/012-rooms.md) (rooms), [014](docs/decisions/014-accounts.md) (accounts) and
+[015](docs/decisions/015-room-games.md) (room games).
+
+- **2 room types** – **Duel** (exactly 2 players) and **Multiplayer** (2–25 players). Every player uses their own
+  device and every device plays the music; the server starts each round at the same moment for everyone.
+- **Room settings** – the room creator chooses public or private, mode, genres, decades, songs per set (3, 5 or 10)
+  and sets (1–3) when creating the room; they cannot be changed afterwards. Everyone sees the standings after each
+  round and each set, and their own set summary with Apple Music links.
+- **Joining with a code** – with the 6-digit room code, the share link or its QR code; public rooms are also
+  listed under **Join a room**. Guests need no account: they pick a nickname and an avatar.
+- **Lobby** – the game starts when the room is full, when the room creator starts it, or (public rooms only) after
+  a 60-second lobby countdown. After a game, players can choose **Play again** (at most 5 games per room).
+- **Accounts** – needed only to create a room. Sign up with email, username and password; the account works only
+  after you open the link in the verification email (valid 24 hours). Also: log in and out, forgot password, and
+  Account settings (avatar, usual nickname, username, email, password). Passwords are stored only as scrypt hashes.
+
 ## Tech stack
 
 | Part | Tool | Why (details in [`docs/decisions/`](docs/decisions/)) |
@@ -84,24 +104,35 @@ npm run dev                     # open http://localhost:3000 in Chrome, Safari o
 ```bash
 npm test          # all tests, once (they never call the real iTunes API or the real database)
 npm run lint      # code style and common mistakes
-npm run build     # production build, also checks all TypeScript types
+npm run typecheck # checks all TypeScript types
+npm run build     # production build
 ```
 
-The same three checks run automatically on every pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml));
+The same four checks run automatically on every pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml));
 `main` only accepts pull requests whose checks pass.
+
+Load test (by hand, not in CI): create a Multiplayer room, then let bots join it and play like phones.
+It targets the live site unless `--url` is given; `--bots` is 1–24 (default 10).
+
+```bash
+npm run load-test -- --room 123456 --bots 15
+```
 
 ## Project structure
 
 | Folder | What lives there |
 |---|---|
-| `app/` | The page and the server routes (`app/api/games/...`) |
-| `components/` | The game screens (`SoloGame.tsx`) |
-| `lib/game/` | Game rules: build rounds, check answers, score – no database, no network |
+| `app/` | The pages (front page, solo, create and join a room, account pages) and the server routes (`app/api/games`, `app/api/rooms`, `app/api/accounts`) |
+| `components/` | The screens and UI pieces (solo game, rooms, forms); `components/icons/` holds the hand-drawn icons |
+| `lib/game/` | Game and room rules: build rounds, check answers, score – no database, no network |
+| `lib/accounts/` | Account rules: username, email and password checks, password hashing, tokens – no database, no network |
 | `lib/api/` | What each server route does step by step |
 | `lib/db/` | All database code – the only place with SQL |
 | `lib/music/` | Everything about iTunes – the only place that calls it |
-| `lib/client/` | Browser-side logic without UI: screen state, server calls, clip loading |
-| `db/` | Database schema, seed script and the song list |
+| `lib/email/` | Everything about sending emails (texts, links, Brevo) – the only place that sends them |
+| `lib/client/` | Browser-side logic without UI: screen state, server calls, clip loading, countdowns |
+| `db/` | Database schema, seed script, the song list and the team accounts script |
+| `scripts/` | The load test |
 | `tests/` | Tests |
 | `docs/`, `specs/` | Plan, decisions and specs |
 

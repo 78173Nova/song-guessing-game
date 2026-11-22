@@ -1,6 +1,6 @@
 # Project plan: music guessing game
 
-Last updated: 10 Nov 2026 (after the base). Change it through a pull request and add a line under "Changelog".
+Last updated: 22 Nov 2026 (before submission). Change it through a pull request and add a line under "Changelog".
 
 ## 1. Context
 - Team: 4 people, everyone works with Claude Code and GitHub.
@@ -14,24 +14,25 @@ Last updated: 10 Nov 2026 (after the base). Change it through a pull request and
   professor on 10 Nov 2026 (decision 001).
 
 ## 2. Scope
-**Status (10 Nov 2026): the base is done** – the solo game runs at https://song-guessing-game-tawny.vercel.app
-(spec `specs/001-base.md`).
+**Status (22 Nov 2026): done, bug fixes only** – solo game, modes, rooms (Duel and Multiplayer) and accounts run
+at https://song-guessing-game-tawny.vercel.app
 
 **Must have**
-1. **Solo game** ✅ – 5 rounds, 4 options, speed points, results. Still to add: high scores, better error screens,
-   polished phone layout.
-2. **Song catalogue** – 300+ well-known songs, filters by genre and decade.
-3. **Game modes** – guess the song ✅, guess the artist, guess the year, mixed.
-4. **Room core** – create a room, join with a nickname, rounds run by the server (the foundation for 5).
-5. **Presentation mode (Kahoot style)** – the big screen shows a QR code, plays the music and shows the leaderboard;
-   the audience answers on their phones.
+1. **Solo game** ✅ – 5 rounds, 4 options, speed points, results with Apple Music links, phone layout.
+   High scores were dropped.
+2. **Song catalogue** ✅ – 413 songs, filters by genre and decade (spec 003).
+3. **Game modes** ✅ – title, artist, year, mixed (spec 003).
+4. **Room core** ✅ – create a room, join with a code, link or QR code, rounds run by the server (spec 002).
+5. **Presentation mode** – replaced by the **Multiplayer room** (2–25 players): every phone plays the music and
+   shows the standings, so no separate big screen is needed. The QR code join is kept.
 
-**If time allows** (only once 1–5 work on the live URL)
+**If time allows**
 
-6. **Online duel** – players in different places, each phone plays the music, rounds start at the same moment.
-7. **Typed answers** – type the title instead of choosing from 4.
+6. **Online duel** ✅ – the **Duel room**: two players, each phone plays the music, rounds start at the same moment.
+7. **Typed answers** – dropped (not built).
 
-**Not planned:** accounts or logins, other music sources.
+**Added later:** accounts with email verification, only to create a room (spec 004, decision 014); one visual
+design across all screens (decision 016). **Not planned:** other music sources.
 
 ## 3. Stack
 - **Next.js (TypeScript):** UI and server in one project. Streamlit is weak for games and multiplayer.
@@ -136,3 +137,5 @@ Rotate reviewers so everyone knows every part. Whoever builds a feature writes i
 - 10 Nov 2026: a solo game has 5 rounds instead of 10; answer route also accepts "timeout" (spec 001, decision 004)
 - 10 Nov 2026: base done. Releases and timeline replaced by a scope (must have 1–5, optional: duel, typed answers) and a step-by-step plan; team names added, roles decided in the group chat
 - 11 Nov 2026: roles filled in – Karin Person 2, Steinar Person 3, Jasper Person 4; room core spec drafted (`specs/002-room-core.md`)
+- 22 Nov 2026: status and scope updated to match the code – must haves 1–4 and the duel done, presentation mode
+  replaced by Multiplayer rooms, accounts added, high scores and typed answers dropped
