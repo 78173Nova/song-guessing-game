@@ -1,8 +1,8 @@
 # SongSnap
 
 A browser music quiz: you hear a well-known song and have 15 seconds to pick the right title, artist or
-year from four options – the faster you answer, the more points you get. A solo game has five rounds; a room
-game has 3 to 30 (songs per set × sets).
+year from four options – the faster you answer, the more points you get. A solo game and a room game both
+have 3 to 30 rounds (3, 5 or 10 songs per set × 1 to 3 sets; a solo game starts at 5 songs × 1 set).
 Team project for the course "Introduction to Programming".
 
 **Play it:** https://song-guessing-game-tawny.vercel.app
@@ -20,12 +20,12 @@ What we are building and who does what: [`docs/PLAN.md`](docs/PLAN.md) (scope an
 
 ## How a game works
 
-1. **Start game** – you choose a mode, a genre and a decade; the server picks 5 songs and the browser loads
-   the first clip ("Loading first song…").
+1. **Start game** – you choose a mode, a genre, a decade, songs per set (3, 5 or 10) and sets (1–3);
+   the server picks the songs and the browser loads the first clip ("Loading first song…").
 2. **3 – 2 – 1** – then the clip, the four answer buttons and the 15-second countdown start together.
 3. **Answer** – the server checks it: 100 points for the right answer plus up to 50 for speed.
    You see right/wrong, the cover, the song and a link to Apple Music.
-4. **Results** – total score and the 5 songs, each with a link to Apple Music, then **Play again**
+4. **Results** – total score and all songs played, each with a link to Apple Music, then **Play again**
    (same settings) or **Change settings**.
 
 The server decides everything (which songs, the options, right or wrong, the points). The browser never

@@ -18,7 +18,7 @@ Last updated: 22 Nov 2026 (before submission). Change it through a pull request 
 at https://song-guessing-game-tawny.vercel.app
 
 **Must have**
-1. **Solo game** ✅ – 5 rounds, 4 options, speed points, results with Apple Music links, phone layout.
+1. **Solo game** ✅ – 3, 5 or 10 songs per set × 1–3 sets (default 5 × 1), 4 options, speed points, results with Apple Music links, phone layout.
    High scores were dropped.
 2. **Song catalogue** ✅ – 413 songs, filters by genre and decade (spec 003).
 3. **Game modes** ✅ – title, artist, year, mixed (spec 003).
