@@ -23,3 +23,14 @@
 .selection section > fieldset:not(:first-child) {
   margin-top: var(--space-2);
 }
+
+/* "Public rooms" is no bigger than the page name in the small header. */
+.selection h2 {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+}
+
+/* With the form's own 8px gap this gives the 24px above the button that the solo start screen has. */
+.selection form > button[type="submit"] {
+  margin-top: var(--space-4);
+}

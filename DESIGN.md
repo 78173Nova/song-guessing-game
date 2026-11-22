@@ -760,3 +760,6 @@ readers hear "has answered"; your own name and the duel show the word "Answered"
 This replaces the "✓ icon" in the board sketch above. The solo start screen now uses tile rows (`TileGroup`, shared
 with "Create a room" and the room list) for mode, genre and decade instead of buttons and dropdowns. Tiles that cannot
 be chosen are faded with a dashed outline, and the "too few songs" / mode notes use the form error style.
+
+Update 22 Nov 2026 (team request): "Create a room" and "Join a room" use the solo start screen's frame, so their page
+heading is the small header's `--text-lg` instead of `--text-2xl`, and they have no panel (decision 016).

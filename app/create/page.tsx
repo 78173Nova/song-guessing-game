@@ -5,7 +5,7 @@ import selection from "@/components/RoomSelection.module.css";
 import ArrowLeftIcon from "@/components/icons/ArrowLeftIcon";
 import frame from "../page.module.css";
 
-export const metadata = { title: "Create a room · Song Guessing Game" };
+export const metadata = { title: "Create a room · SongSnap" };
 
 // Create a room (issue #32). Only for account holders: CreateRoomForm asks a guest to log in or sign up first.
 // Same frame as the solo start screen: small header, then one column straight on the page background.
