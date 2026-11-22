@@ -248,6 +248,21 @@
   outline-offset: 2px;
 }
 
+/* The question that replaces Leave or Kick: one quiet line and the two choices, centred (like the solo game's).
+   A long nickname in the question wraps instead of overflowing. */
+.askFirst {
+  flex-basis: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
 /* ---------- Room game screens ---------- */
 
 /* Below the game: the kick controls, Leave and any message, centred. */

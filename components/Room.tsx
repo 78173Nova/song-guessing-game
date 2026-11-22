@@ -3,7 +3,7 @@
 // One room at /join/<code>: the nickname form, the lobby, and the game itself. The server moves the game forward
 // by itself (issue #33); this page only polls the state, plays the clips at the server's start times and sends
 // answers. Which screen shows is decided by roomReducer / roomScreen (lib/client/room-game.ts).
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import NumberFlow from "@number-flow/react";
 import { apiAccountSettings } from "@/lib/client/account-api";
@@ -237,15 +237,16 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
   }
 
   // Leave (issue #40): anyone, at any time. The room creator leaving the lobby closes the room for everyone.
+  // LeaveButton asks this question first, inside the page (see AskFirst).
+  const isCreatorInLobby = view.latest?.status === "lobby" && view.latest.role === "creator";
+  const leaveQuestion = isCreatorInLobby
+    ? "Leave and close the room for everyone?"
+    : view.latest?.status === "playing"
+      ? "Leave the game? You cannot come back and your points disappear from the standings."
+      : "Leave the room?";
+
   async function leave() {
     if (token === null) return;
-    const isCreatorInLobby = view.latest?.status === "lobby" && view.latest.role === "creator";
-    const question = isCreatorInLobby
-      ? "Leave and close the room for everyone?"
-      : view.latest?.status === "playing"
-        ? "Leave the game? You cannot come back and your points disappear from the standings."
-        : "Leave the room?";
-    if (!window.confirm(question)) return;
     setSending(true);
     const result = await apiLeaveRoom(code, token);
     setSending(false);
@@ -273,10 +274,10 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
     await refresh(token);
   }
 
-  // Kick (issue #40): only the room creator, only a player away for more than 60 s, and only after a confirmation.
+  // Kick (issue #40): only the room creator, only a player away for more than 60 s, and only after a confirmation
+  // (KickButton asks inside the page, for the same reason as Leave).
   async function kick(player: string) {
     if (token === null) return;
-    if (!window.confirm(`Are you sure you want to kick ${player}?`)) return;
     const result = await apiKickPlayer(code, token, player);
     if (!result.ok) showError(result.message);
     await refresh(token);
@@ -426,7 +427,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
             </button>
           )}
           <KickButtons kickable={state.kickable ?? []} onKick={kick} />
-          <LeaveButton onLeave={leave} disabled={sending} />
+          <LeaveButton question={leaveQuestion} onLeave={leave} disabled={sending} />
         </div>
         {message}
       </div>
@@ -463,7 +464,7 @@ export default function Room({ code, appAddress }: { code: string; appAddress: s
         )}
         <div className={room.controls}>
           <KickButtons kickable={state.kickable ?? []} onKick={kick} />
-          <LeaveButton onLeave={leave} disabled={sending} />
+          <LeaveButton question={leaveQuestion} onLeave={leave} disabled={sending} />
         </div>
         {message}
       </div>
@@ -493,25 +494,83 @@ function Avatar({ id, className = room.avatar }: { id: string | undefined; class
 // For the room creator: one quiet button per player who has been away for more than 60 s (the server lists
 // them). A long nickname ends in "…"; the full name is in the button's label.
 function KickButtons({ kickable, onKick }: { kickable: string[]; onKick: (player: string) => void }) {
-  return kickable.map((player) => (
+  return kickable.map((player) => <KickButton key={player} player={player} onKick={() => onKick(player)} />);
+}
+
+// "Kick <player>", then the question in its place: "Kick" kicks, "Cancel" puts the button back.
+function KickButton({ player, onKick }: { player: string; onKick: () => void }) {
+  const [asking, setAsking] = useState(false);
+  if (asking) {
+    return (
+      <AskFirst
+        question={`Are you sure you want to kick ${player}?`}
+        yes="Kick"
+        no="Cancel"
+        onYes={onKick}
+        onNo={() => setAsking(false)}
+        disabled={false}
+      />
+    );
+  }
+  return (
     <button
-      key={player}
       type="button"
       className={room.control}
-      onClick={() => onKick(player)}
+      onClick={() => setAsking(true)}
       aria-label={`Kick ${player}`}
       title={`Kick ${player}`}
     >
       <span className={room.controlText}>Kick {player}</span>
     </button>
-  ));
+  );
 }
 
-function LeaveButton({ onLeave, disabled }: { onLeave: () => void; disabled: boolean }) {
+// Leave, then the question in its place: "Leave" goes, "Stay" puts the button back.
+function LeaveButton({ question, onLeave, disabled }: { question: string; onLeave: () => void; disabled: boolean }) {
+  const [asking, setAsking] = useState(false);
+  if (asking) {
+    return (
+      <AskFirst
+        question={question}
+        yes="Leave"
+        no="Stay"
+        onYes={onLeave}
+        onNo={() => setAsking(false)}
+        disabled={disabled}
+      />
+    );
+  }
   return (
-    <button type="button" className={room.control} onClick={onLeave} disabled={disabled}>
+    <button type="button" className={room.control} onClick={() => setAsking(true)} disabled={disabled}>
       Leave
     </button>
+  );
+}
+
+// The question that replaces Leave or Kick, inside the page instead of the browser's confirm() pop-up: Safari
+// sometimes silenced the clip while the pop-up was open, and the pop-up froze the page's timers. The game keeps
+// running while it shows. It takes the whole row (flex-basis 100 %), so it sits under the other controls.
+function AskFirst(props: {
+  question: string;
+  yes: string;
+  no: string;
+  onYes: () => void;
+  onNo: () => void;
+  disabled: boolean;
+}) {
+  const questionId = useId();
+  return (
+    <div className={room.askFirst} role="group" aria-labelledby={questionId}>
+      <p id={questionId}>{props.question}</p>
+      <div className={room.controls}>
+        <button type="button" className={room.control} onClick={props.onYes} disabled={props.disabled}>
+          {props.yes}
+        </button>
+        <button type="button" className={room.control} onClick={props.onNo} disabled={props.disabled}>
+          {props.no}
+        </button>
+      </div>
+    </div>
   );
 }
 
