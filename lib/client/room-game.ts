@@ -9,8 +9,8 @@
 //
 // Flow: lobby → get-ready (round 1 is coming) → round → result (5 s, or until "Tap to continue")
 //       → next-starting → round → …
-//       In a Multiplayer game with 3 or more players, the standings (with "Next round in … s") take the place of
-//       next-starting after each round inside a set: the time between rounds stays the same.
+//       In every room game (Multiplayer and duel), the standings (with "Next round in … s", 5 s) take the place of
+//       next-starting after each round inside a set; the server sets the time between rounds.
 //       After the last round of a set (issue #34): result → set summary (10 s) → set standings (5 s) → next-starting.
 //       After the last round of the game: result → final standings (5 s) → full summary, which stays.
 //       "Tap to continue" skips each of these early on this device only; the next round still starts on time.
@@ -74,7 +74,7 @@ export type RoomScreen =
       score: number;
     }
   | { kind: "next-starting"; number: number }
-  // After a round inside a set, in a Multiplayer game with 3 or more players: instead of "Next round starting…".
+  // After a round inside a set, in every room game (Multiplayer and duel): instead of "Next round starting…".
   | { kind: "round-standings"; number: number; standings: Standing[]; me: string; secondsToNext: number }
   | { kind: "set-summary"; set: number; songs: SummaryItem[] }
   | { kind: "set-standings"; set: number; standings: Standing[]; me: string }

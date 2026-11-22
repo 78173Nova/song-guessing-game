@@ -59,12 +59,12 @@ const openRound = (serverNow: number, answeredCount = 0): RoomState => ({
   },
 });
 
-// Round 1 closed at T0 + 9 s (everyone answered); round 2 starts 8 s later.
+// Round 1 closed at T0 + 9 s (everyone answered); round 2 starts 10 s later.
 const closedRound = (serverNow: number, status: "playing" | "finished" = "playing"): RoomState => ({
   ...scheduled,
   status,
   serverNow: iso(serverNow),
-  nextRound: status === "finished" ? null : { number: 2, startsAt: iso(T0 + 17000), options: ["W", "X", "Y", "Z"] },
+  nextRound: status === "finished" ? null : { number: 2, startsAt: iso(T0 + 19000), options: ["W", "X", "Y", "Z"] },
   round: {
     number: 1,
     status: "closed",
@@ -167,15 +167,15 @@ describe("roomScreen – round → result → next round → final standings", (
     const later = roomReducer(view, polled(3, closedRound(T0 + 11000)));
     expect(roomScreen(later, T0 + 14499).kind).toBe("result");
     expect(roomScreen(later, T0 + 14500)).toEqual({ kind: "next-starting", number: 2 });
-    expect(roomScreen(later, T0 + 17000)).toMatchObject({ kind: "round", number: 2, options: ["W", "X", "Y", "Z"], secondsLeft: 15 });
+    expect(roomScreen(later, T0 + 19000)).toMatchObject({ kind: "round", number: 2, options: ["W", "X", "Y", "Z"], secondsLeft: 15 });
   });
 
   it("'Tap to continue' skips this player's result, but the next round still starts at the server's time", () => {
     const view = run(polled(1, closedRound(T0 + 9500)), { type: "continued", round: 1 });
 
     expect(roomScreen(view, T0 + 10000)).toEqual({ kind: "next-starting", number: 2 });
-    expect(roomScreen(view, T0 + 16999).kind).toBe("next-starting");
-    expect(roomScreen(view, T0 + 17000)).toMatchObject({ kind: "round", number: 2 });
+    expect(roomScreen(view, T0 + 18999).kind).toBe("next-starting");
+    expect(roomScreen(view, T0 + 19000)).toMatchObject({ kind: "round", number: 2 });
   });
 
   it("shows a missed round as wrong with 0 points", () => {
