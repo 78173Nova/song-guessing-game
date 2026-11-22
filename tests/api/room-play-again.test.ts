@@ -30,8 +30,8 @@ const deps = { now: () => clock, random: () => randomValue };
 const START = new Date("2026-11-15T12:00:00.000Z");
 // Short games: one set of 3 songs.
 const SETTINGS: RoomSettings = { ...DEFAULT_ROOM_SETTINGS, songsPerSet: 3, sets: 1 };
-// From the last round's close: 5 s result + 5 s final standings (the end screen), then 60 s to choose.
-const VOTE_ENDS_AFTER_CLOSE = 70;
+// From the last round's close: 5 s result + 15 s final standings (the end screen), then 60 s to choose.
+const VOTE_ENDS_AFTER_CLOSE = 80;
 
 function wait(seconds: number) {
   clock = new Date(clock.getTime() + seconds * 1000);

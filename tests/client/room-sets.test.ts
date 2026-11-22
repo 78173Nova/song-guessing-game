@@ -105,12 +105,13 @@ describe("roomScreen – the break after a set", () => {
 });
 
 describe("roomScreen – the end of the game", () => {
-  it("shows the result, the final standings for 5 s, then the full summary of every song, which stays", () => {
+  it("shows the result, the final standings for 15 s, then the full summary of every song, which stays", () => {
     const view = run(polled(closed(6, ALL, "finished")));
 
     expect(roomScreen(view, T0 + 4.9 * S).kind).toBe("result");
     expect(roomScreen(view, T0 + 5 * S)).toEqual({ kind: "final", standings: STANDINGS, me: "Ben" });
-    expect(roomScreen(view, T0 + 10 * S)).toEqual({ kind: "final-summary", songs: ALL, score: 300 });
+    expect(roomScreen(view, T0 + 19.9 * S).kind).toBe("final");
+    expect(roomScreen(view, T0 + 20 * S)).toEqual({ kind: "final-summary", songs: ALL, score: 300 });
     expect(roomScreen(view, T0 + 60 * 60 * S).kind).toBe("final-summary");
   });
 

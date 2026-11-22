@@ -91,7 +91,7 @@ export function hasRoundStandings(game: { type?: RoomType; startingPlayers?: num
   return game.type !== undefined && (game.startingPlayers ?? 0) >= MIN_PLAYERS_TO_START;
 }
 // After the last round of the game: the final standings, then the full summary, which stays.
-export const FINAL_STANDINGS_SECONDS = 5;
+export const FINAL_STANDINGS_SECONDS = 15;
 // When a round's song is swapped (issue #41), every device needs this long to load the new clip. A round that would
 // start sooner starts this long after the swap instead – so it starts at most this much later than planned.
 export const SWAP_LOAD_SECONDS = 5;
