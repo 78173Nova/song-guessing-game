@@ -39,3 +39,18 @@ the clip actually starts playing instead of when the round arrives.
 - Limits: the server's 15 seconds start when the request arrives, so the reply's travel time (about 0.1–0.3 s)
   counts against the player. If a phone still refuses to start round 1's sound, a "▶ Tap to start" button
   appears; the server's clock is already running then.
+
+## Update 22 Nov 2026: "Leave game" during a game
+- Decision: a quiet "Leave game" button under the answers, on every screen from "Loading first song…" to the
+  reveal. Tapping it shows a question in its place ("Leave this game? Your points from this game are lost.",
+  Leave / Keep playing); the game keeps running meanwhile. Leave stops the music and brings back the start screen
+  with mode, genre and decade still chosen (team feedback 22 Nov, point 2).
+- Why: a player who picked the wrong settings had to finish all 5 rounds or reload the page. The question stops a
+  mistaken tap from throwing a game away.
+- Alternatives: the browser's own pop-up (`window.confirm`, as rooms use) – tried first, but in Safari the clip
+  sometimes went silent while it was open, and it freezes the page's timers. Naming it "New game" (sounds like an
+  instant restart with the same settings, which is what "Play again" does; GLOSSARY.md avoids the term) or putting
+  it in the header (easy to miss, far from the thumb).
+- Limits: the left game stays unfinished on the server, the same as closing the tab. "← Home" still leaves without
+  asking. Late replies of the left game are ignored: errors now carry the game's ID like clip replies do. Rooms
+  still use the browser's pop-up for Leave and Kick; they could switch to the same question later.

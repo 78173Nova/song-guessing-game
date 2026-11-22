@@ -68,7 +68,9 @@ export type GameAction =
   | { type: "answer"; answer: Answer }
   | { type: "answer-result"; result: AnswerResult }
   | { type: "next" }
-  | { type: "failed"; message: string }
+  // gameId: the game the error belongs to (a round or an answer that failed). An error of a game the player has
+  // left, or of an earlier game, is then ignored. Without it (before any game exists) the error always shows.
+  | { type: "failed"; message: string; gameId?: string }
   | { type: "start-refused"; message: string }
   | { type: "reset" };
 
@@ -197,8 +199,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case "failed":
+      if (action.gameId !== undefined && !(inGame(state) && state.gameId === action.gameId)) return state;
       return { screen: "error", message: action.message };
 
+    // "Change settings", "Try again" and "Leave game" (after the player confirms): back to the start screen.
     case "reset":
       return initialState;
   }
