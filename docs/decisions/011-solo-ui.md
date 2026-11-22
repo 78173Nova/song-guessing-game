@@ -56,3 +56,5 @@ the clip actually starts playing instead of when the round arrives.
   still use the browser's pop-up for Leave and Kick; they could switch to the same question later.
 
 Update 22 Nov 2026 (solo sets, decision 013): "Leave game" is also on the set summary, because the game is still running there. Leaving now empties the game's audio players, so a long game does not keep its clips open, and a clip still loading stops without asking the server for a replacement song.
+
+Update 22 Nov 2026: rooms now ask the same way. Leave and Kick show their question in place of the button (Leave / Stay, Kick / Cancel) instead of the browser's pop-up, for the same Safari reasons; the wording of each question is unchanged. No `window.confirm` is left in the app.
