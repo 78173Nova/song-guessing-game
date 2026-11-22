@@ -50,6 +50,7 @@ const SILENT_SOUND = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8A
 const GET_READY_SECONDS = 3;
 const CLIP_LOAD_LIMIT_MS = 10_000; // one attempt to load one clip
 const FIRST_CLIP_LIMIT_MS = 30_000; // everything for the first clip, including swaps
+const SUMMARY_TAP_GUARD_MS = 400; // "Next set" ignores taps this soon after the set summary appears
 
 type Reveal = Extract<GameState, { screen: "reveal" }>;
 type PlayedRound = Extract<GameState, { screen: "results" }>["history"][number];
@@ -90,6 +91,11 @@ export default function SoloGame() {
   // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
   // a reload forgets them.
   const recentGamesRef = useRef<string[]>([]);
+  // When the set summary appeared, so a leftover tap does not skip it.
+  const summaryShownAtRef = useRef(0);
+  useEffect(() => {
+    if (state.screen === "set-summary") summaryShownAtRef.current = Date.now();
+  }, [state.screen]);
   // Playable songs per genre and decade, so choices with too few songs are greyed out (spec 003, "filter gaps").
   // null until loaded, or if loading failed: then nothing is greyed out and the server still checks the start.
   const [songCounts, setSongCounts] = useState<SongCount[] | null>(null);
@@ -186,6 +192,12 @@ export default function SoloGame() {
     // previous game's players.
     wave.detachAll();
     wave.unlock();
+    // Empty the old players, so a long game followed by "Play again" does not keep twice as many clips open
+    // (phones limit how many media players a page can hold).
+    for (const player of playersRef.current) {
+      player.removeAttribute("src");
+      player.load();
+    }
     // Still inside the tap: create and unlock one player per round.
     const players = Array.from({ length: totalRounds }, (_, index) => {
       const player = new Audio();
@@ -232,6 +244,13 @@ export default function SoloGame() {
   function handleNext() {
     pauseAll();
     dispatch({ type: "next" });
+  }
+
+  // The second tap of a double tap on "See set summary" could land on "Next set" and skip the summary.
+  function handleNextSet() {
+    if (Date.now() - summaryShownAtRef.current < SUMMARY_TAP_GUARD_MS) return;
+    pauseAll();
+    dispatch({ type: "next-set" });
   }
 
   function handleTapToStart() {
@@ -497,7 +516,7 @@ export default function SoloGame() {
             points so far
           </h2>
           <PlayedList songs={state.setSongs} />
-          <button className={`${shared.primary} ${shared.wide}`} onClick={() => dispatch({ type: "next-set" })}>
+          <button className={`${shared.primary} ${shared.wide}`} onClick={handleNextSet}>
             Next set
           </button>
         </section>
@@ -535,7 +554,7 @@ export default function SoloGame() {
 
 const OUTCOME_WORD = { correct: "Right", wrong: "Wrong", skipped: "Skipped", timeout: "Time's up" } as const;
 
-// The list of played songs: on the set summary (one set) and on the results (the whole game).
+// The list of played songs: one set on the set summary, the whole game on the final screen.
 function PlayedList({ songs }: { songs: PlayedRound[] }) {
   return (
     <ol className={`${styles.results} ${styles.soloResults}`}>

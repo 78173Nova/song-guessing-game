@@ -22,7 +22,15 @@ export type BuildResult = { ok: true; rounds: NewRound[] } | { ok: false; reason
 // `rounds`: how many rounds to build (rooms choose it, issue #34); missing = ROUNDS_PER_GAME.
 // avoid: songs to leave out while enough others are left (a room's earlier games, issue #43). They can still
 // appear as wrong options.
-export type BuildSettings = { mode?: Mode; currentYear?: number; rounds?: number; avoid?: number[] };
+// preferred: lists of songs in the order to use them (see songPools): the first list is used up first, then what the
+// next one adds, and so on. Wrong options still come from all songs. A solo game's way of avoiding recent songs.
+export type BuildSettings = {
+  mode?: Mode;
+  currentYear?: number;
+  rounds?: number;
+  avoid?: number[];
+  preferred?: SongForGame[][];
+};
 
 // Options that differ only in upper/lower case or spaces count as the same ("Queen" = "queen").
 function optionKey(text: string): string {
@@ -96,7 +104,9 @@ export function buildRounds(
 
   const avoid = new Set(settings.avoid ?? []);
   const fresh = songs.filter((song) => !avoid.has(song.id));
-  const chosen = shuffle(fresh.length >= count ? fresh : songs, random).slice(0, count);
+  const chosen = (
+    settings.preferred ? inPreferredOrder(settings.preferred, random) : shuffle(fresh.length >= count ? fresh : songs, random)
+  ).slice(0, count);
   const rounds: NewRound[] = [];
   for (const [index, song] of chosen.entries()) {
     const types = typesFor(mode);
@@ -107,6 +117,18 @@ export function buildRounds(
     rounds.push(round);
   }
   return { ok: true, rounds };
+}
+
+// Each list shuffled, without the songs an earlier list already had.
+function inPreferredOrder(lists: SongForGame[][], random: () => number): SongForGame[] {
+  const seen = new Set<number>();
+  const ordered: SongForGame[] = [];
+  for (const list of lists) {
+    const added = list.filter((song) => !seen.has(song.id));
+    for (const song of added) seen.add(song.id);
+    ordered.push(...shuffle(added, random));
+  }
+  return ordered;
 }
 
 // One round for `song`: the correct option plus 3 different wrong ones, shuffled. null = not possible

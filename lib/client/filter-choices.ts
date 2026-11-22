@@ -31,5 +31,14 @@ export function filterNotes(counts: SongCount[] | null, filters: Filters, rounds
   if (decade !== undefined && GENRES.some((g) => !canChoose(counts, { genre: g, decade }, rounds))) {
     notes.push(`Greyed-out genres have fewer than ${rounds} songs from the ${decade}s.`);
   }
+  // A chosen length can grey out tiles even with "Any" in the other row, so those get a note too.
+  if (rounds !== MIN_MATCHING_SONGS) {
+    if (decade === undefined && GENRES.some((g) => !canChoose(counts, { genre: g }, rounds))) {
+      notes.push(`Greyed-out genres have fewer than ${rounds} songs.`);
+    }
+    if (genre === undefined && DECADES.some((d) => !canChoose(counts, { decade: d }, rounds))) {
+      notes.push(`Greyed-out decades have fewer than ${rounds} songs.`);
+    }
+  }
   return notes;
 }

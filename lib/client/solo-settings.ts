@@ -19,9 +19,9 @@ export function decadeFromTile(value: string): Decade | undefined {
 
 // The warning above "Start game" when fewer songs match than the game has rounds: shown as an error, Start is disabled.
 // null = nothing to show (enough songs, or the numbers are not loaded): the number of matching songs is not shown.
-export function matchLine(counts: MatchingCounts | null, rounds: number = ROUNDS_PER_GAME): string | null {
-  if (counts === null || counts.songs >= rounds) return null;
-  return rounds === ROUNDS_PER_GAME ? tooFewSongsMessage(counts.songs) : tooFewForSetsMessage(counts.songs);
+export function matchLine(counts: MatchingCounts | null, rounds?: number): string | null {
+  if (counts === null || counts.songs >= (rounds ?? ROUNDS_PER_GAME)) return null;
+  return rounds === undefined ? tooFewSongsMessage(counts.songs) : tooFewForSetsMessage(counts.songs);
 }
 
 // With fewer songs than rounds the filters are the problem (the match line says so), not the mode.

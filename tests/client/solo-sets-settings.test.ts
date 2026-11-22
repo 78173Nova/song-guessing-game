@@ -29,6 +29,25 @@ describe("the solo start screen follows the chosen game length", () => {
     expect(modeProblem(counts(3), "title", 3)).toContain("needs 4 different titles");
   });
 
+  it("never suggests fewer songs when the smallest game is already chosen", () => {
+    expect(matchLine(counts(2), 3)).toBe("Only 2 songs match these filters – try 'Any' for genre or decade.");
+  });
+
+  it("at the usual 5, 3 or 4 matching songs suggest choosing fewer songs", () => {
+    expect(matchLine(counts(4), 5)).toBe("Only 4 songs match. Choose fewer songs, or try 'Any' for genre or decade.");
+  });
+
+  it("with Any and Any, greyed-out tiles for a long game still get a note", () => {
+    const songCounts = [
+      { genre: "rock", decade: 1980, count: 12 },
+      { genre: "pop", decade: 1990, count: 40 },
+    ];
+    expect(filterNotes(songCounts, {}, 30)).toEqual([
+      "Greyed-out genres have fewer than 30 songs.",
+      "Greyed-out decades have fewer than 30 songs.",
+    ]);
+  });
+
   it("without a length everything still works with 5 songs", () => {
     expect(matchLine(counts(3))).toBe("Only 3 songs match these filters – try 'Any' for genre or decade.");
     expect(modeFits(counts(5), "title")).toBe(true);

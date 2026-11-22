@@ -57,3 +57,5 @@ server while the timer runs felt unfair. Trade-off: someone using the developer 
 clips early. For a solo game that risk is small; the rule that matters most stays: **titles, options and the
 correct answer are still only sent with "next" and "answer"**. Alternative considered: keep the URLs on the server
 and let the browser report "music is playing" (more requests, still dependent on load times).
+
+Update 22 Nov 2026: a solo game no longer always has 5 rounds. The player chooses songs per set and number of sets (3 to 30 songs, 5 by default; decision 013), the server checks the choice, and `POST /api/games` returns one preview URL per round. The rules above stay the same: no answers before the player has answered.

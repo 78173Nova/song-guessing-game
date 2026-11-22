@@ -6,7 +6,7 @@ import { listSongs, savePreview, upsertSongs, type SongInput } from "@/lib/db/so
 import { createTestDb } from "../helpers/test-db";
 
 // Choosing songs per set and number of sets in a solo game, against PGlite. No network.
-// 7 rock songs and 28 pop songs: 35 playable songs in all.
+// 7 rock songs, 28 pop songs and 6 country songs: 41 playable songs in all.
 let db: Db;
 
 beforeAll(async () => {
@@ -14,6 +14,7 @@ beforeAll(async () => {
   const songs: SongInput[] = [
     ...Array.from({ length: 7 }, (_, i) => ({ title: `Rock ${i}`, artist: `Rock Artist ${i}`, year: 1980 + i, genre: "rock" })),
     ...Array.from({ length: 28 }, (_, i) => ({ title: `Pop ${i}`, artist: `Pop Artist ${i}`, year: 1990 + (i % 10), genre: "pop" })),
+    ...Array.from({ length: 6 }, (_, i) => ({ title: `Country ${i}`, artist: `Country Artist ${i}`, year: 1970 + i, genre: "country" })),
   ];
   await upsertSongs(db, songs);
   for (const song of await listSongs(db)) {
@@ -98,6 +99,31 @@ describe("POST /api/games – songs per set and number of sets", () => {
     const second = await started({ songsPerSet: 10, sets: 2, recentGames: [first.gameId] });
     const earlier = new Set(await songIds(first.gameId));
     expect((await songIds(second.gameId)).some((id) => earlier.has(id))).toBe(false);
+  });
+
+  it("a game of 3 plays the 3 songs left, even though 3 songs alone cannot give the wrong answers", async () => {
+    for (let i = 0; i < 20; i++) {
+      const first = await started({ genre: "country", songsPerSet: 3, sets: 1 });
+      const second = await started({ genre: "country", songsPerSet: 3, sets: 1, recentGames: [first.gameId] });
+      const earlier = new Set(await songIds(first.gameId));
+      expect((await songIds(second.gameId)).some((id) => earlier.has(id))).toBe(false);
+    }
+  });
+
+  it("with too few new songs, plays all of them and only tops up with recent ones", async () => {
+    const first = await started({ songsPerSet: 10, sets: 3 });
+    const earlier = new Set(await songIds(first.gameId));
+    const second = await started({ songsPerSet: 10, sets: 2, recentGames: [first.gameId] });
+    const fresh = (await songIds(second.gameId)).filter((id) => !earlier.has(id));
+    expect(fresh).toHaveLength(11); // 41 songs – 30 recent
+  });
+
+  it("when topping up, the oldest recent game's songs come back before the newest game's", async () => {
+    const older = await started({ genre: "rock", songsPerSet: 3, sets: 1 });
+    const newer = await started({ genre: "rock", songsPerSet: 3, sets: 1, recentGames: [older.gameId] });
+    const third = await started({ genre: "rock", songsPerSet: 3, sets: 1, recentGames: [newer.gameId, older.gameId] });
+    const newest = new Set(await songIds(newer.gameId));
+    expect((await songIds(third.gameId)).some((id) => newest.has(id))).toBe(false);
   });
 
   it("the reply holds only the game ID and the clip addresses, no answers", async () => {

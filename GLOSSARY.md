@@ -73,7 +73,7 @@ One song: the clip plays, every player answers one question about it, and the ri
 _Avoid_: Question, turn, song (when the whole step is meant)
 
 **Set**:
-A group of rounds in a game. In a room game it is followed by the standings; in a solo game by the set summary and a "Next set" button.
+A group of rounds in a game. In a room game it is followed by the standings; in a solo game, every set but the last is followed by the set summary and a "Next set" button.
 _Avoid_: Round, stage, level
 
 **Set summary**:

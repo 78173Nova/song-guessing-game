@@ -1,4 +1,5 @@
 // Genre and decade filters (spec 003, decision 013). Plain functions: no database, no network.
+import { SONGS_PER_SET_CHOICES } from "./set-choices.ts";
 import { isGenre, type Genre } from "./genres.ts";
 
 // The decades a player can choose. There is no 1950s filter: the one 1957 song only plays with "Any".
@@ -42,16 +43,19 @@ export function tooFewSongsMessage(matching: number): string {
   return `These filters match too few different titles or artists for this mode – ${hint}, or another mode.`;
 }
 
-// A solo game with chosen sets needs more (or fewer) songs than the usual 5, and there are too few for it.
+// A solo game with a chosen length, and too few matching songs for it.
 export function tooFewForSetsMessage(matching: number): string {
+  // Below the smallest game, "choose fewer songs" would not help.
+  if (matching < Math.min(...SONGS_PER_SET_CHOICES)) return tooFewSongsMessage(matching);
   const hint = "Choose fewer songs, or try 'Any' for genre or decade.";
   if (matching === 0) return `No songs match. ${hint}`;
   if (matching === 1) return `Only 1 song matches. ${hint}`;
   return `Only ${matching} songs match. ${hint}`;
 }
 
-// A game needs 5 different songs (5 rounds). A genre + decade with fewer can never start, so the start screen
-// greys it out (spec 003, "filter gaps"). The server still refuses it on its own.
+// A game of the usual length needs 5 different songs (5 rounds). A solo game with a chosen length needs one per round.
+// A genre + decade with too few can never start, so the start screen greys it out (spec 003, "filter gaps"). The
+// server still refuses it on its own.
 export const MIN_MATCHING_SONGS = 5;
 
 // How many songs one genre has in one decade. Only counts – nothing about single songs.

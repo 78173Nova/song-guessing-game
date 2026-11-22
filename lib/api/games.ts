@@ -27,7 +27,7 @@ import {
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
 import { songPools } from "../game/recent-songs";
-import { buildReplacementRound, buildRounds, countMatching, ROUNDS_PER_GAME, type BuildResult } from "../game/rounds";
+import { buildReplacementRound, buildRounds, countMatching, ROUNDS_PER_GAME } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -115,19 +115,20 @@ export async function startGame(
   const filters = { genre: input.genre, decade: input.decade };
   const songs = filterSongs(await listSongsWithPreview(db), filters);
 
-  // Avoid the songs of the player's last games where possible: first all of them, then fewer, then none
-  // (songPools). The first list that can fill a game in this mode is used.
+  // Avoid the songs of the player's last games where possible: songs from none of them first, then the oldest
+  // game's songs, the newest game's last (songPools). Wrong options come from all matching songs.
   const recentSongIds = await getSongIdsOfGames(db, input.recentGames ?? []);
   const rounds = input.songsPerSet === undefined || input.sets === undefined ? ROUNDS_PER_GAME : input.songsPerSet * input.sets;
-  let built: BuildResult = { ok: false, reason: "not-enough-songs" };
-  for (const pool of songPools(songs, recentSongIds, rounds)) {
-    built = buildRounds(pool, random, { mode: input.mode, currentYear: now().getFullYear(), rounds });
-    if (built.ok) break;
-  }
+  const built = buildRounds(songs, random, {
+    mode: input.mode,
+    currentYear: now().getFullYear(),
+    rounds,
+    preferred: songPools(songs, recentSongIds, 1),
+  });
   if (!built.ok) {
     // With filters, or a chosen game longer than the song list, the player can fix it by choosing differently.
     // Otherwise the music is unavailable.
-    const tooLong = rounds !== ROUNDS_PER_GAME && songs.length < rounds;
+    const tooLong = input.sets !== undefined && songs.length < rounds;
     if (!hasFilters(filters) && !(tooLong && songs.length >= MIN_MATCHING_SONGS)) return fail("not-enough-songs");
     // Enough songs for this length, but not enough different titles or artists: the mode is the problem.
     const message = tooLong
