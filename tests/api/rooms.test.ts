@@ -494,7 +494,7 @@ describe("server-paced rounds (nobody taps Next)", () => {
     expect((await roundsOf(room.code))[0].status).toBe("answered");
   });
 
-  it("schedules the next round 8 s after the 15 seconds are over when not everyone answered", async () => {
+  it("schedules the next round 10 s after the 15 seconds are over when not everyone answered", async () => {
     const room = await startedRoom("Anna", "Ben");
     await openRound(room);
     const roundStart = clock;
@@ -502,10 +502,10 @@ describe("server-paced rounds (nobody taps Next)", () => {
 
     const body = (await state(room.code, room.creatorToken)).body;
     expect(body.round).toMatchObject({ number: 1, status: "closed" });
-    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(roundStart, 15 + 8) });
+    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(roundStart, 15 + 10) });
   });
 
-  it("closes the round once every player – the creator included – has answered, and the next one starts 8 s after the last answer", async () => {
+  it("closes the round once every player – the creator included – has answered, and the next one starts 10 s after the last answer", async () => {
     const room = await startedRoom("Anna", "Ben");
     const round = await openRound(room);
     wait(2);
@@ -517,7 +517,7 @@ describe("server-paced rounds (nobody taps Next)", () => {
 
     const body = (await state(room.code, room.tokens[1])).body;
     expect(body.round).toMatchObject({ number: 1, status: "closed", correctOption: round.right });
-    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(lastAnswer, 8) });
+    expect(body.nextRound).toMatchObject({ number: 2, startsAt: plus(lastAnswer, 10) });
     const rounds = await roundsOf(room.code);
     expect(rounds[0].answeredAt).toEqual(lastAnswer);
     expect(rounds[1].status).toBe("open"); // scheduled: open in the database, but not started yet
@@ -539,9 +539,9 @@ describe("server-paced rounds (nobody taps Next)", () => {
   it("plays a whole game without anyone answering or asking: after a long pause it catches up and is finished", async () => {
     const room = await startedRoom("Anna", "Ben");
     const startedAt = clock;
-    // Round 1 starts at 5 s and closes at 20 s; each next round starts 8 s later and lasts 15 s.
-    // Round 5 closes at 20 + 4 × 23 = 112 s.
-    clock = new Date(startedAt.getTime() + 112 * 1000);
+    // Round 1 starts at 5 s and closes at 20 s; each next round starts 10 s later and lasts 15 s.
+    // Round 5 closes at 20 + 4 × 25 = 120 s.
+    clock = new Date(startedAt.getTime() + 120 * 1000);
     expect((await state(room.code, room.creatorToken)).body).toMatchObject({ status: "playing", round: { number: 5, status: "open" } });
 
     wait(0.001);
@@ -549,7 +549,7 @@ describe("server-paced rounds (nobody taps Next)", () => {
     expect(body).toMatchObject({ status: "finished", round: { number: 5, status: "closed" }, nextRound: null });
     const rounds = await roundsOf(room.code);
     expect(rounds.every((r) => r.status === "answered")).toBe(true);
-    expect(rounds.map((r) => r.startedAt!.toISOString())).toEqual([5, 28, 51, 74, 97].map((s) => plus(startedAt, s)));
+    expect(rounds.map((r) => r.startedAt!.toISOString())).toEqual([5, 30, 55, 80, 105].map((s) => plus(startedAt, s)));
   });
 
   it("answers two requests at the closing moment the same way and schedules the next round once", async () => {
@@ -1103,9 +1103,9 @@ describe("POST /api/rooms/[code]/replace – a device could not load a clip (iss
     await answer(room.code, room.tokens[0], { round: 1, answer: round.right });
     await answer(room.code, room.tokens[1], { round: 1, answer: round.right });
     const scheduled = (await state(room.code, room.tokens[1])).body.nextRound as NextRound;
-    expect(scheduled).toMatchObject({ number: 2, startsAt: plus(clock, 8) });
+    expect(scheduled).toMatchObject({ number: 2, startsAt: plus(clock, 10) });
 
-    wait(1); // 7 s before round 2 starts: enough time to load the new clip
+    wait(1); // 9 s before round 2 starts: enough time to load the new clip
     expect((await replace(room.code, room.tokens[1], { round: 2 })).status).toBe(200);
 
     const swapped = (await roundsOf(room.code))[1];

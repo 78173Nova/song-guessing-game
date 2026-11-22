@@ -238,9 +238,9 @@ describe("hasRoundStandings", () => {
     expect(hasRoundStandings({ type: "multiplayer", startingPlayers: 25 })).toBe(true);
   });
 
-  it("does not show them in a duel: a Duel room, or a Multiplayer game that started with 2 players", () => {
-    expect(hasRoundStandings({ type: "duel", startingPlayers: 2 })).toBe(false);
-    expect(hasRoundStandings({ type: "multiplayer", startingPlayers: 2 })).toBe(false);
+  it("shows them in a duel too: a Duel room, or a Multiplayer game that started with 2 players", () => {
+    expect(hasRoundStandings({ type: "duel", startingPlayers: 2 })).toBe(true);
+    expect(hasRoundStandings({ type: "multiplayer", startingPlayers: 2 })).toBe(true);
   });
 
   it("does not show them before the game started (no starting players yet)", () => {

@@ -25,9 +25,9 @@ const STANDINGS = [
   { rank: 2, nickname: "Anna", score: 100 },
 ];
 
-// 2 sets of 3 songs. Round `number` closed at T0; the next round starts 23 s later (end of a set) or 8 s later.
+// 2 sets of 3 songs. Round `number` closed at T0; the next round starts 25 s later (end of a set) or 10 s later.
 function closed(number: number, summary: SummaryItem[], status: "playing" | "finished" = "playing"): RoomState {
-  const nextStartsAt = T0 + (number % 3 === 0 ? 23000 : 8000);
+  const nextStartsAt = T0 + (number % 3 === 0 ? 25000 : 10000);
   return {
     code: "482913",
     status,
@@ -76,7 +76,7 @@ describe("roomScreen – the break after a set", () => {
     expect(roomScreen(view, T0 + 15 * S)).toEqual({ kind: "set-standings", set: 1, standings: STANDINGS, me: "Ben" });
     expect(roomScreen(view, T0 + 19.9 * S).kind).toBe("set-standings");
     expect(roomScreen(view, T0 + 20 * S)).toEqual({ kind: "next-starting", number: 4 });
-    expect(roomScreen(view, T0 + 23 * S)).toMatchObject({ kind: "round", number: 4 });
+    expect(roomScreen(view, T0 + 25 * S)).toMatchObject({ kind: "round", number: 4 });
   });
 
   it("shows only the songs of the set that just ended", () => {
@@ -95,7 +95,7 @@ describe("roomScreen – the break after a set", () => {
     view = roomReducer(view, { type: "continued", round: 3, step: "standings" });
     expect(roomScreen(view, T0 + 3 * S)).toEqual({ kind: "next-starting", number: 4 });
     // The next set still starts at the server's time.
-    expect(roomScreen(view, T0 + 23 * S)).toMatchObject({ kind: "round", number: 4 });
+    expect(roomScreen(view, T0 + 25 * S)).toMatchObject({ kind: "round", number: 4 });
   });
 
   it("has no set break after a round inside a set", () => {

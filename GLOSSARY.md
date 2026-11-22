@@ -85,5 +85,5 @@ The choice each player makes after a room's game ends. Those who choose it stay 
 _Avoid_: Rematch, restart, new game
 
 **Standings**:
-The ranking of all players by total points so far, shown after each set and at the end of the game, and in a Multiplayer game with 3 or more players also after each round. Equal points share a rank.
+The ranking of all players by total points so far, shown after each set and at the end of the game, and in every room game (duel included) also after each round. Equal points share a rank.
 _Avoid_: Leaderboard, scoreboard, high scores

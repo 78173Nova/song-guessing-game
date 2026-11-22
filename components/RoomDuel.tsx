@@ -1,14 +1,15 @@
 // The duel layout of a room round (issues #39, #66), for a game with exactly two players: the opponent's side on
 // top in cyan, facing the viewer; the wave circle in the middle with the seconds inside it; the viewer's side at
 // the bottom in violet, just above the answer buttons (which Room.tsx shows below, the same as on the Multiplayer
-// game board). On a laptop the two sides stand left and right of the circle. Once the opponent has answered they
-// get the word "Answered" on a neutral grey pill (no tick, no green: team feedback, PR #74), never what they
+// game board). On a laptop the same stack, centred and bigger (team feedback point 8). Each nickname shrinks to fit
+// its line instead of being cut off: the CSS gets its length as --chars (RoomDuel.module.css). Once the opponent
+// has answered they get the word "Answered" on a neutral grey pill (no tick, no green: team feedback, PR #74), never what they
 // answered. Which side shows what: lib/client/room-duel.ts.
 //
 // The circle uses the app's own colours only (CLAUDE.md rule 5: nothing about the song before the answer); the
 // cover's colours appear on the result screen, in Room.tsx.
 import NumberFlow from "@number-flow/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { duelSides, type ScoreMemory } from "@/lib/client/room-duel";
 import { avatarEmoji } from "@/lib/game/avatars";
 import AwayIcon from "./icons/AwayIcon";
@@ -56,13 +57,15 @@ export default function RoomDuel({
             <p className={styles.gone}>Your opponent has left</p>
           ) : (
             <>
-              <div className={styles.who}>
-                <p className={styles.nameRow} title={opponent.nickname}>
+              <div className={styles.nameBox}>
+                <p className={styles.nameRow} title={opponent.nickname} style={nameLength(opponent.nickname)}>
                   <span className={styles.avatar} aria-hidden="true">
                     {avatarEmoji(avatars[opponent.nickname])}
                   </span>
                   <span className={styles.name}>{opponent.nickname}</span>
                 </p>
+              </div>
+              <div className={styles.marks}>
                 {opponent.answered && (
                   <span className={styles.answered}>
                     Answered
@@ -100,14 +103,16 @@ export default function RoomDuel({
         </div>
 
         <section className={`${styles.side} ${styles.me}`} aria-label="You">
-          <div className={styles.who}>
-            <p className={styles.nameRow} title={sides.me.nickname}>
+          <div className={styles.nameBox}>
+            <p className={styles.nameRow} title={sides.me.nickname} style={nameLength(sides.me.nickname)}>
               <span className={styles.avatar} aria-hidden="true">
                 {avatarEmoji(avatars[sides.me.nickname])}
               </span>
               <span className={styles.name}>{sides.me.nickname}</span>
-              <span className={styles.you}>(you)</span>
             </p>
+          </div>
+          <div className={styles.marks}>
+            <span className={styles.you}>(you)</span>
             {iAnswered && (
               <span className={styles.answered}>
                 Answered
@@ -121,6 +126,12 @@ export default function RoomDuel({
       <TimeBar left={timeLeft} className={styles.timeTrack} />
     </div>
   );
+}
+
+// The nickname's length in whole characters (an emoji counts as one, like lib/game/rooms.ts), as the CSS variable
+// --chars: RoomDuel.module.css uses it to pick a font size at which the whole nickname fits its line.
+function nameLength(nickname: string): CSSProperties {
+  return { "--chars": [...nickname].length } as CSSProperties;
 }
 
 // A large score that rolls from the value the viewer saw last to the new one (NumberFlow), one frame after the
