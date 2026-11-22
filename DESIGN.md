@@ -394,7 +394,7 @@ Phone width (≈ 360px) unless noted. `( ~~~ )` is the wave circle. `[ Button ]`
 │  ──────────────────────────────  │
 │  ‹Log in›           ‹Sign up›    │  account buttons, quiet
 └──────────────────────────────────┘
-Laptop: same column (--width-form), circle grows to 280px, sits left of the column from 64rem up.
+Laptop: same stack and column (--width-form), circle centred above the title, up to 280px (limited by screen height).
 ```
 
 The three "how it works" points stay as a short list under the pitch with small inline SVG icons (no emoji).
@@ -707,6 +707,10 @@ the `useCoverColours` hook. Under reduce motion the circle's colour now changes 
 circle blends back to the app colours over `--duration-base`. On the landing page the circle is
 `min(220px, 55vw, 26dvh)` on phones, with the empty canvas edge above and below given back to the page, so the
 title and the main buttons sit higher on short screens; 280px left of the column from 64rem up, as before.
+
+Update 22 Nov 2026 (landing on a laptop): the circle no longer sits left of the column from 64rem up. The laptop
+uses the same stack as the phone (circle centred above the title, then the column), and the circle grows to
+`min(280px, 34svh)`, so "Play solo" stays visible without scrolling at 1366 × 768. The phone layout is unchanged.
 
 Update 18 Nov 2026 (#65): room screens built. Board: the wave circle's top half replaces the song half circle at the
 same size (radius = `SONG_RADIUS`, outline ≤ 48 % of its square), seconds on a half disc (28 % radius), "Round n / N"

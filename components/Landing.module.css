@@ -172,22 +172,12 @@
   min-height: 3.5rem;
 }
 
-/* Laptop: the circle sits left of the column (DESIGN.md, landing sketch). */
+/* Laptop: the same stack as on a phone, the circle centred above the title (DESIGN.md, landing sketch). The circle
+   may grow to 280px, but it is limited by the screen height, so "Play solo" stays visible without scrolling on a
+   1366 × 768 laptop. Below 64rem nothing changes. */
 @media (min-width: 64rem) {
-  .landingMain {
-    max-width: calc(280px + var(--space-8) + var(--width-form));
-    flex-direction: row;
-    gap: var(--space-8);
-  }
-
   .circleSlot {
-    --circle-size: 280px;
-    margin-block: 0;
-  }
-
-  .landingTitle,
-  .landingPitch {
-    text-align: left;
+    --circle-size: min(280px, 34svh);
   }
 }
 
