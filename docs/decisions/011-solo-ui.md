@@ -54,3 +54,5 @@ the clip actually starts playing instead of when the round arrives.
 - Limits: the left game stays unfinished on the server, the same as closing the tab. "← Home" still leaves without
   asking. Late replies of the left game are ignored: errors now carry the game's ID like clip replies do. Rooms
   still use the browser's pop-up for Leave and Kick; they could switch to the same question later.
+
+Update 22 Nov 2026 (solo sets, decision 013): "Leave game" is also on the set summary, because the game is still running there. Leaving now empties the game's audio players, so a long game does not keep its clips open, and a clip still loading stops without asking the server for a replacement song.

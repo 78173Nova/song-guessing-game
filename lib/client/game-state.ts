@@ -4,6 +4,7 @@
 //
 // Flow: start → creating → first-clip (loading the first song) → get-ready (3-2-1) → starting →
 // round → reveal → starting the next round (or clip-loading if its clip is not ready yet) → ... → results.
+// In a game of several sets, the last song of each set but the final one goes reveal → set-summary → (Next set) → next round.
 import type { QuestionType } from "../game/modes";
 import { MUSIC_LOAD_MESSAGE } from "./clip-loader";
 
@@ -38,7 +39,8 @@ export type PlayedRound = {
 type Progress = { score: number; history: PlayedRound[] };
 
 // The clips of the game: one address per round, and whether it is loaded (or given up on).
-type Clips = { gameId: string; previewUrls: string[]; ready: boolean[] };
+// songsPerSet: missing = the whole game is one set.
+type Clips = { gameId: string; previewUrls: string[]; ready: boolean[]; songsPerSet?: number };
 
 type InGame = Clips & Progress;
 
@@ -52,12 +54,13 @@ export type GameState =
   | ({ screen: "clip-loading"; roundNumber: number } & InGame)
   | ({ screen: "round"; round: RoundInfo; pending: Answer | null } & InGame)
   | ({ screen: "reveal"; round: RoundInfo; chosen: Answer; result: AnswerResult } & InGame)
+  | ({ screen: "set-summary"; setNumber: number; totalSets: number; nextRound: number; setSongs: PlayedRound[] } & InGame)
   | ({ screen: "results" } & Progress)
   | { screen: "error"; message: string };
 
 export type GameAction =
   | { type: "start" }
-  | { type: "game-created"; gameId: string; previewUrls: string[] }
+  | { type: "game-created"; gameId: string; previewUrls: string[]; songsPerSet?: number }
   | { type: "clip-ready"; gameId: string; index: number }
   | { type: "clip-failed"; gameId: string; index: number }
   | { type: "clip-replaced"; gameId: string; index: number; url: string }
@@ -68,6 +71,7 @@ export type GameAction =
   | { type: "answer"; answer: Answer }
   | { type: "answer-result"; result: AnswerResult }
   | { type: "next" }
+  | { type: "next-set" }
   // gameId: the game the error belongs to (a round or an answer that failed). An error of a game the player has
   // left, or of an earlier game, is then ignored. Without it (before any game exists) the error always shows.
   | { type: "failed"; message: string; gameId?: string }
@@ -88,8 +92,8 @@ function inGame(state: GameState): state is Extract<GameState, InGame> {
 
 // The parts every in-game screen keeps.
 function keep(state: Extract<GameState, InGame>): InGame {
-  const { gameId, previewUrls, ready, score, history } = state;
-  return { gameId, previewUrls, ready, score, history };
+  const { gameId, previewUrls, ready, songsPerSet, score, history } = state;
+  return { gameId, previewUrls, ready, songsPerSet, score, history };
 }
 
 // A clip is ready (or given up on – its round will then be skipped when it comes).
@@ -125,6 +129,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         gameId: action.gameId,
         previewUrls: action.previewUrls,
         ready: action.previewUrls.map(() => false),
+        songsPerSet: action.songsPerSet,
         score: 0,
         history: [],
       };
@@ -194,8 +199,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (nextNumber > state.round.totalRounds) {
         return { screen: "results", score: state.score, history: state.history };
       }
+      // The last song of a set: the player sees the set's songs first, and goes on with "Next set".
+      const { songsPerSet } = state;
+      if (songsPerSet !== undefined && state.round.round % songsPerSet === 0) {
+        return {
+          ...keep(state),
+          screen: "set-summary",
+          setNumber: state.round.round / songsPerSet,
+          totalSets: state.round.totalRounds / songsPerSet,
+          nextRound: nextNumber,
+          setSongs: state.history.slice(-songsPerSet),
+        };
+      }
       const screen = state.ready[nextNumber - 1] ? "starting" : "clip-loading";
       return { ...keep(state), screen, roundNumber: nextNumber };
+    }
+
+    case "next-set": {
+      if (state.screen !== "set-summary") return state;
+      const screen = state.ready[state.nextRound - 1] ? "starting" : "clip-loading";
+      return { ...keep(state), screen, roundNumber: state.nextRound };
     }
 
     case "failed":

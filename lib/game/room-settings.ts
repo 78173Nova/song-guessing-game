@@ -3,12 +3,12 @@
 import { DECADES, decadeOf, type Decade } from "./filters.ts";
 import { GENRES, type Genre } from "./genres.ts";
 import { isMode, type Mode } from "./modes.ts";
+import { SET_CHOICES, SONGS_PER_SET_CHOICES } from "./set-choices.ts";
+
+export { SET_CHOICES, SONGS_PER_SET_CHOICES };
 
 export const ROOM_TYPES = ["duel", "multiplayer"] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
-
-export const SONGS_PER_SET_CHOICES = [3, 5, 10] as const;
-export const SET_CHOICES = [1, 2, 3] as const;
 
 // "any" = every genre (or decade). Otherwise a list of at least one, each at most once.
 export type RoomSettings = {

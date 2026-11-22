@@ -32,7 +32,8 @@ import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { DECADES, type Decade, type SongCount } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
-import { ROUNDS_PER_GAME, type MatchingCounts } from "@/lib/game/rounds";
+import type { MatchingCounts } from "@/lib/game/rounds";
+import { SET_CHOICES, SONGS_PER_SET_CHOICES, type SetCount, type SongsPerSet } from "@/lib/game/set-choices";
 import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
@@ -49,8 +50,10 @@ const SILENT_SOUND = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8A
 const GET_READY_SECONDS = 3;
 const CLIP_LOAD_LIMIT_MS = 10_000; // one attempt to load one clip
 const FIRST_CLIP_LIMIT_MS = 30_000; // everything for the first clip, including swaps
+const SUMMARY_TAP_GUARD_MS = 400; // "Next set" ignores taps this soon after the set summary appears
 
 type Reveal = Extract<GameState, { screen: "reveal" }>;
+type PlayedRound = Extract<GameState, { screen: "results" }>["history"][number];
 
 export default function SoloGame() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -83,9 +86,18 @@ export default function SoloGame() {
   // keep them.
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [decade, setDecade] = useState<Decade | undefined>(undefined);
+  // How long the game is, with the same choices as a room. Kept like the mode and filters.
+  const [songsPerSet, setSongsPerSet] = useState<SongsPerSet>(5);
+  const [sets, setSets] = useState<SetCount>(1);
+  const totalRounds = songsPerSet * sets;
   // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
   // a reload forgets them.
   const recentGamesRef = useRef<string[]>([]);
+  // When the set summary appeared, so a leftover tap does not skip it.
+  const summaryShownAtRef = useRef(0);
+  useEffect(() => {
+    if (state.screen === "set-summary") summaryShownAtRef.current = Date.now();
+  }, [state.screen]);
   // Playable songs per genre and decade, so choices with too few songs are greyed out (spec 003, "filter gaps").
   // null until loaded, or if loading failed: then nothing is greyed out and the server still checks the start.
   const [songCounts, setSongCounts] = useState<SongCount[] | null>(null);
@@ -113,8 +125,8 @@ export default function SoloGame() {
     };
   }, [genre, decade]);
   // The warning when too few songs match, and why the chosen mode cannot start (it stays chosen, greyed out).
-  const tooFew = matchLine(matching);
-  const problem = modeProblem(matching, mode);
+  const tooFew = matchLine(matching, totalRounds);
+  const problem = modeProblem(matching, mode, totalRounds);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -124,6 +136,15 @@ export default function SoloGame() {
     const result = await apiAnswer(gameId, round, answer);
     dispatch(result.ok ? { type: "answer-result", result: result.data } : { type: "failed", gameId, message: result.message });
   }, []);
+
+  // Lets go of a finished or left game's clips, so a long game does not keep them open (phones limit how many media
+  // players a page can hold).
+  function emptyPlayers(players: HTMLAudioElement[]) {
+    for (const player of players) {
+      player.removeAttribute("src");
+      player.load();
+    }
+  }
 
   function pauseAll() {
     for (const player of playersRef.current) player.pause();
@@ -162,8 +183,10 @@ export default function SoloGame() {
   function prepare(players: HTMLAudioElement[], gameId: string, index: number, url: string) {
     return prepareClip(
       url,
-      (u) => loadClip(players[index], u),
+      // A game the player left or restarted stops here: no more loading, and no song swaps on the server.
+      (u) => (playersRef.current === players ? loadClip(players[index], u) : Promise.resolve(false)),
       async () => {
+        if (playersRef.current !== players) return null;
         const replaced = await apiReplace(gameId, index + 1);
         if (!replaced.ok) return null;
         dispatch({ type: "clip-replaced", gameId, index, url: replaced.data.previewUrl });
@@ -182,8 +205,9 @@ export default function SoloGame() {
     // previous game's players.
     wave.detachAll();
     wave.unlock();
+    emptyPlayers(playersRef.current);
     // Still inside the tap: create and unlock one player per round.
-    const players = Array.from({ length: ROUNDS_PER_GAME }, (_, index) => {
+    const players = Array.from({ length: totalRounds }, (_, index) => {
       const player = new Audio();
       player.preload = "auto";
       player.addEventListener("error", () => handlePlayerError(player, index));
@@ -198,7 +222,7 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current);
+    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current, { songsPerSet, sets });
     // The player left (or started again) while the game was being created: this game has no ID on screen yet, so
     // its reply is dropped here.
     if (playersRef.current !== players) return;
@@ -209,7 +233,7 @@ export default function SoloGame() {
     }
     const { gameId, previewUrls } = game.data;
     recentGamesRef.current = rememberGame(recentGamesRef.current, gameId);
-    dispatch({ type: "game-created", gameId, previewUrls });
+    dispatch({ type: "game-created", gameId, previewUrls, songsPerSet });
 
     // Only the first clip is waited for. The 3-2-1 starts the moment it is ready.
     const first = await withTimeout(prepare(players, gameId, 0, previewUrls[0]), FIRST_CLIP_LIMIT_MS, { ok: false as const });
@@ -238,13 +262,22 @@ export default function SoloGame() {
   function handleLeave() {
     setAskLeave(false);
     pauseAll();
+    const left = playersRef.current;
     playersRef.current = [];
+    emptyPlayers(left);
     dispatch({ type: "reset" });
   }
 
   function handleNext() {
     pauseAll();
     dispatch({ type: "next" });
+  }
+
+  // The second tap of a double tap on "See set summary" could land on "Next set" and skip the summary.
+  function handleNextSet() {
+    if (Date.now() - summaryShownAtRef.current < SUMMARY_TAP_GUARD_MS) return;
+    pauseAll();
+    dispatch({ type: "next-set" });
   }
 
   function handleTapToStart() {
@@ -329,7 +362,7 @@ export default function SoloGame() {
   // No music on the start, results and error screens, or after leaving the page (useWaveAudio closes the sound
   // context itself).
   useEffect(() => {
-    if (state.screen === "start" || state.screen === "results" || state.screen === "error") pauseAll();
+    if (state.screen === "start" || state.screen === "set-summary" || state.screen === "results" || state.screen === "error") pauseAll();
   }, [state.screen]);
   useEffect(() => () => pauseAll(), []);
 
@@ -353,28 +386,48 @@ export default function SoloGame() {
     if (errorMessage !== null) showError(errorMessage);
   }, [errorMessage]);
 
+  // Every screen of a running game, set summary included: leave it and go back to the settings. The question replaces
+  // the button; music, timer and answers carry on while it shows.
+  const leaveControl = askLeave ? (
+    <div className={styles.leaveQuestion} role="group" aria-labelledby="leave-question">
+      <p id="leave-question">Leave this game? Your points from this game are lost.</p>
+      <div className={styles.leaveChoices}>
+        <button type="button" className={styles.leave} onClick={handleLeave}>
+          Leave
+        </button>
+        <button type="button" className={styles.leave} onClick={() => setAskLeave(false)}>
+          Keep playing
+        </button>
+      </div>
+    </div>
+  ) : (
+    <button type="button" className={styles.leave} onClick={() => setAskLeave(true)}>
+      Leave game
+    </button>
+  );
+
   return (
     <div className={shared.game}>
       {state.screen === "start" && (
         <section className={shared.center}>
           <p className={shared.intro}>
-            Hear a song and pick the right answer within {ROUND_SECONDS} seconds. {ROUNDS_PER_GAME} rounds – faster answers score more.
+            Hear a song and pick the right answer within {ROUND_SECONDS} seconds. {totalRounds} rounds – faster answers score more.
           </p>
           {/* Mode, genre and decade as tile rows (team feedback 18 Nov, point 8); choices with too few songs are
               greyed out with a note saying why (point 7). */}
           <div className={styles.settings}>
             <TileGroup
               legend="What do you want to guess?"
-              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m) }))}
+              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m, totalRounds) }))}
               selected={(value) => value === mode}
               onTap={(value) => setMode(MODES.find((m) => m === value) ?? "title")}
-              notes={modeNotes(matching)}
+              notes={modeNotes(matching, totalRounds)}
             />
             <TileGroup
               legend="Genre"
               options={[
                 { value: "any", label: "Any" },
-                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }) })),
+                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }, totalRounds) })),
               ]}
               selected={(value) => value === (genre ?? "any")}
               onTap={(value) => setGenre(genreFromTile(value))}
@@ -383,11 +436,23 @@ export default function SoloGame() {
               legend="Decade"
               options={[
                 { value: "any", label: "Any" },
-                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }) })),
+                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }, totalRounds) })),
               ]}
               selected={(value) => value === String(decade ?? "any")}
               onTap={(value) => setDecade(decadeFromTile(value))}
-              notes={filterNotes(songCounts, { genre, decade })}
+              notes={filterNotes(songCounts, { genre, decade }, totalRounds)}
+            />
+            <TileGroup
+              legend="Songs per set"
+              options={SONGS_PER_SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
+              selected={(value) => value === String(songsPerSet)}
+              onTap={(value) => setSongsPerSet(SONGS_PER_SET_CHOICES.find((n) => String(n) === value) ?? 5)}
+            />
+            <TileGroup
+              legend="Number of sets"
+              options={SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
+              selected={(value) => value === String(sets)}
+              onTap={(value) => setSets(SET_CHOICES.find((n) => String(n) === value) ?? 1)}
             />
           </div>
           {/* Too few matching songs, and why the chosen mode cannot start: these belong to the settings above, so
@@ -489,25 +554,23 @@ export default function SoloGame() {
             </div>
           )}
 
-          {/* Every screen of a running game, under the answers: leave it and go back to the settings. The question
-              replaces the button; music, timer and answers carry on while it shows. */}
-          {askLeave ? (
-            <div className={styles.leaveQuestion} role="group" aria-labelledby="leave-question">
-              <p id="leave-question">Leave this game? Your points from this game are lost.</p>
-              <div className={styles.leaveChoices}>
-                <button type="button" className={styles.leave} onClick={handleLeave}>
-                  Leave
-                </button>
-                <button type="button" className={styles.leave} onClick={() => setAskLeave(false)}>
-                  Keep playing
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button type="button" className={styles.leave} onClick={() => setAskLeave(true)}>
-              Leave game
-            </button>
-          )}
+          {leaveControl}
+        </section>
+      )}
+
+      {/* After each set but the last: that set's songs, then the player goes on when ready. No timer. */}
+      {state.screen === "set-summary" && (
+        <section className={shared.center}>
+          <h2 className={styles.finalHeading}>
+            Set {state.setNumber} of {state.totalSets} finished
+            <span className={styles.finalScore}>{state.score}</span>
+            points so far
+          </h2>
+          <PlayedList songs={state.setSongs} />
+          <button className={`${shared.primary} ${shared.wide}`} onClick={handleNextSet}>
+            Next set
+          </button>
+          {leaveControl}
         </section>
       )}
 
@@ -517,37 +580,7 @@ export default function SoloGame() {
             Your score
             <span className={styles.finalScore}>{state.score}</span>
           </h2>
-          <ol className={`${styles.results} ${styles.soloResults}`}>
-            {state.history.map((played) => (
-              <li key={played.round}>
-                <span className={styles.outcome} data-outcome={played.outcome}>
-                  {played.outcome === "correct" ? (
-                    <CheckIcon className={shared.inlineIcon} />
-                  ) : (
-                    <CrossIcon className={shared.inlineIcon} />
-                  )}
-                  {OUTCOME_WORD[played.outcome]}
-                </span>
-                <span className={styles.played}>
-                  <span>
-                    <strong>{played.title}</strong> – {played.artist}
-                  </span>
-                  {played.storeUrl && (
-                    <a
-                      className={styles.storeLink}
-                      href={played.storeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${played.title} in Apple Music`}
-                    >
-                      Open in Apple Music
-                    </a>
-                  )}
-                </span>
-                <span className={styles.playedPoints}>{played.points}</span>
-              </li>
-            ))}
-          </ol>
+          <PlayedList songs={state.history} />
           <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Play again
           </button>
@@ -572,6 +605,43 @@ export default function SoloGame() {
 }
 
 const OUTCOME_WORD = { correct: "Right", wrong: "Wrong", skipped: "Skipped", timeout: "Time's up" } as const;
+
+// The list of played songs: one set on the set summary, the whole game on the final screen.
+function PlayedList({ songs }: { songs: PlayedRound[] }) {
+  return (
+    <ol className={`${styles.results} ${styles.soloResults}`}>
+      {songs.map((played) => (
+        <li key={played.round}>
+          <span className={styles.outcome} data-outcome={played.outcome}>
+            {played.outcome === "correct" ? (
+              <CheckIcon className={shared.inlineIcon} />
+            ) : (
+              <CrossIcon className={shared.inlineIcon} />
+            )}
+            {OUTCOME_WORD[played.outcome]}
+          </span>
+          <span className={styles.played}>
+            <span>
+              <strong>{played.title}</strong> – {played.artist}
+            </span>
+            {played.storeUrl && (
+              <a
+                className={styles.storeLink}
+                href={played.storeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${played.title} in Apple Music`}
+              >
+                Open in Apple Music
+              </a>
+            )}
+          </span>
+          <span className={styles.playedPoints}>{played.points}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
@@ -690,6 +760,7 @@ function AnswerButton({
 function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
   const { result, chosen } = state;
   const isLast = state.round.round >= state.round.totalRounds;
+  const endsSet = state.songsPerSet !== undefined && state.round.round % state.songsPerSet === 0;
   const verdict = verdictOf(chosen, result.correct);
 
   return (
@@ -736,7 +807,7 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
         </div>
       </div>
       <button className={`${shared.primary} ${shared.wide}`} onClick={onNext}>
-        {isLast ? "See results" : "Next song"}
+        {isLast ? "See results" : endsSet ? "See set summary" : "Next song"}
       </button>
     </div>
   );
