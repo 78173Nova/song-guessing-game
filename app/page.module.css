@@ -1,4 +1,4 @@
-/* The frame around the solo game (app/solo/page.tsx). Tokens only (app/globals.css). */
+/* The frame around the solo game (app/solo/page.tsx), also used by Create a room and Join a room. Tokens only (app/globals.css). */
 .page {
   min-height: 100vh;
   min-height: 100dvh;

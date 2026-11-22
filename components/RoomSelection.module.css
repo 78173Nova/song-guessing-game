@@ -1,0 +1,36 @@
+/*
+ * "Create a room" and "Join a room": the column that makes them look like the solo start screen (no panel, as wide
+ * as a form, left-aligned, tile rows spaced like SoloGame's .settings). The shared form styles stay as they are,
+ * because login, sign-up and the landing page use them too. Tokens only (app/globals.css).
+ */
+.selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--width-form);
+  text-align: left;
+}
+
+/* The room code box comes first here, so it needs no dividing line above it (it keeps that line on the landing page). */
+.selection > form:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+/* With the form's own 8px gap this gives the 16px between tile rows that the solo start screen has. */
+.selection form > fieldset:not(:first-child),
+.selection section > fieldset:not(:first-child) {
+  margin-top: var(--space-2);
+}
+
+/* "Public rooms" is no bigger than the page name in the small header. */
+.selection h2 {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+}
+
+/* With the form's own 8px gap this gives the 24px above the button that the solo start screen has. */
+.selection form > button[type="submit"] {
+  margin-top: var(--space-4);
+}
