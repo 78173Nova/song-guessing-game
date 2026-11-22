@@ -8,6 +8,15 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// What the server log gets for an unexpected error: its kind and database code (e.g. "NeonDbError 23514"),
+// never its text. A database error's message or detail can contain an email, part of a password hash or, with a
+// broken DATABASE_URL, the connection string. Anything thrown that is not an Error is "unknown error".
+export function errorSummary(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown error";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && /^[A-Za-z0-9_]{1,10}$/.test(code) ? `${error.name} ${code}` : error.name;
+}
+
 // The errors for a nickname or an avatar, the same in rooms and in Account settings (issue #44).
 export const PLAYER_INPUT_ERRORS = {
   "invalid-nickname": { status: 400, message: "Please choose a nickname with 1 to 20 characters." },

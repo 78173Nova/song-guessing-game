@@ -227,7 +227,8 @@ export type RedeemEmailTokenResult = { ok: true } | { ok: false; reason: "unknow
 // and not expired; then:
 // - verify: marks the account verified.
 // - reset: replaces the password hash ($3), marks the email verified (clicking the link proves the person reads
-//   that inbox) and ends every session of the account (log out everywhere).
+//   that inbox), ends every session of the account (log out everywhere) and cancels an email change that is not
+//   confirmed yet (someone who knew the old password may have asked for it).
 const REDEEM_QUERIES: Record<EmailTokenPurpose, string> = {
   verify: `WITH used AS (
              UPDATE email_tokens SET used_at = $2
@@ -244,6 +245,10 @@ const REDEEM_QUERIES: Record<EmailTokenPurpose, string> = {
           ),
           ended AS (
             DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM used)
+          ),
+          cancelled AS (
+            DELETE FROM email_tokens
+            WHERE user_id IN (SELECT user_id FROM used) AND purpose = 'email' AND used_at IS NULL
           )
           UPDATE users SET password_hash = $3, email_verified_at = COALESCE(email_verified_at, $2)
           FROM used WHERE users.id = used.user_id
@@ -369,13 +374,15 @@ export async function renameAccount(
 const UNIQUE_VIOLATION = "23505";
 
 // Replaces an account's password hash and ends every session of the account except this one (issue #45), in one
-// query: whoever logged in with the old password is thrown out, this browser stays logged in.
+// query: whoever logged in with the old password is thrown out, this browser stays logged in. An email change that
+// is not confirmed yet is cancelled too (someone who knew the old password may have asked for it).
 export async function replacePassword(
   db: TransactionDb,
   change: { userId: string; passwordHash: string; keepSession: string },
 ): Promise<void> {
   await db.query(
-    `WITH ended AS (DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $3)
+    `WITH ended AS (DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $3),
+          cancelled AS (DELETE FROM email_tokens WHERE user_id = $1 AND purpose = 'email' AND used_at IS NULL)
      UPDATE users SET password_hash = $2 WHERE id = $1`,
     [change.userId, change.passwordHash, hashToken(change.keepSession)],
   );
