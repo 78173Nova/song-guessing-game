@@ -116,3 +116,10 @@ Update 18 Nov 2026: the "12 songs match – 5 will be played" line is removed (`
 - **Alternatives:** keep the line only for small filters (one more rule to explain); show it only in rooms (that
   is how it is now, by keeping the room form unchanged).
 - **Limits:** players no longer see how much variety a filter has before they start.
+
+## Update 22 Nov 2026: songs per set and number of sets in solo (team request)
+- **Decision:** the solo start screen has the same "Songs per set" (3 / 5 / 10) and "Number of sets" (1 / 2 / 3) tiles as a room, starting at 1 set of 5. The server checks both and builds that many rounds. After each set but the last, the player sees the set summary and goes on with "Next set"; the last set goes straight to the results.
+- **Why:** players wanted to choose the game length as in Multiplayer. Solo has no other players to wait for, so it needs no timer and no standings.
+- **Alternatives:** no break between sets (then "sets" would mean nothing visible), or one "Number of songs" row (different from the room settings).
+- **Limits:** where a set ends is only shown in the browser; the server stores the rounds, not the sets, which is safe because sets do not change scoring. A game of 30 songs prepares 30 audio players at the Start tap, which has not been tried on a real phone yet.
+- **How it could change:** the choices are lists in `lib/game/set-choices.ts`, shared with rooms.

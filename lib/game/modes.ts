@@ -3,6 +3,7 @@ import { isValidGameId } from "./answers.ts";
 import { isDecade, type Filters } from "./filters.ts";
 import { isGenre } from "./genres.ts";
 import { MAX_RECENT_GAMES } from "./recent-songs.ts";
+import { isSetCount, isSongsPerSet, type SetCount, type SongsPerSet } from "./set-choices.ts";
 
 // The modes a player can choose. "mixed" picks one of the question types at random for each round.
 export const MODES = ["title", "artist", "year", "mixed"] as const;
@@ -26,11 +27,12 @@ export function isMode(value: unknown): value is Mode {
 
 // A chosen genre or decade is only in the result when the player chose it: missing = "Any".
 // recentGames (the player's last games, newest first) is only in the result when the list is not empty.
+// songsPerSet and sets come together or not at all; missing = one set of 5.
 export type ParsedStart =
-  | ({ ok: true; mode: Mode; recentGames?: string[] } & Filters)
+  | ({ ok: true; mode: Mode; recentGames?: string[]; songsPerSet?: SongsPerSet; sets?: SetCount } & Filters)
   | { ok: false; error: "malformed" | "invalid-mode" | "invalid-genre" | "invalid-decade" };
 
-const START_FIELDS = ["mode", "genre", "decade", "recentGames"];
+const START_FIELDS = ["mode", "genre", "decade", "recentGames", "songsPerSet", "sets"];
 
 // A list of at most MAX_RECENT_GAMES game IDs (UUIDs). Whether the games exist is not checked here:
 // unknown IDs simply find no songs.
@@ -47,11 +49,14 @@ export function parseStartInput(body: unknown): ParsedStart {
   const fields = Object.keys(body);
   if (fields.some((field) => !START_FIELDS.includes(field))) return { ok: false, error: "malformed" };
 
-  const { mode, genre, decade, recentGames } = body as Record<string, unknown>;
+  const { mode, genre, decade, recentGames, songsPerSet, sets } = body as Record<string, unknown>;
   if (mode !== undefined && typeof mode !== "string") return { ok: false, error: "malformed" };
   if (genre !== undefined && typeof genre !== "string") return { ok: false, error: "malformed" };
   if (decade !== undefined && typeof decade !== "number") return { ok: false, error: "malformed" };
   if (recentGames !== undefined && !isRecentGames(recentGames)) return { ok: false, error: "malformed" };
+  if ((songsPerSet === undefined) !== (sets === undefined)) return { ok: false, error: "malformed" };
+  if (songsPerSet !== undefined && !isSongsPerSet(songsPerSet)) return { ok: false, error: "malformed" };
+  if (sets !== undefined && !isSetCount(sets)) return { ok: false, error: "malformed" };
   if (mode !== undefined && !isMode(mode)) return { ok: false, error: "invalid-mode" };
   if (genre !== undefined && !isGenre(genre)) return { ok: false, error: "invalid-genre" };
   if (decade !== undefined && !isDecade(decade)) return { ok: false, error: "invalid-decade" };
@@ -62,6 +67,7 @@ export function parseStartInput(body: unknown): ParsedStart {
     ...(genre === undefined ? {} : { genre }),
     ...(decade === undefined ? {} : { decade }),
     ...(recentGames === undefined || recentGames.length === 0 ? {} : { recentGames }),
+    ...(songsPerSet === undefined || sets === undefined ? {} : { songsPerSet, sets }),
   };
 }
 

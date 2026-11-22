@@ -15,11 +15,19 @@ import {
 } from "../db/games";
 import { isRoomGame } from "../db/rooms";
 import { listSongsWithPreview } from "../db/songs";
-import { countByGenreAndDecade, filterSongs, hasFilters, parseFiltersQuery, tooFewSongsMessage } from "../game/filters";
+import {
+  countByGenreAndDecade,
+  filterSongs,
+  hasFilters,
+  MIN_MATCHING_SONGS,
+  parseFiltersQuery,
+  tooFewForSetsMessage,
+  tooFewSongsMessage,
+} from "../game/filters";
 import { checkAnswer, isValidGameId, nextRoundNumber, parseAnswerInput, parseRoundInput } from "../game/answers";
 import { parseStartInput } from "../game/modes";
 import { songPools } from "../game/recent-songs";
-import { buildReplacementRound, buildRounds, countMatching, type BuildResult } from "../game/rounds";
+import { buildReplacementRound, buildRounds, countMatching, ROUNDS_PER_GAME, type BuildResult } from "../game/rounds";
 import { MUSIC_UNAVAILABLE_MESSAGE } from "../music/itunes";
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -83,7 +91,7 @@ async function getSoloGameRounds(db: Db, gameId: string): Promise<StoredRound[] 
 
 // POST /api/games – checks the chosen mode and filters, picks the matching songs (avoiding those of the
 // player's last games where possible), builds the rounds, stores the game with its mode and filters.
-// Returns its ID and the 5 clip addresses in round order, so the browser can load the clips in advance
+// Returns its ID and the clip addresses (one per round) in round order, so the browser can load the clips in advance
 // (decision 004, update). No titles and no answers: those only come with "next" and "answer".
 // An empty body means title mode with no filters, so callers that send no body keep working.
 export async function startGame(
@@ -110,15 +118,22 @@ export async function startGame(
   // Avoid the songs of the player's last games where possible: first all of them, then fewer, then none
   // (songPools). The first list that can fill a game in this mode is used.
   const recentSongIds = await getSongIdsOfGames(db, input.recentGames ?? []);
+  const rounds = input.songsPerSet === undefined || input.sets === undefined ? ROUNDS_PER_GAME : input.songsPerSet * input.sets;
   let built: BuildResult = { ok: false, reason: "not-enough-songs" };
-  for (const pool of songPools(songs, recentSongIds)) {
-    built = buildRounds(pool, random, { mode: input.mode, currentYear: now().getFullYear() });
+  for (const pool of songPools(songs, recentSongIds, rounds)) {
+    built = buildRounds(pool, random, { mode: input.mode, currentYear: now().getFullYear(), rounds });
     if (built.ok) break;
   }
   if (!built.ok) {
-    // With filters, the player can fix it by choosing other filters. Without, the music is unavailable.
-    if (!hasFilters(filters)) return fail("not-enough-songs");
-    return { status: 422, body: { error: "too-few-songs", message: tooFewSongsMessage(songs.length) } };
+    // With filters, or a chosen game longer than the song list, the player can fix it by choosing differently.
+    // Otherwise the music is unavailable.
+    const tooLong = rounds !== ROUNDS_PER_GAME && songs.length < rounds;
+    if (!hasFilters(filters) && !(tooLong && songs.length >= MIN_MATCHING_SONGS)) return fail("not-enough-songs");
+    // Enough songs for this length, but not enough different titles or artists: the mode is the problem.
+    const message = tooLong
+      ? tooFewForSetsMessage(songs.length)
+      : tooFewSongsMessage(songs.length >= rounds ? Math.max(songs.length, MIN_MATCHING_SONGS) : songs.length);
+    return { status: 422, body: { error: "too-few-songs", message } };
   }
 
   const gameId = await createGame(db, built.rounds, input.mode, filters);

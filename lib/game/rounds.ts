@@ -72,9 +72,9 @@ export function countMatching(songs: SongForGame[]): MatchingCounts {
 }
 
 // True if a game in this mode can start with songs that have these numbers: the same rule as buildRounds
-// (5 songs, and 4 different titles / artists for every question type the mode asks; mixed asks both).
-export function modeFits(counts: MatchingCounts, mode: Mode): boolean {
-  if (counts.songs < ROUNDS_PER_GAME) return false;
+// (one song per round, and 4 different titles / artists for every question type the mode asks; mixed asks both).
+export function modeFits(counts: MatchingCounts, mode: Mode, rounds: number = ROUNDS_PER_GAME): boolean {
+  if (counts.songs < rounds) return false;
   return typesFor(mode).every(
     (type) => type === "year" || (type === "title" ? counts.titles : counts.artists) >= OPTIONS_PER_ROUND,
   );

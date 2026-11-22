@@ -1,5 +1,6 @@
 // The browser's calls to our game server routes. Each call returns the data or a readable message –
 // it never throws, so the screen can always show something sensible.
+import type { SetCount, SongsPerSet } from "../game/set-choices";
 import type { Filters, SongCount } from "../game/filters";
 import type { Mode } from "../game/modes";
 import type { MatchingCounts } from "../game/rounds";
@@ -65,12 +66,14 @@ export async function apiStartGame(
   mode?: Mode,
   filters: Filters = {},
   recentGames: string[] = [],
+  length?: { songsPerSet: SongsPerSet; sets: SetCount },
 ): Promise<StartResponse> {
   const body = {
     ...(mode === undefined ? {} : { mode }),
     ...(filters.genre === undefined ? {} : { genre: filters.genre }),
     ...(filters.decade === undefined ? {} : { decade: filters.decade }),
     ...(recentGames.length === 0 ? {} : { recentGames }),
+    ...(length ?? {}),
   };
   const result = await postWithCode<{ gameId: string; previewUrls: string[] }>(
     "/api/games",

@@ -32,7 +32,8 @@ import { useWaveAudio } from "@/lib/client/useWaveAudio";
 import { DECADES, type Decade, type SongCount } from "@/lib/game/filters";
 import { GENRE_LABELS, GENRES, type Genre } from "@/lib/game/genres";
 import { MODES, QUESTION_LABELS, type Mode } from "@/lib/game/modes";
-import { ROUNDS_PER_GAME, type MatchingCounts } from "@/lib/game/rounds";
+import type { MatchingCounts } from "@/lib/game/rounds";
+import { SET_CHOICES, SONGS_PER_SET_CHOICES, type SetCount, type SongsPerSet } from "@/lib/game/set-choices";
 import CheckIcon from "./icons/CheckIcon";
 import CrossIcon from "./icons/CrossIcon";
 import PlayIcon from "./icons/PlayIcon";
@@ -51,6 +52,7 @@ const CLIP_LOAD_LIMIT_MS = 10_000; // one attempt to load one clip
 const FIRST_CLIP_LIMIT_MS = 30_000; // everything for the first clip, including swaps
 
 type Reveal = Extract<GameState, { screen: "reveal" }>;
+type PlayedRound = Extract<GameState, { screen: "results" }>["history"][number];
 
 export default function SoloGame() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -81,6 +83,10 @@ export default function SoloGame() {
   // keep them.
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [decade, setDecade] = useState<Decade | undefined>(undefined);
+  // How long the game is, with the same choices as a room. Kept like the mode and filters.
+  const [songsPerSet, setSongsPerSet] = useState<SongsPerSet>(5);
+  const [sets, setSets] = useState<SetCount>(1);
+  const totalRounds = songsPerSet * sets;
   // The last 3 games, newest first, sent with the next start so their songs are avoided. Memory only:
   // a reload forgets them.
   const recentGamesRef = useRef<string[]>([]);
@@ -111,8 +117,8 @@ export default function SoloGame() {
     };
   }, [genre, decade]);
   // The warning when too few songs match, and why the chosen mode cannot start (it stays chosen, greyed out).
-  const tooFew = matchLine(matching);
-  const problem = modeProblem(matching, mode);
+  const tooFew = matchLine(matching, totalRounds);
+  const problem = modeProblem(matching, mode, totalRounds);
 
   const sendAnswer = useCallback(async (gameId: string, round: number, answer: Answer) => {
     const key = `${gameId}:${round}`;
@@ -181,7 +187,7 @@ export default function SoloGame() {
     wave.detachAll();
     wave.unlock();
     // Still inside the tap: create and unlock one player per round.
-    const players = Array.from({ length: ROUNDS_PER_GAME }, (_, index) => {
+    const players = Array.from({ length: totalRounds }, (_, index) => {
       const player = new Audio();
       player.preload = "auto";
       player.addEventListener("error", () => handlePlayerError(player, index));
@@ -195,7 +201,7 @@ export default function SoloGame() {
     startedRef.current = null;
 
     dispatch({ type: "start" });
-    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current);
+    const game = await apiStartGame(fetch, mode, { genre, decade }, recentGamesRef.current, { songsPerSet, sets });
     if (!game.ok) {
       // Too few songs match the filters: back to the start screen, which says so.
       dispatch(game.tooFewSongs ? { type: "start-refused", message: game.message } : { type: "failed", message: game.message });
@@ -203,7 +209,7 @@ export default function SoloGame() {
     }
     const { gameId, previewUrls } = game.data;
     recentGamesRef.current = rememberGame(recentGamesRef.current, gameId);
-    dispatch({ type: "game-created", gameId, previewUrls });
+    dispatch({ type: "game-created", gameId, previewUrls, songsPerSet });
 
     // Only the first clip is waited for. The 3-2-1 starts the moment it is ready.
     const first = await withTimeout(prepare(players, gameId, 0, previewUrls[0]), FIRST_CLIP_LIMIT_MS, { ok: false as const });
@@ -308,7 +314,7 @@ export default function SoloGame() {
   // No music on the start, results and error screens, or after leaving the page (useWaveAudio closes the sound
   // context itself).
   useEffect(() => {
-    if (state.screen === "start" || state.screen === "results" || state.screen === "error") pauseAll();
+    if (state.screen === "start" || state.screen === "set-summary" || state.screen === "results" || state.screen === "error") pauseAll();
   }, [state.screen]);
   useEffect(() => () => pauseAll(), []);
 
@@ -337,23 +343,23 @@ export default function SoloGame() {
       {state.screen === "start" && (
         <section className={shared.center}>
           <p className={shared.intro}>
-            Hear a song and pick the right answer within {ROUND_SECONDS} seconds. {ROUNDS_PER_GAME} rounds – faster answers score more.
+            Hear a song and pick the right answer within {ROUND_SECONDS} seconds. {totalRounds} rounds – faster answers score more.
           </p>
           {/* Mode, genre and decade as tile rows (team feedback 18 Nov, point 8); choices with too few songs are
               greyed out with a note saying why (point 7). */}
           <div className={styles.settings}>
             <TileGroup
               legend="What do you want to guess?"
-              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m) }))}
+              options={MODES.map((m) => ({ value: m, label: MODE_LABELS[m], disabled: !canPickMode(matching, m, totalRounds) }))}
               selected={(value) => value === mode}
               onTap={(value) => setMode(MODES.find((m) => m === value) ?? "title")}
-              notes={modeNotes(matching)}
+              notes={modeNotes(matching, totalRounds)}
             />
             <TileGroup
               legend="Genre"
               options={[
                 { value: "any", label: "Any" },
-                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }) })),
+                ...GENRES.map((g) => ({ value: g, label: GENRE_LABELS[g], disabled: !canChoose(songCounts, { genre: g, decade }, totalRounds) })),
               ]}
               selected={(value) => value === (genre ?? "any")}
               onTap={(value) => setGenre(genreFromTile(value))}
@@ -362,11 +368,23 @@ export default function SoloGame() {
               legend="Decade"
               options={[
                 { value: "any", label: "Any" },
-                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }) })),
+                ...DECADES.map((d) => ({ value: String(d), label: `${d}s`, disabled: !canChoose(songCounts, { genre, decade: d }, totalRounds) })),
               ]}
               selected={(value) => value === String(decade ?? "any")}
               onTap={(value) => setDecade(decadeFromTile(value))}
-              notes={filterNotes(songCounts, { genre, decade })}
+              notes={filterNotes(songCounts, { genre, decade }, totalRounds)}
+            />
+            <TileGroup
+              legend="Songs per set"
+              options={SONGS_PER_SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
+              selected={(value) => value === String(songsPerSet)}
+              onTap={(value) => setSongsPerSet(SONGS_PER_SET_CHOICES.find((n) => String(n) === value) ?? 5)}
+            />
+            <TileGroup
+              legend="Number of sets"
+              options={SET_CHOICES.map((n) => ({ value: String(n), label: String(n) }))}
+              selected={(value) => value === String(sets)}
+              onTap={(value) => setSets(SET_CHOICES.find((n) => String(n) === value) ?? 1)}
             />
           </div>
           {/* Too few matching songs, and why the chosen mode cannot start: these belong to the settings above, so
@@ -470,43 +488,28 @@ export default function SoloGame() {
         </section>
       )}
 
+      {/* After each set but the last: that set's songs, then the player goes on when ready. No timer. */}
+      {state.screen === "set-summary" && (
+        <section className={shared.center}>
+          <h2 className={styles.finalHeading}>
+            Set {state.setNumber} of {state.totalSets} finished
+            <span className={styles.finalScore}>{state.score}</span>
+            points so far
+          </h2>
+          <PlayedList songs={state.setSongs} />
+          <button className={`${shared.primary} ${shared.wide}`} onClick={() => dispatch({ type: "next-set" })}>
+            Next set
+          </button>
+        </section>
+      )}
+
       {state.screen === "results" && (
         <section className={shared.center}>
           <h2 className={styles.finalHeading}>
             Your score
             <span className={styles.finalScore}>{state.score}</span>
           </h2>
-          <ol className={`${styles.results} ${styles.soloResults}`}>
-            {state.history.map((played) => (
-              <li key={played.round}>
-                <span className={styles.outcome} data-outcome={played.outcome}>
-                  {played.outcome === "correct" ? (
-                    <CheckIcon className={shared.inlineIcon} />
-                  ) : (
-                    <CrossIcon className={shared.inlineIcon} />
-                  )}
-                  {OUTCOME_WORD[played.outcome]}
-                </span>
-                <span className={styles.played}>
-                  <span>
-                    <strong>{played.title}</strong> – {played.artist}
-                  </span>
-                  {played.storeUrl && (
-                    <a
-                      className={styles.storeLink}
-                      href={played.storeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${played.title} in Apple Music`}
-                    >
-                      Open in Apple Music
-                    </a>
-                  )}
-                </span>
-                <span className={styles.playedPoints}>{played.points}</span>
-              </li>
-            ))}
-          </ol>
+          <PlayedList songs={state.history} />
           <button className={`${shared.primary} ${shared.wide}`} onClick={handleStart}>
             Play again
           </button>
@@ -531,6 +534,43 @@ export default function SoloGame() {
 }
 
 const OUTCOME_WORD = { correct: "Right", wrong: "Wrong", skipped: "Skipped", timeout: "Time's up" } as const;
+
+// The list of played songs: on the set summary (one set) and on the results (the whole game).
+function PlayedList({ songs }: { songs: PlayedRound[] }) {
+  return (
+    <ol className={`${styles.results} ${styles.soloResults}`}>
+      {songs.map((played) => (
+        <li key={played.round}>
+          <span className={styles.outcome} data-outcome={played.outcome}>
+            {played.outcome === "correct" ? (
+              <CheckIcon className={shared.inlineIcon} />
+            ) : (
+              <CrossIcon className={shared.inlineIcon} />
+            )}
+            {OUTCOME_WORD[played.outcome]}
+          </span>
+          <span className={styles.played}>
+            <span>
+              <strong>{played.title}</strong> – {played.artist}
+            </span>
+            {played.storeUrl && (
+              <a
+                className={styles.storeLink}
+                href={played.storeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${played.title} in Apple Music`}
+              >
+                Open in Apple Music
+              </a>
+            )}
+          </span>
+          <span className={styles.playedPoints}>{played.points}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 const MODE_LABELS: Record<Mode, string> = { title: "Title", artist: "Artist", year: "Year", mixed: "Mixed" };
 
@@ -649,6 +689,7 @@ function AnswerButton({
 function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
   const { result, chosen } = state;
   const isLast = state.round.round >= state.round.totalRounds;
+  const endsSet = state.songsPerSet !== undefined && state.round.round % state.songsPerSet === 0;
   const verdict = verdictOf(chosen, result.correct);
 
   return (
@@ -695,7 +736,7 @@ function RevealPanel({ state, onNext }: { state: Reveal; onNext: () => void }) {
         </div>
       </div>
       <button className={`${shared.primary} ${shared.wide}`} onClick={onNext}>
-        {isLast ? "See results" : "Next song"}
+        {isLast ? "See results" : endsSet ? "See set summary" : "Next song"}
       </button>
     </div>
   );

@@ -42,6 +42,14 @@ export function tooFewSongsMessage(matching: number): string {
   return `These filters match too few different titles or artists for this mode – ${hint}, or another mode.`;
 }
 
+// A solo game with chosen sets needs more (or fewer) songs than the usual 5, and there are too few for it.
+export function tooFewForSetsMessage(matching: number): string {
+  const hint = "Choose fewer songs, or try 'Any' for genre or decade.";
+  if (matching === 0) return `No songs match. ${hint}`;
+  if (matching === 1) return `Only 1 song matches. ${hint}`;
+  return `Only ${matching} songs match. ${hint}`;
+}
+
 // A game needs 5 different songs (5 rounds). A genre + decade with fewer can never start, so the start screen
 // greys it out (spec 003, "filter gaps"). The server still refuses it on its own.
 export const MIN_MATCHING_SONGS = 5;
