@@ -287,3 +287,28 @@ A teammate's review of the account code led to four small changes, each with tes
 - Someone who knows the password and confirms an email change at once is not stopped by a later reset; that would
   need an undo link or a waiting time, which we did not build.
 - Further points from the review were judged too large for the deadline and are not changed here.
+
+## Update 23 Nov 2026: no sign-up with @novasbe.pt emails
+
+### Decision
+- **Sign-up refuses emails at `@novasbe.pt`** (any letter case) with 400 `email-domain-blocked`, "You are currently
+  not able to sign-up with an @novasbe.pt email". The sign-up form shows that message. Nothing is stored and no
+  email is sent. The rule is `isBlockedSignupEmail` in `lib/accounts/rules.ts`; only the exact domain is refused.
+- **Accounts with such an email that already exist keep working:** log in, the verification link, "Send the email
+  again", "Forgot password?" and Account settings are unchanged.
+
+### Why
+- Brevo's log showed every verification email to `@novasbe.pt` as a soft bounce. The school's mail goes through
+  Cisco Secure Email and Microsoft 365, which defer mail from our sender domain `songsnapverify.app`, registered on
+  21 Nov 2026 and so without a reputation yet. People would sign up and never get the link.
+
+### Alternatives
+- Waiting until the domain has a reputation: no fixed date, and the project is submitted on 23 Nov 2026.
+- A team account for each person (`npm run db:team-accounts`): works for the team, not for other students.
+
+### Limits
+- Changing the email on Account settings to an `@novasbe.pt` address is still allowed, and that email can bounce too.
+- Other strict school or company mail servers may defer our emails in the same way; only this domain is refused.
+
+### How it could change
+Once emails to `@novasbe.pt` arrive (check Brevo's log), remove the check in `signUp` and `isBlockedSignupEmail`.

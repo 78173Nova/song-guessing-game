@@ -6,6 +6,7 @@ import {
   checkPassword,
   createToken,
   hashPassword,
+  isBlockedSignupEmail,
   looksLikeToken,
   parseEmailChangeInput,
   parseEmailInput,
@@ -88,6 +89,7 @@ const ERRORS = {
     message: "Usernames are 3–20 characters long and use only letters, digits and _.",
   },
   "invalid-password": { status: 400, message: "Passwords are 8–128 characters long, without spaces." },
+  "email-domain-blocked": { status: 400, message: "You are currently not able to sign-up with an @novasbe.pt email" },
   "username-taken": { status: 409, message: "This username is taken" },
   "wrong-login": { status: 401, message: "Wrong username/email or password" },
   "not-verified": { status: 403, message: "Verify your email first" },
@@ -176,6 +178,8 @@ export async function signUp(db: TransactionDb, rawBody: string | null, deps: Ac
   const parsed = parseSignupInput(json.body);
   if (!parsed.ok) return fail(parsed.error);
   const { email, username, password } = parsed.input;
+  // Before anything is stored or sent, so the reply is the same whether or not the email has an account.
+  if (isBlockedSignupEmail(email)) return fail("email-domain-blocked");
 
   const verifyToken = makeToken();
   const created = await createPendingAccount(db, {

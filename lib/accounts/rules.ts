@@ -54,6 +54,15 @@ export function isValidEmail(email: string): boolean {
   );
 }
 
+// Sign-up is closed for @novasbe.pt emails: the school's mail servers bounce our verification emails (decision 014,
+// update 23 Nov 2026). Only sign-up checks this; accounts that already have such an email keep working.
+// Only this exact domain, in any letter case: x@notnovasbe.pt or x@novasbe.pt.example.com may sign up.
+const BLOCKED_SIGNUP_DOMAIN = "@novasbe.pt";
+
+export function isBlockedSignupEmail(email: string): boolean {
+  return email.toLowerCase().endsWith(BLOCKED_SIGNUP_DOMAIN);
+}
+
 // Password: 8–128 characters and no spaces (no whitespace at all: a space typed by mistake at the start or end
 // would otherwise lock people out). Counted in Unicode characters, so a simple emoji counts as one.
 const MIN_PASSWORD_LENGTH = 8;
